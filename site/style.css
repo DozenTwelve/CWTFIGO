@@ -88,7 +88,7 @@ h2:lang(zh) { line-height: 1.22; word-break: keep-all; }
 .hero picture { width: min(100%, 720px); }
 .hero__banner { display: block; width: 100%; height: auto; aspect-ratio: 1280 / 440; object-fit: cover; }
 .hero h1 { max-width: none; font-size: var(--text-display-s); }
-.hero .lead { max-width: 40ch; }
+.hero .lead { max-width: 40ch; text-wrap: balance; }
 .hero .install { width: min(100%, 36rem); margin-top: 0; text-align: left; }
 .hero__then { color: var(--color-ink-2); }
 
