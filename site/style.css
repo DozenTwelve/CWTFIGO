@@ -15,14 +15,12 @@
   --text-xs: 0.8125rem; --text-sm: 0.875rem; --text-md: 1rem; --text-lg: 1.25rem; --text-xl: 1.5625rem; --text-2xl: 1.953rem; --text-3xl: 2.441rem;
   --text-display-s: clamp(2.25rem, 4vw + 0.5rem, 3.75rem); --text-display: clamp(2.5rem, 4vw + 1rem, 4.5rem);
   --text-section: clamp(2rem, 2.5vw + 1rem, 3.5rem); --text-title: clamp(1.25rem, 0.75vw + 0.875rem, 1.625rem); --text-lead: clamp(1.125rem, 0.35vw + 1rem, 1.375rem);
-  --text-figure: clamp(3.5rem, 6vw + 1rem, 6.5rem);
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --dur-micro: 120ms; --dur-short: 220ms;
-  --container: 1440px; --gutter: 64px; --gap-columns: 32px; --gap-split: 64px; --section-gap-s: 120px; --section-gap: 144px; --section-gap-l: 176px; --nav-h: 64px;
+  --container: 1440px; --gutter: 64px; --gap-columns: 32px; --gap-split: 64px; --nav-h: 64px;
   --color-paper: #f4ede0; /* the light banner's background */ --color-paper-2: oklch(99.5% 0.005 85); --color-paper-3: oklch(92% 0.016 85);
   --color-ink: oklch(18% 0.006 60); --color-ink-2: oklch(28% 0.008 60); --color-muted: oklch(44% 0.012 60); --color-rule: oklch(88% 0.013 85);
-  --color-accent: oklch(70% 0.19 40); --color-accent-ink: oklch(18% 0.006 60); --color-accent-soft: oklch(91% 0.05 50); --color-focus: oklch(60% 0.19 40);
-  --color-green: oklch(42% 0.11 150); --color-green-soft: oklch(92% 0.04 150);
+  --color-accent: oklch(70% 0.19 40); --color-accent-ink: oklch(18% 0.006 60); --color-focus: oklch(60% 0.19 40);
   --color-head: oklch(18% 0.006 60); --color-head-ink: oklch(96% 0.011 85);
   --color-sheet: oklch(99.3% 0.004 85);
   --color-term: #1c1c2c; --color-term-ink: #e4e4ee; --color-term-dim: #a9a9bd; /* the screenshots' terminal, dark in both themes */
@@ -31,19 +29,16 @@
   --font-body: "Red Hat Text", var(--font-cjk), sans-serif;
   --font-outlier: "Red Hat Mono", var(--font-cjk), monospace;
   --font-ja: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic Medium", "Yu Gothic", Meiryo, "Noto Sans JP", "Noto Sans CJK JP";
-  --radius-card: 10px; --radius-entry: 14px; --radius-pill: 6px; --rule-hair: 1px;
-  --shadow-lift: 0 1px 1px oklch(18% 0.006 60 / 0.1), 0 2px 4px -1px oklch(18% 0.006 60 / 0.1), 0 14px 22px -12px oklch(18% 0.006 60 / 0.3);
+  --radius-entry: 14px; --radius-pill: 6px; --rule-hair: 1px;
   --tracking-display: -0.035em; --display-weight: 600;
 }
 @media (prefers-color-scheme: dark) {
   :root {
     --color-paper: #16130f; /* the dark banner's background */ --color-paper-2: oklch(23% 0.009 70); --color-paper-3: oklch(26% 0.01 70);
     --color-ink: oklch(94% 0.01 85); --color-ink-2: oklch(86% 0.012 85); --color-muted: oklch(74% 0.014 80); --color-rule: oklch(34% 0.012 70);
-    --color-accent-soft: oklch(34% 0.07 45); --color-focus: oklch(74% 0.17 45);
-    --color-green: oklch(78% 0.13 150); --color-green-soft: oklch(31% 0.05 150);
+    --color-focus: oklch(74% 0.17 45);
     --color-head: oklch(13% 0.006 60); --color-head-ink: oklch(94% 0.01 85);
     --color-sheet: oklch(23% 0.009 70);
-    --shadow-lift: 0 0 0 1px oklch(34% 0.012 70), 0 14px 22px -12px oklch(5% 0.005 60 / 0.7);
   }
 }
 /* base */
@@ -119,14 +114,11 @@ h2:lang(zh) { line-height: 1.22; word-break: keep-all; }
 .skip { position: absolute; left: var(--space-md); top: var(--space-xs); z-index: 10; padding: var(--space-xs) var(--space-md); background: var(--color-ink); color: var(--color-paper); border-radius: var(--radius-pill); transform: translateY(-200%); }
 .skip:focus { transform: none; }
 
-/* split rows */
-.split { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--gap-split); align-items: start; margin-top: var(--section-gap); }
-.split--lead { margin-top: var(--section-gap-s); grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); }
-.gap-s { margin-top: var(--section-gap-s); }
-.gap-l { margin-top: var(--section-gap-l); }
-.split__text { display: grid; gap: var(--space-md); align-content: start; }
-.split__text h2 { margin-bottom: var(--space-xs); }
-.split__text > p { max-width: 46ch; color: var(--color-ink-2); }
+/* questions and the clone install, side by side */
+.end { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: var(--gap-split); align-items: start; padding-block: var(--space-2xl); }
+.questions, .clone { display: grid; gap: var(--space-lg); }
+.clone .install { margin-top: 0; }
+.clone > p { color: var(--color-ink-2); }
 
 /* walkthrough: an exclusive accordion; the open item's picture sits in one fixed panel on the right */
 .walk-section { padding-block: var(--space-2xl); }
@@ -156,27 +148,26 @@ h2:lang(zh) { line-height: 1.22; word-break: keep-all; }
 .faq details p { max-width: 62ch; padding-bottom: var(--space-lg); color: var(--color-ink-2); }
 
 /* footer: index columns */
-.foot { margin-top: var(--section-gap); padding-block: var(--space-2xl); border-top: 2px solid var(--color-ink); background: var(--color-paper-3); font-size: var(--text-sm); }
+.foot { margin-top: var(--space-2xl); padding-block: var(--space-2xl); border-top: 2px solid var(--color-ink); background: var(--color-paper-3); font-size: var(--text-sm); }
 .foot__cols { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 3fr) minmax(0, 2fr) minmax(0, 3fr); gap: var(--gap-columns); align-items: start; }
 .foot ul { display: grid; gap: var(--space-2xs); }
 .foot a { display: inline-flex; align-items: center; min-height: 32px; }
 .foot__note { color: var(--color-muted); max-width: 40ch; }
 
 @media (max-width: 60rem) {
-  :root { --gutter: 24px; --gap-split: 40px; --section-gap-s: 80px; --section-gap: 96px; --section-gap-l: 120px; }
+  :root { --gutter: 24px; --gap-split: 40px; }
   .slab__links { display: none; }
-  .split, .split--lead { grid-template-columns: minmax(0, 1fr); }
-  .walk-section { padding-block: var(--space-2xl); }
   /* stacked: each picture under its own item, at its own height */
   .walk { display: block; }
   .walk::after { content: none; }
   .walk__pic { position: static; width: 100%; aspect-ratio: auto; margin-bottom: var(--space-lg); }
   .walk__pic img { height: auto; }
+  .end { grid-template-columns: minmax(0, 1fr); }
   .foot__cols { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 }
 @media (max-width: 40rem) {
-  :root { --gutter: 16px; --gap-split: 32px; --section-gap-s: 64px; --section-gap: 72px; --section-gap-l: 88px; --gap-columns: 16px; }
-  }
+  :root { --gutter: 16px; --gap-split: 32px; --gap-columns: 16px; }
+}
 @media (prefers-reduced-motion: reduce) {
   .btn { transition: none; }
   .btn:active { transform: none; }

@@ -100,70 +100,40 @@ Debian file server. Backups only.
   </div>
 </section>
 
-<section class="split container gap-l" id="questions" aria-labelledby="questions-title">
-  <div class="split__text">
-    <h2 id="questions-title">Questions</h2>
-  </div>
+<div class="end container">
+<section class="questions" id="questions" aria-labelledby="questions-title">
+  <h2 id="questions-title">Questions</h2>
   <div class="faq">
     <details>
-      <summary>Where does my data go?</summary>
-      <p>The record stays in <code>~/.cwtfigo</code> on your machine, plus a private remote if you add one. What it reads during a visit passes through your model provider, like anything in Claude Code. A bug report it drafts for upstream goes out only on your yes, with names, IPs and paths redacted.</p>
+      <summary>Where do my notes go?</summary>
+      <p>Into <code>~/.cwtfigo</code> on your computer. Delete that folder and they’re gone. What Claude reads passes through Anthropic, like anything in Claude Code.</p>
     </details>
     <details>
-      <summary>What does it need?</summary>
-      <p><code>git</code>, and <code>python3</code> for search. On a Mac that means the Command Line Tools: <code>xcode-select --install</code>. On Windows it runs in Git Bash, which Claude Code needs there anyway.</p>
+      <summary>What do I need?</summary>
+      <p>Claude Code, <code>git</code> and <code>python3</code>. On a Mac, run <code>xcode-select --install</code> first. The first visit goes best on Opus: <code>/model opus</code>.</p>
     </details>
     <details>
-      <summary>Can I make it stop asking?</summary>
-      <p>It already asks less as it goes: a read you’ve said yes to once runs without asking again, and only changes ask. To skip the remaining questions for 12 hours, tell Claude to turn on YOLO; only you can, and “YOLO off” ends it early. Deleting data, touching partitions or anything that could lock out SSH still needs a typed yes.</p>
+      <summary>Will it touch things I didn’t ask about?</summary>
+      <p>It starts only when you call it by name, and only on the computer you point it at.</p>
     </details>
     <details>
-      <summary>Can I run it without AI?</summary>
-      <p>On Mac and Linux, yes: <code>cwtfigo</code> is a small menu in the terminal that runs the scripts you’ve already said yes to, with no model involved. In Claude Code, say “CWTFIGO install the TUI”. There’s no Windows build.</p>
-    </details>
-    <details>
-      <summary>What if it can’t fix it?</summary>
-      <p>It says so, puts back what it changed that didn’t help, and parks the problem with what would make it worth another look: a package version, an upstream issue closing, a part arriving.</p>
-    </details>
-    <details>
-      <summary>Anything that needs sudo?</summary>
-      <p>Comes to you as a command to run in your own terminal, where sudo can ask for your password. It never sees the password.</p>
+      <summary>Something went wrong?</summary>
+      <p>Tell it “CWTFIGO, that didn’t work”. It drafts a bug report and posts it only on your yes. Or <a href="https://github.com/DozenTwelve/CWTFIGO/issues/new/choose">open an issue</a> yourself.</p>
     </details>
   </div>
 </section>
 
-<section class="split container gap-l" id="install" aria-labelledby="install-title">
-  <div class="split__text">
-    <h2 id="install-title">Point it at the broken one.</h2>
-    <div class="install">
-      <div class="install__box">
-        <div class="install__head"><span class="install__status" role="status">Paste into Claude Code</span><button class="btn btn--primary" type="button" data-copy="install-2">Copy the install</button></div>
-        <pre id="install-2" tabindex="0"><code><span class="ln">/plugin marketplace add DozenTwelve/<wbr>CWTFIGO</span><span class="ln">/plugin install cwtfigo@cwtfigo</span></code></pre>
-      </div>
-    </div>
-    <p>Or from a clone, to change it while you use it:</p>
-    <div class="install">
-      <div class="install__box">
-        <div class="install__head"><span class="install__status" role="status">In a shell, then Claude Code</span><button class="btn" type="button" data-copy="install-3">Copy</button></div>
-        <pre id="install-3" tabindex="0"><code><span class="ln">git clone https://github.com/<wbr>DozenTwelve/<wbr>CWTFIGO</span><span class="ln">/plugin marketplace add ./CWTFIGO</span><span class="ln">/plugin install cwtfigo@cwtfigo</span></code></pre>
-      </div>
+<section class="clone" id="install" aria-labelledby="install-title">
+  <h2 id="install-title">Install from a clone</h2>
+  <p>To change it while you use it.</p>
+  <div class="install">
+    <div class="install__box">
+      <div class="install__head"><span class="install__status" role="status">In a shell, then Claude Code</span><button class="btn" type="button" data-copy="install-2">Copy</button></div>
+      <pre id="install-2" tabindex="0"><code><span class="ln">git clone https://github.com/<wbr>DozenTwelve/<wbr>CWTFIGO</span><span class="ln">/plugin marketplace add ./CWTFIGO</span><span class="ln">/plugin install cwtfigo@cwtfigo</span></code></pre>
     </div>
   </div>
-  <figure class="entry" aria-label="The visit as the record logs it">
-    <div class="entry__head"><span>hosts/kettle/log.md</span><span class="chip chip--green">Fixed, unverified</span></div>
-    <pre class="entry__body" tabindex="0"><code><span class="out">## 2026-11-07 hot on video calls
-- perf on a call: 91°C, firefox RDD 38%, throttling
-- vainfo: iHD driver missing
-- owner installed intel-media-driver (sudo)
-- perf, same call: 71°C, firefox RDD 6%
-- check.sh: warn if intel-media-driver is gone
-
-## 2026-11-06 upgrade
-- maintain dry run: 143 updates, 2.1 GB of cache
-- maintain --apply: upgraded, 2.1 GB freed
-- rebooted for the new kernel</span></code></pre>
-  </figure>
 </section>
+</div>
 
 </main>
 
