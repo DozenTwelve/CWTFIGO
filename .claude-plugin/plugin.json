@@ -1,6 +1,6 @@
 {
   "name": "cwtfigo",
-  "version": "0.5.8",
+  "version": "0.5.9",
   "description": "Claude, what the fuck is going on? All-round ops for your own and LAN machines: cleanup, upgrades, optimization and debugging, with a per-machine record that makes every visit cheaper.",
   "author": { "name": "yzr" },
   "homepage": "https://github.com/DozenTwelve/CWTFIGO",
