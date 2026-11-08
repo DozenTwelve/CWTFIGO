@@ -1,4 +1,4 @@
-Static landing page: preview with `cd site && python3 -m http.server` (Chinese at `/zh/`), or open `index.html` as a file; deploys to Cloudflare Pages as a static directory, build command none, output directory `site`.
+Static landing page: preview with `cd site && python3 -m http.server` (Chinese at `/zh/`), or open `index.html` as a file; deploys by hand to the Cloudflare Pages project `cwtfigo` (direct upload, no Git connection; https://cwtfigo.diamonddoge.org). From a clean checkout of `main`: `npx wrangler pages deploy site --project-name cwtfigo --branch main`.
 
 ## Images
 
