@@ -35,7 +35,7 @@ printf '#!/bin/sh\necho new\n' > "$T/pkg/cwtfigo"; echo MIT > "$T/pkg/LICENSE"; 
 tsum() { { sha256sum "$1" 2>/dev/null || shasum -a 256 "$1"; } | cut -d' ' -f1; }
 echo "$(tsum "$T/srv.tar.gz")  $A" > "$T/srv.sha256"
 printf '#!/bin/sh\ncase $1 in -m) echo "${FAKE_M:-x86_64}" ;; *) echo "${FAKE_OS:-Linux}" ;; esac\n' > "$T/bin/uname"
-printf '#!/bin/sh\necho "$*" >> "$FAKE/curl.args"; [ -e "$FAKE/curl.fail" ] && exit 22\nwhile [ $# -gt 1 ]; do [ "$1" = -o ] && o=$2; shift; done\ncase $1 in *.sha256) cp "$FAKE/srv.sha256" "$o" ;; *) cp "$FAKE/srv.tar.gz" "$o" ;; esac\n' > "$T/bin/curl"
+printf '#!/bin/sh\necho "$*" >> "$FAKE/curl.args"; [ -e "$FAKE/curl.fail" ] && { cat "$FAKE/curl.fail"; exit 22; }\nwhile [ $# -gt 1 ]; do [ "$1" = -o ] && o=$2; shift; done\ncase $1 in *.sha256) cp "$FAKE/srv.sha256" "$o" ;; *) cp "$FAKE/srv.tar.gz" "$o" ;; esac\n' > "$T/bin/curl"
 printf '#!/bin/sh\necho "$*" >> "$FAKE/gh.args"\nwhile [ $# -gt 0 ]; do [ "$1" = -D ] && d=$2; shift; done\ncp "$FAKE/srv.tar.gz" "$d/%s"; cp "$FAKE/srv.sha256" "$d/%s.sha256"\n' "$A" "$A" > "$T/bin/gh"
 chmod +x "$T/bin/uname" "$T/bin/curl" "$T/bin/gh"
 tw() { PATH=$T/bin:$PATH HOME=$T/home FAKE=$T SHELL=${TSH:-/bin/zsh} "${SH:-sh}" "$CW" tui; }
@@ -62,10 +62,21 @@ out=$(tw 2>&1) && fail "cw tui should refuse a tarball that doesn't match its .s
 echo "$out" | grep -q "doesn't match" || fail "a sha mismatch should say so: $out"
 [ "$(cat "$T/home/.local/bin/cwtfigo")" = old ] && [ "$(ls -A "$T/home/.local/bin")" = cwtfigo ] || fail "a sha mismatch must leave ~/.local/bin as it was: $(ls -A "$T/home/.local/bin")"
 echo "$(tsum "$T/srv.tar.gz")  $A" > "$T/srv.sha256"
-# curl failing (right after a plugin update the release is still building): try again later, the old binary stays, no gh.
-echo old > "$T/home/.local/bin/cwtfigo"; touch "$T/curl.fail"; out=$(tw 2>&1) && fail "cw tui should fail when curl does"
-echo "$out" | grep -q "isn't ready to download yet.*Try again in 5 minutes" || fail "a failed download should say to try again later: $out"
+grep -q -- '--connect-timeout [0-9]* --max-time [0-9]*' "$T/curl.args" || fail "cw tui's curl needs timeouts, a stalled download would hang the TUI's u: $(cat "$T/curl.args")"
+# A 404 (right after a plugin update the release is still building): try again later, the old binary stays, no gh.
+echo old > "$T/home/.local/bin/cwtfigo"; printf 404 > "$T/curl.fail"; out=$(tw 2>&1) && fail "cw tui should fail when curl does"
+echo "$out" | grep -q "isn't ready to download yet.*Try again in 5 minutes" || fail "a 404 should say to try again later: $out"
 [ "$(cat "$T/home/.local/bin/cwtfigo")" = old ] && [ ! -e "$T/gh.args" ] || fail "a failed download must leave the old binary and not try gh"
+# No connection (no DNS, a timeout: curl's code 000) is not "not ready yet".
+printf 000 > "$T/curl.fail"; out=$(tw 2>&1) && fail "cw tui should fail with no connection"
+echo "$out" | grep -q "couldn't reach GitHub" && ! echo "$out" | grep -q "isn't ready" || fail "no connection should say so: $out"
+[ "$(ls -A "$T/home/.local/bin")" = cwtfigo ] || fail "a failed download must leave no temp file: $(ls -A "$T/home/.local/bin")"
+rm "$T/curl.fail"
+# No curl at all: how to get it, before anything is fetched or created.
+mkdir "$T/nc"; for c in dirname sed sha256sum shasum; do p=$(command -v $c) && ln -s "$p" "$T/nc/$c"; done; cp "$T/bin/uname" "$T/nc/"
+out=$(PATH=$T/nc HOME=$T/home "$(command -v sh)" "$CW" tui 2>&1) && fail "cw tui without curl should fail"
+echo "$out" | grep -q "doesn't have: install it (Debian/Ubuntu/Mint: sudo apt install curl;.*Arch: sudo pacman -S curl; a Mac has it)" || fail "cw tui without curl should say how to install it: $out"
+touch "$T/curl.fail"
 # Windows (Git Bash) has no build: one line, nothing fetched.
 rm "$T/curl.args"; out=$(FAKE_OS=MINGW64_NT-10.0 tw 2>&1) && fail "cw tui should refuse Windows"
 echo "$out" | grep -q "Mac and Linux only, there's no Windows build" && [ ! -e "$T/curl.args" ] || fail "cw tui on Windows: $out"
@@ -74,28 +85,36 @@ out=$(FAKE_M=armv7l tw 2>&1) && fail "cw tui should refuse armv7l"
 echo "$out" | grep -q 'no TUI build for this processor (armv7l)' && [ ! -e "$T/curl.args" ] || fail "cw tui on armv7l: $out"
 
 # A machine's dir is its SSH alias. "local" means this machine, whose name is in self.
-# Another host in the record already: local asks what this machine is called there.
-mkdir -p "$CWTFIGO_HOME/hosts/nas"
-out=$(sh "$CW" run local collect 2>&1); [ $? = 1 ] || fail "local without a name, another host known, should fail"
+# Shared with other operator machines that know hosts: local asks what this machine is called there, in plain words.
+mkdir -p "$CWTFIGO_HOME/hosts/nas"; git init -q "$CWTFIGO_HOME"; git -C "$CWTFIGO_HOME" remote add origin "$CWTFIGO_HOME/none.git"
+out=$(sh "$CW" run local collect 2>&1); [ $? = 1 ] || fail "local without a name, shared record with a host, should fail"
 echo "$out" | grep -q 'cw name <name>' || fail "local without a name should ask for cw name"
-[ -f "$CWTFIGO_HOME/self" ] && fail "no automatic name once another host is in the record"
-rm -r "$CWTFIGO_HOME/hosts/nas"
-# Alone in the record: local takes the hostname, made a valid name.
-N=$(mktemp -d); printf '#!/bin/sh\necho My_Mac.Air-2\n' > "$N/scutil"; cp "$N/scutil" "$N/hostname"; chmod +x "$N/scutil" "$N/hostname"
+echo "$out" | grep -q 'SSH alias' && fail "the name question in plain words: $out"
+[ -f "$CWTFIGO_HOME/self" ] && fail "no automatic name once the record is shared and has a host"
+git -C "$CWTFIGO_HOME" remote remove origin; rm -r "$CWTFIGO_HOME/hosts/nas"
+# Alone in the record: local takes the hostname, made a valid name: uname -n up to its domain (stock Arch has no
+# hostname command), a Mac's LocalHostName first.
+N=$(mktemp -d); printf '#!/bin/sh\nexit 127\n' > "$N/hostname"; printf '#!/bin/sh\nexit 1\n' > "$N/scutil"; printf '#!/bin/sh\n' > "$N/xcode-select"
+printf '#!/bin/sh\ncase $1 in -n) echo "${FAKE_N:-My_Box-2.lan}" ;; *) echo "${FAKE_OS:-Linux}" ;; esac\n' > "$N/uname"; chmod +x "$N"/*
+out=$(PATH=$N:$PATH FAKE_OS=Darwin FAKE_N=MacBook-Air.local CWTFIGO_HOME=$N/rec sh "$CW" run local collect 2>&1); [ $? = 3 ] && grep -qx macbook-air "$N/rec/self" || fail "a Mac with no LocalHostName: $out"
+# Not shared, its only host so far a remote one: still one operator, named the same way. Never another host's name.
+mkdir -p "$N/r2/hosts/nas"; out=$(PATH=$N:$PATH CWTFIGO_HOME=$N/r2 sh "$CW" run local collect 2>&1); [ $? = 3 ] && grep -qx mybox-2 "$N/r2/self" || fail "a record with only a remote host, not shared, should name this machine: $out"
+mkdir -p "$N/r3/hosts/nas"; out=$(PATH=$N:$PATH FAKE_N=nas CWTFIGO_HOME=$N/r3 sh "$CW" run local collect 2>&1); [ $? = 1 ] && [ ! -e "$N/r3/self" ] || fail "this machine must not take another host's name: $out"
+echo "$out" | grep -q 'already called nas.*cw name <name>' || fail "a hostname another host has should ask for a name: $out"
 out=$(PATH=$N:$PATH sh "$CW" run local collect 2>&1); [ $? = 3 ] || fail "local alone in the record should name itself and go on: $out"
-grep -qx mymacair-2 "$CWTFIGO_HOME/self" || fail "automatic name: $(cat "$CWTFIGO_HOME/self")"
-echo "$out" | grep -q 'called mymacair-2 in the record.*cw name' || fail "automatic name should be said: $out"
+grep -qx mybox-2 "$CWTFIGO_HOME/self" || fail "automatic name: $(cat "$CWTFIGO_HOME/self")"
+echo "$out" | grep -q 'called mybox-2 in the record.*cw name' || fail "automatic name should be said: $out"
 [ -d "$CWTFIGO_HOME/hosts/local" ] && fail "hosts/local must never be created"
 # Stopped at approval (the owner said no, or left): no host dir, so no machine row, and the owner is still new.
-[ -e "$CWTFIGO_HOME/hosts/mymacair-2" ] && fail "a run that stops before approval must leave no host dir"
+[ -e "$CWTFIGO_HOME/hosts/mybox-2" ] && fail "a run that stops before approval must leave no host dir"
 sh "$CW" status 2>&1 >/dev/null | grep -q '^hint: this record is new' || fail "a run that stopped before approval: the owner is still new"
-mkdir "$CWTFIGO_HOME/hosts/mymacair-2"; touch "$CWTFIGO_HOME/hosts/mymacair-2/approved.sha256"
+mkdir "$CWTFIGO_HOME/hosts/mybox-2"; touch "$CWTFIGO_HOME/hosts/mybox-2/approved.sha256"
 for n in '' local a/b 'a b'; do sh "$CW" name "$n" >/dev/null 2>&1 && fail "cw name '$n' should be refused"; done
 mkdir "$CWTFIGO_HOME/hosts/nas"; sh "$CW" name nas >/dev/null 2>&1 && fail "cw name onto an existing host dir should be refused"
 rm -r "$CWTFIGO_HOME/hosts/nas"
 sh "$CW" name box | grep -q box || fail "cw name should say the name"
 grep -qx box "$CWTFIGO_HOME/self" || fail "self not written"
-[ -f "$H/approved.sha256" ] && [ ! -e "$CWTFIGO_HOME/hosts/mymacair-2" ] || fail "cw name should rename this machine's dir"
+[ -f "$H/approved.sha256" ] && [ ! -e "$CWTFIGO_HOME/hosts/mybox-2" ] || fail "cw name should rename this machine's dir"
 
 out=$(sh "$CW" run local collect); [ $? = 3 ] || fail "unapproved collect should exit 3"
 echo "$out" | grep -q '^Tell the human in one line what it reads or changes, then run cw approve box collect@[0-9a-f]\{12\} right away: the permission prompt they get is the question' || fail "never-approved script should ask for one line, not a diff, then approve right away: $out"
@@ -391,11 +410,19 @@ printf '# Reads uptime.\necho outside-body\n' > "$PC/evil.sh"
 sh "$CW" run local "$PC/cwtfigo/scripts/../../evil.sh" >/dev/null 2>&1; [ $? = 1 ] || fail "a path with .. should be refused"
 sh "$CW" approve local "$PC/cwtfigo/scripts/../../evil.sh" >/dev/null 2>&1 && fail "approving a path with .. should be refused"
 sh "$CW" run local ../box/maintain >/dev/null 2>&1; [ $? = 1 ] || fail "a script name with .. should be refused"
-# A path outside the record and the plugin (a key, a .env) is not printed: it would go to the model unasked.
+# A path outside the host's dir and the plugin's scripts (a key, a .env) is refused: not printed, never run.
 printf 'SECRET-KEY-MATERIAL\n' > "$PC/id_ed25519"
-out=$(sh "$CW" run local "$PC/id_ed25519"); [ $? = 3 ] || fail "an unapproved path should exit 3"
+out=$(sh "$CW" run local "$PC/id_ed25519" 2>&1); [ $? = 1 ] || fail "a path outside should be refused: $out"
 echo "$out" | grep -q SECRET && fail "a file outside the record and the plugin must not be printed: $out"
-echo "$out" | grep -q "^not shown: $PC/id_ed25519 is outside" || fail "a path outside should say it's not shown: $out"
+echo "$out" | grep -q "isn't one of box's own scripts" || fail "a path outside should say why it's refused: $out"
+# A bare name that is no script of the host's or the plugin's, but a file in the shell's current dir: refused, under
+# YOLO too, so it is neither run nor approved unseen. Nor approved by name.
+printf 'touch "%s/ran"\n' "$PC" > "$PC/cwd"; cp "$H/approved.sha256" "$PC/before"
+sh "$CW" yolo >/dev/null; (cd "$PC" && sh "$CW" run local cwd >/dev/null 2>&1); r=$?; sh "$CW" yolo off >/dev/null
+[ $r = 1 ] && [ ! -e "$PC/ran" ] && cmp -s "$H/approved.sha256" "$PC/before" || fail "a file in the current dir must not run under YOLO, nor be approved: rc $r"
+(cd "$PC" && sh "$CW" approve local cwd >/dev/null 2>&1) && fail "approving a file in the current dir should be refused"
+sh "$CW" approve local "$PC/cwd" >/dev/null 2>&1 && fail "approving a path outside should be refused"
+cmp -s "$H/approved.sha256" "$PC/before" || fail "a refused approval must write nothing"
 rm -rf "$PC"
 sh "$CW" save "test" >/dev/null || fail "save"
 echo "# don't touch X" >> "$H/maintain.sh"
@@ -627,6 +654,7 @@ echo "$out" | grep -q 'unknown command' && fail "no command is not an unknown on
 art=$(printf '%s\n' '       *' '       |' "  .----'----." '  |  _   _/ |    CWTFIGO' \
   '  | (-o)(-o)|    Claude, what the fuck is going on?' '  | [#####] |' "  '---------'    Scripts run only after your OK.")
 out=$(sh "$CW" status 2>/dev/null); [ "$(echo "$out" | head -7)" = "$art" ] || fail "status should open with the art: $out"
+echo "$out" | grep -qx "  CWTFIGO version: $V" || fail "status should say the plugin's version, bug reports ask for it: $out"
 echo "$out" | grep -q 'Mode\|C  W  T  F\|Reads nothing' && fail "status should have no mode line: $out"
 F=$(mktemp -d); out=$(CWTFIGO_HOME=$F/rec sh "$CW" status 2>/dev/null)
 [ "$(echo "$out" | head -7)" = "$art" ] || fail "a brand-new record's status should open with the art: $out"
@@ -692,15 +720,16 @@ C=$(mktemp -d)/rec; mkdir -p "$C/hosts/box"; cp "$H/cases.jsonl" "$C/hosts/box/"
 out=$(CWTFIGO_HOME=$C sh "$CW" search lid 2>&1) || fail "cases without an archive should still be searched"
 echo "$out" | grep -q 'your own visit on box' || fail "cases without an archive should be found: $out"
 # Own cases are boosted: one scoring a bit below an archive thread comes first, one sharing only a common word doesn't.
+# The second sits at about 1/1.7 of the archive thread's score: a boost of 2 would put it first.
 O=$(mktemp -d)/rec; mkdir -p "$O/hosts/box"
 printf '%s\n' '{"source":"cwtfigo:box/b","title":"Battery drains in sleep","items":[{"kind":"symptom","text":"battery is low after a night asleep"}]}' \
-  '{"source":"cwtfigo:box/f","title":"Fan loud","items":[{"kind":"symptom","text":"the fan spins up at idle"}]}' > "$O/hosts/box/cases.jsonl"
+  '{"source":"cwtfigo:box/f","title":"Fan keeps spinning","items":[{"kind":"symptom","text":"it keeps spinning"}]}' > "$O/hosts/box/cases.jsonl"
 printf '%s\n' '{"source":"https://x/b","title":"Battery drains in sleep","items":[{"kind":"symptom","text":"battery empty overnight"}]}' \
-  '{"source":"https://x/d","title":"Docker container keeps restarting","items":[{"kind":"symptom","text":"docker restart loop after the update"}]}' \
+  '{"source":"https://x/d","title":"Container keeps restarting","items":[{"kind":"symptom","text":"restart loop after the update"}]}' \
   '{"source":"https://x/w","title":"Wifi drops","items":[{"kind":"symptom","text":"wifi gone after resume"}]}' > "$O/archive.jsonl"
 out=$(CWTFIGO_HOME=$O CWTFIGO_ARCHIVE=$O/archive.jsonl sh "$CW" search battery sleep 2>&1)
 echo "$out" | sed -n 2p | grep -q 'cwtfigo:box/b' || fail "an own case scoring a bit below an archive thread should come first: $out"
-out=$(CWTFIGO_HOME=$O CWTFIGO_ARCHIVE=$O/archive.jsonl sh "$CW" search docker keeps restarting the 2>&1)
+out=$(CWTFIGO_HOME=$O CWTFIGO_ARCHIVE=$O/archive.jsonl sh "$CW" search docker keeps restarting 2>&1)
 echo "$out" | sed -n 2p | grep -q 'https://x/d' || fail "an own case sharing only a common word should not beat a strong archive match: $out"
 # Who said it, the derived ending, stone zones (2026-11-05 corpus analysis). `from` is P<participant> #<post>.
 cat >> "$CWTFIGO_HOME/archive/archive.jsonl" <<'EOF'
