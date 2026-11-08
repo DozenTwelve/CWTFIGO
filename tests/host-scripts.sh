@@ -77,6 +77,29 @@ grep -q '^df: broken' "$D/err" || fail "macos check: df's error should show: $(c
 echo "$out" | grep -q '^OK' && fail "macos check: OK from failed commands: $out"
 for w in disk memory swap thermal; do echo "$out" | grep -q "^WARN $w: no .*(error above)" || fail "macos check: failed $w should WARN: $out"; done
 
+# macos check: failed background jobs are this user's that exited with an error, Apple's own and running ones aside.
+fresh; stub launchctl 'printf "PID\tStatus\tLabel\n-\t78\tcom.apple.foo\n-\t1\torg.example.broken\n123\t2\torg.example.running\n-\t-9\torg.example.killed\n-\t0\torg.example.fine\n"'
+out=$(run "$F/macos/check.sh" 2>/dev/null | grep 'background jobs')
+[ "$out" = "WARN failed background jobs: org.example.broken (exit 1)" ] || fail "macos check: failed jobs: $out"
+stub launchctl 'printf "PID\tStatus\tLabel\n-\t78\tcom.apple.foo\n"'
+out=$(run "$F/macos/check.sh" 2>/dev/null | grep 'background jobs')
+[ "$out" = "OK   no failed background jobs" ] || fail "macos check: only Apple's jobs failed: $out"
+stub launchctl 'echo "launchctl: broken" >&2; exit 1'
+run "$F/macos/check.sh" 2>/dev/null | grep -qx 'WARN launchctl list did not answer (error above)' || fail "macos check: launchctl failing should WARN"
+
+# debian and arch check: battery health from sysfs, full against design; one with no numbers says so; none, no line.
+for s in debian arch; do
+  fresh; B=$D/sys/class/power_supply; mkdir -p "$B/BAT0" "$B/BAT1" "$B/AC"
+  echo Battery > "$B/BAT0/type"; echo 30000000 > "$B/BAT0/energy_full"; echo 50000000 > "$B/BAT0/energy_full_design"; echo 412 > "$B/BAT0/cycle_count"
+  echo Battery > "$B/BAT1/type"; echo Mains > "$B/AC/type"
+  out=$(run "$F/$s/check.sh" 2>/dev/null | grep battery)
+  echo "$out" | grep -qx 'WARN battery BAT0 holds 60% of new, 412 cycles' || fail "$s check: battery at 60%: $out"
+  echo "$out" | grep -qx "WARN battery BAT1: no full and design capacity in $B/BAT1" || fail "$s check: battery without numbers: $out"
+  echo 4800000 > "$B/BAT1/charge_full"; echo 5000000 > "$B/BAT1/charge_full_design"; echo 0 > "$B/BAT1/cycle_count"
+  run "$F/$s/check.sh" 2>/dev/null | grep -qx 'OK   battery BAT1 holds 96% of new' || fail "$s check: charge_full battery, no cycles"
+  rm -r "$B/BAT0" "$B/BAT1"; run "$F/$s/check.sh" 2>/dev/null | grep -q battery && fail "$s check: no battery, no line"
+done
+
 # macos maintain: logs counts only files older than 30 days, never DiagnosticReports (the probes read them).
 fresh; L=$HOME/Library/Logs; mkdir -p "$L/DiagnosticReports" "$L/app"
 for f in DiagnosticReports/old.ips app/old.log app/new.log; do head -c 1048576 /dev/zero > "$L/$f"; done

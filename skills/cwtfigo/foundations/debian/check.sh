@@ -99,6 +99,17 @@ j=; [ "$(id -u)" != 0 ] && ! id -Gn | grep -qwE 'adm|systemd-journal|wheel' && j
 has journalctl && info "journal $(journalctl --disk-usage | grep -o '[0-9.]*[KMGT]' | head -1)$j"
 [ -d /var/lib/systemd/coredump ] && { c=$(ls /var/lib/systemd/coredump | wc -l); [ "$c" -gt 0 ] && info "coredumps: $c (coredumpctl list)"; }
 
+# Battery (laptops): what a full charge holds now against new, from the kernel. cycle_count 0 means not reported.
+for b in /sys/class/power_supply/BAT*; do
+  [ -f "$b/type" ] || continue
+  n=${b##*/}; f=$(cat "$b/energy_full" 2>/dev/null || cat "$b/charge_full" 2>/dev/null)
+  d=$(cat "$b/energy_full_design" 2>/dev/null || cat "$b/charge_full_design" 2>/dev/null)
+  c=$(cat "$b/cycle_count" 2>/dev/null); case $c in ''|0|*[!0-9]*) c= ;; *) c=", $c cycles" ;; esac
+  case $f$d in *[!0-9]*|'') warn "battery $n: no full and design capacity in $b"; continue ;; esac
+  [ "$d" -gt 0 ] || { warn "battery $n: design capacity 0 in $b"; continue; }
+  p=$((f * 100 / d)); [ "$p" -ge 80 ] && ok "battery $n holds ${p}% of new$c" || warn "battery $n holds ${p}% of new$c"
+done
+
 info "load $(cut -d' ' -f1-3 /proc/loadavg) on $(nproc) cores, $(uptime -p)"
 
 # Host-specific checks go below this line: drift checks for this host's tweaks (a held kernel, a pinned repo, a masked
