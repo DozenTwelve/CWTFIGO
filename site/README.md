@@ -21,7 +21,7 @@ CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 "$CHROME" --headless --hide-scrollbars --force-device-scale-factor=1 --window-size=180,180 --screenshot=apple-touch-icon.png "file://$PWD/og-image.html#icon"
 ```
 
-`og:image` and `og:url` point at https://cwtf.diamonddoge.org (absolute, as crawlers want).
+`og:image` and `og:url` point at https://cwtfigo.diamonddoge.org (absolute, as crawlers want).
 
 ## Fonts
 
