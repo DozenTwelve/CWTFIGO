@@ -38,6 +38,15 @@ if [ -n "$b" ]; then
   else [ "$3" = Normal ] && [ "${1%\%}" -ge 80 ] && ok "battery $1, $2 cycles, $3" || warn "battery $1, $2 cycles, $3"; fi
 fi
 
+# Failed services: this user's background jobs whose last run ended in an error. Apple's own are left out: many exit
+# non-zero by design. Over SSH launchctl may see that login's jobs rather than the desktop's: the line says so.
+if l=$(launchctl list); then
+  s=; [ -n "${SSH_CONNECTION:-}" ] && s=" (seen over SSH: may miss the desktop's)"
+  x=$(echo "$l" | awk 'NR>1 && $1=="-" && $2+0>0 && $3!~/^com\.apple\./{printf " %s (exit %s)", $3, $2}')
+  [ -n "$x" ] && warn "failed background jobs:$x$s" || ok "no failed background jobs$s"
+else warn "launchctl list did not answer (error above)"; fi
+# Reboot needed: macOS keeps no flag a script can read. A macOS update that restarts it shows in maintain's dry run.
+
 # Homebrew: brew doctor exits 1 on any warning; that's the finding, not a failure. Warnings go to stderr.
 # Exit 1 with no warning is brew doctor itself failing.
 if command -v brew >/dev/null; then

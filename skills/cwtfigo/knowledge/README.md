@@ -12,4 +12,4 @@ Shared, public. Nothing here may identify a person or a home: no IPs, MACs, host
 
 ## Kinds
 
-`kinds.json`: the kinds of fact a case item can have (`kind` in `cases.jsonl`), each with a description and the free labels it groups.
+`kinds.json`: the kinds of fact a case item can have (`kind` in `cases.jsonl`), each with a description and the free labels it groups. A label belongs to one kind only. A guess at a cause is a `hypothesis`, not a `root cause`; a fix tried or suggested is a `proposed fix` until it's confirmed to work, then a `resolution` (`cw search` reads any resolution as fixed).

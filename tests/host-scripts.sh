@@ -77,6 +77,29 @@ grep -q '^df: broken' "$D/err" || fail "macos check: df's error should show: $(c
 echo "$out" | grep -q '^OK' && fail "macos check: OK from failed commands: $out"
 for w in disk memory swap thermal; do echo "$out" | grep -q "^WARN $w: no .*(error above)" || fail "macos check: failed $w should WARN: $out"; done
 
+# macos check: failed background jobs are this user's that exited with an error, Apple's own and running ones aside.
+fresh; stub launchctl 'printf "PID\tStatus\tLabel\n-\t78\tcom.apple.foo\n-\t1\torg.example.broken\n123\t2\torg.example.running\n-\t-9\torg.example.killed\n-\t0\torg.example.fine\n"'
+out=$(run "$F/macos/check.sh" 2>/dev/null | grep 'background jobs')
+[ "$out" = "WARN failed background jobs: org.example.broken (exit 1)" ] || fail "macos check: failed jobs: $out"
+stub launchctl 'printf "PID\tStatus\tLabel\n-\t78\tcom.apple.foo\n"'
+out=$(run "$F/macos/check.sh" 2>/dev/null | grep 'background jobs')
+[ "$out" = "OK   no failed background jobs" ] || fail "macos check: only Apple's jobs failed: $out"
+stub launchctl 'echo "launchctl: broken" >&2; exit 1'
+run "$F/macos/check.sh" 2>/dev/null | grep -qx 'WARN launchctl list did not answer (error above)' || fail "macos check: launchctl failing should WARN"
+
+# debian and arch check: battery health from sysfs, full against design; one with no numbers says so; none, no line.
+for s in debian arch; do
+  fresh; B=$D/sys/class/power_supply; mkdir -p "$B/BAT0" "$B/BAT1" "$B/AC"
+  echo Battery > "$B/BAT0/type"; echo 30000000 > "$B/BAT0/energy_full"; echo 50000000 > "$B/BAT0/energy_full_design"; echo 412 > "$B/BAT0/cycle_count"
+  echo Battery > "$B/BAT1/type"; echo Mains > "$B/AC/type"
+  out=$(run "$F/$s/check.sh" 2>/dev/null | grep battery)
+  echo "$out" | grep -qx 'WARN battery BAT0 holds 60% of new, 412 cycles' || fail "$s check: battery at 60%: $out"
+  echo "$out" | grep -qx "WARN battery BAT1: no full and design capacity in $B/BAT1" || fail "$s check: battery without numbers: $out"
+  echo 4800000 > "$B/BAT1/charge_full"; echo 5000000 > "$B/BAT1/charge_full_design"; echo 0 > "$B/BAT1/cycle_count"
+  run "$F/$s/check.sh" 2>/dev/null | grep -qx 'OK   battery BAT1 holds 96% of new' || fail "$s check: charge_full battery, no cycles"
+  rm -r "$B/BAT0" "$B/BAT1"; run "$F/$s/check.sh" 2>/dev/null | grep -q battery && fail "$s check: no battery, no line"
+done
+
 # macos maintain: logs counts only files older than 30 days, never DiagnosticReports (the probes read them).
 fresh; L=$HOME/Library/Logs; mkdir -p "$L/DiagnosticReports" "$L/app"
 for f in DiagnosticReports/old.ips app/old.log app/new.log; do head -c 1048576 /dev/zero > "$L/$f"; done
@@ -104,6 +127,13 @@ echo "$out" | grep -q '^## report' || fail "macos maintain: the dry run should g
 stub softwareupdate 'echo "Software Update Tool"; echo "* Label: macOS Tahoe 26.1-25B78"'
 run "$D/m.sh" 2>/dev/null | grep -qx '  macOS Tahoe 26.1-25B78' || fail "macos maintain: softwareupdate -l label"
 
+# macos maintain: a Trash macOS won't list (no Full Disk Access) says so and how to allow it, not 0M.
+fresh; mkdir "$HOME/.Trash"; chmod 000 "$HOME/.Trash"
+out=$(run "$F/macos/maintain.sh" trash 2>/dev/null | grep '^trash'); chmod 755 "$HOME/.Trash"
+echo "$out" | grep -Eq '^trash +on +skipped, macOS blocks reading the Trash here\. To include it: .*Full Disk Access' || fail "macos maintain: an unreadable Trash should say macOS blocked it: $out"
+run "$F/macos/maintain.sh" 2>/dev/null | grep -Eqx 'trash +off +0M' || fail "macos maintain: a readable empty Trash is 0M, off"
+rmdir "$HOME/.Trash"
+
 # macos maintain --apply: a clean of a dir that leaves files in use or protected is "partly", not "failed".
 # item() alone, cut out of the script, on a temp dir; nothing else of --apply runs.
 fresh; ln -s "${SH%% *}" "$D/bin/sh"; X=$D/cache; mkdir -p "$X/locked"; touch "$X/gone" "$X/locked/f"; chmod 555 "$X/locked"
@@ -113,6 +143,27 @@ out=$(PATH=$D/bin $SH "$D/item.sh" 2>&1); chmod 755 "$X/locked"   # not run(): i
 echo "$out" | grep -qx '  partly: caches, [0-9]*M left (in use or protected)' || fail "macos maintain: a partly cleaned dir should say partly: $out"
 [ -e "$X/gone" ] && fail "macos maintain: item should still clean what it can"
 echo "$out" | grep -qx '  failed: trash' || fail "macos maintain: without a dir a failed clean stays failed: $out"
+
+# maintain: items named after --apply replace CLEAN for that run (the owner's pick, no edit, no new hash); none
+# cleans nothing; no items keep CLEAN. Only the argument lines run, cut out of each script.
+fresh
+for s in macos debian arch; do
+  { sed -n '/^APPLY=/,/^\[ \$# -gt 0 \]/p' "$F/$s/maintain.sh"; echo 'echo "$APPLY|$CLEAN"'; } > "$D/args.sh"
+  c=$(sed -n 's/^CLEAN="\(.*\)"$/\1/p' "$F/$s/maintain.sh")
+  # args | APPLY | CLEAN after (= the script's own CLEAN)
+  for t in "--apply brew trash|1|brew trash" "--apply none|1|none" "--apply|1|=" "||="; do
+    a=${t%%|*}; w=${t#*|}; [ "${w#*|}" = = ] && w="${w%|*}|$c"
+    { echo "CLEAN=\"$c\""; cat "$D/args.sh"; } > "$D/a.sh"; o=$(PATH=$D/bin $SH "$D/a.sh" $a)
+    [ "$o" = "$w" ] || fail "$s maintain: args '$a' should give APPLY|CLEAN '$w', got '$o'"
+  done
+done
+# The dry run shows the pick as on/off too.
+fresh; stub id 'case $1 in -u) echo 1000 ;; -Gn) echo adm ;; *) echo u ;; esac'
+stub journalctl 'echo "Archived and active journals take up 8.0M in the file system."'
+for s in debian arch; do
+  run "$F/$s/maintain.sh" usercache 2>/dev/null | grep -Eq '^journal +off ' || fail "$s maintain: journal not in the pick should be off"
+  run "$F/$s/maintain.sh" 2>/dev/null | grep -Eq '^journal +on ' || fail "$s maintain: journal is in CLEAN, should be on"
+done
 
 # openwrt maintain: a package in UPGRADE whose upgrade would also move a core package is skipped, and the dry run says so.
 for pm in apk opkg; do
@@ -183,6 +234,20 @@ esac"
     echo "$out" | grep -qx 'choco: 2' || fail "collect.ps1: choco $v installed count: $out"
   done
 fi
+
+# knowledge/kinds.json, which case items take their kind from: valid JSON, each label in one kind only, and no guess
+# or attempt under root cause or resolution (cw search reads any resolution as fixed).
+o=$(python3 - "$S/knowledge/kinds.json" <<'EOF' 2>&1
+import collections, json, re, sys
+k = json.load(open(sys.argv[1]))["kinds"]
+n = collections.Counter(m for x in k for m in x["members"])
+print(*sorted(m for m in n if n[m] > 1), sep="\n")
+for x in k:
+    if x["kind"] in ("root cause", "resolution"):
+        print(*(m for m in x["members"] if re.search(r"possible|likely|suspect|guess|unverified|unconfirmed|hypothes|attempt|suggest", m)), sep="\n")
+EOF
+)
+[ -z "$(echo "$o" | tr -d '[:space:]')" ] || fail "kinds.json: labels in two kinds, or guesses under root cause or resolution: $o"
 
 # Temp dirs are left for the OS to clean (under $TMPDIR); a failing run's copy is $D/script.
 echo "ok"

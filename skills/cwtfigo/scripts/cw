@@ -318,8 +318,8 @@ run)
       echo "NOT APPROVED: $name on $alias, $why (sha256 $(sha "$F"))"
       # name@<hash start>: approve refuses it if the file changed since this showed it.
       a="cw approve $alias $name@$(sha "$F" | cut -c1-12)"
-      case $why$plug in never*|*1) echo "Tell the human in one line what it reads or changes, then run $a right away: the permission prompt they get is the question, don't also ask in chat and wait" ;;
-                        *) echo "Show the human what changed, then run $a right away: the permission prompt they get is the question, don't also ask in chat and wait" ;; esac
+      case $why$plug in never*|*1) echo "Tell the human in one line what it reads or changes, then run $a right away: the permission prompt they get is the question, don't also ask in chat and wait. About to run other scripts here that need approval too (a first visit's check and maintain)? Run them first, then approve all of them in that one call: one prompt" ;;
+                        *) echo "Show the human what changed, then run $a right away: the permission prompt they get is the question, don't also ask in chat and wait. About to run other scripts here that need approval too (a first visit's check and maintain)? Run them first, then approve all of them in that one call: one prompt" ;; esac
     fi
     if git_rec ls-files --error-unmatch "$O" >/dev/null 2>&1 && ! git_rec diff --quiet HEAD -- "$O"; then
       git_rec --no-pager diff HEAD -- "$O"
@@ -509,7 +509,7 @@ EOF
   # stdout is the human's, shown as is; hint: lines on stderr are the model's.
   if [ -n "$new" ]; then
     # One line, nothing to remember: other computers come up only when the owner brings them up.
-    echo "hint: this record is new and not shared: this owner is new to CWTFIGO. A problem they named comes first. If they only said the name, offer a checkup of this computer in plain words: you'd look at its OS and hardware, disk, memory and battery health, failed services, pending updates and how much space cleaning would free (sizes only, never what's in their files), and nothing changes until they say so. Other computers come up only if they mention one where they used CWTFIGO: see Remote and several machines (it takes a shared copy on a computer that's always on)." >&2
+    echo "hint: this record is new and not shared: this owner is new to CWTFIGO. A problem they named comes first. If they only said the name, offer a checkup of this computer in plain words: you'd look at its OS and hardware, disk, memory and battery health, failed services, pending updates and how much space cleaning would free (sizes only, never what's in their files), and nothing changes until they say so. Joining another computer's notes comes up only if they mention one where they used CWTFIGO: see Remote and several machines (it takes a shared copy on a computer that's always on)." >&2
   fi
   # Changed by hand and never saved (a script deleted, a note edited): other operator machines go on seeing the old one.
   # Not .gitignore/.gitattributes: after an update cw adds its own lines there (ignores), and those aren't the owner's.
