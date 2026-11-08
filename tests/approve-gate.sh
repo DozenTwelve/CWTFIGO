@@ -5,7 +5,9 @@
 set -u
 R=$(cd "$(dirname "$0")/.." && pwd); G=$R/hooks/approve-gate.sh; CW=$R/skills/cwtfigo/scripts/cw
 fail() { echo "FAIL: $*"; exit 1; }
-TMPDIR=$(mktemp -d) || exit 1; export TMPDIR; trap 'rm -rf "$TMPDIR"' EXIT
+TMPDIR=$(mktemp -d) || exit 1; export TMPDIR; trap 'chmod -R u+w "$TMPDIR"; rm -rf "$TMPDIR"' EXIT
+# The marker dir: $XDG_RUNTIME_DIR/cwtfigo-visit, here the temp dir.
+XDG_RUNTIME_DIR=$TMPDIR; export XDG_RUNTIME_DIR
 # The hook reads the mode from the record: a temp one, never the real ~/.cwtfigo.
 HOME=$TMPDIR/home; REC=$TMPDIR/rec; export HOME CWTFIGO_HOME=$REC; mkdir -p "$HOME" "$REC/hosts/box"
 mkdir "$TMPDIR/cwtfigo-visit" && : > "$TMPDIR/cwtfigo-visit/on"
@@ -209,4 +211,17 @@ up() { hook "$(printf '"hook_event_name":"UserPromptSubmit","prompt":"%s"' "$1")
 ask "$(bash 'cw approve local x')" "after /cwtfigo prompt"
 S=d; up '/cwtfigo:cwtfigo' >/dev/null
 ask "$(bash 'cw yolo local')" "after /cwtfigo:cwtfigo prompt"
+# A marker dir this user can't write (another user's /tmp dir, a read-only disk): fail closed, never off, and quiet.
+for x in ro/cwtfigo-visit ro2; do mkdir -p "$TMPDIR/$x"; chmod 555 "$TMPDIR/$x"; done
+S=e; XDG_RUNTIME_DIR=$TMPDIR/ro
+o=$(up '/cwtfigo my mac is hot' 2>&1) && [ -z "$o" ] || fail "unwritable marker dir: UserPromptSubmit should exit 0 and print nothing: $o"
+ask "$(bash 'cw approve local x')" "unwritable marker dir, after /cwtfigo prompt"
+S=f; ask "$(bash 'cw approve local x')" "unwritable marker dir, never started"
+XDG_RUNTIME_DIR=$TMPDIR/ro2; ask "$(bash 'cw approve local x')" "marker dir can't be made"
+# No XDG_RUNTIME_DIR (macOS): ~/.cache/cwtfigo-visit, only the user's.
+unset XDG_RUNTIME_DIR; S=g
+[ -z "$(bash 'cw approve local x')" ] || fail "no XDG_RUNTIME_DIR, not started, should pass silently"
+up '/cwtfigo' >/dev/null; ask "$(bash 'cw approve local x')" "no XDG_RUNTIME_DIR, after /cwtfigo prompt"
+[ -e "$HOME/.cache/cwtfigo-visit/g" ] && [ "$(ls -ld "$HOME/.cache/cwtfigo-visit" | cut -c1-10)" = drwx------ ] \
+  || fail "marker should be in ~/.cache/cwtfigo-visit, mode 700"
 echo "ok"
