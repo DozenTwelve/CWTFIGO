@@ -1480,7 +1480,7 @@ mod tests {
         assert!(Command::new("git").args(["init", "-q"]).arg(&d).status().unwrap().success());
         assert!(Command::new("git").arg("-C").arg(&d).args(["remote", "add", "origin", "/nonexistent"]).status().unwrap().success());
         // A slow Home. No terminal: stdin is closed, no /dev/tty (checked only when the test runs in one), git may not prompt.
-        let cw = "sleep 1; : 2>/dev/null </dev/tty && echo got-tty >&2; read x && echo got-stdin >&2\n\
+        let cw = "sleep 1; (: </dev/tty) 2>/dev/null && echo got-tty >&2; read x && echo got-stdin >&2\n\
                   echo \"prompt=$GIT_TERMINAL_PROMPT\" >&2\n\
                   echo 'cw: pull failed, using local record' >&2\n";
         fs::write(d.join("cw"), cw).unwrap();
