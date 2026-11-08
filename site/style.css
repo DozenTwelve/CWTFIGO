@@ -135,7 +135,7 @@ h2:lang(zh) { line-height: 1.22; word-break: keep-all; }
 .faq details[open] summary::after, .walk details[open] summary::after { content: "\2212" / ""; }
 .faq summary:hover, .walk summary:hover { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 0.16em; }
 .faq summary:focus-visible, .walk summary:focus-visible { outline-offset: 4px; }
-.faq details p { max-width: 62ch; padding-bottom: var(--space-lg); color: var(--color-ink-2); }
+.faq details p { padding-bottom: var(--space-lg); color: var(--color-ink-2); }
 
 /* footer: index columns */
 .foot { margin-top: var(--space-2xl); padding-block: var(--space-2xl); border-top: 2px solid var(--color-ink); background: var(--color-paper-3); font-size: var(--text-sm); }
