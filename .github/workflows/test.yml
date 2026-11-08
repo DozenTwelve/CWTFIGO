@@ -1,0 +1,41 @@
+# The test suites on every push and pull request: tests/*.sh under dash (Ubuntu's sh) and bash 3.2 (macOS's sh),
+# cargo test for the TUI. Separate from tui-release.yml, which builds and releases. No secrets, no network past checkout.
+name: test
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shell:
+    strategy:
+      fail-fast: false
+      matrix:
+        # SH: the suites run their child scripts with it. Ubuntu's sh is already dash, so this is the dash run.
+        include:
+          - { os: ubuntu-latest, sh: dash }
+          - { os: macos-latest, sh: sh }
+    runs-on: ${{ matrix.os }}
+    env:
+      SH: ${{ matrix.sh }}
+    steps:
+      - uses: actions/checkout@v5
+      - run: sh tests/cw.sh
+      - run: sh tests/approve-gate.sh
+      - run: sh tests/host-scripts.sh
+      - run: sh tests/tui-release.sh
+
+  tui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: cargo test --locked
+        working-directory: tui
