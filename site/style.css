@@ -1,11 +1,6 @@
-/* Hallmark · shape: Split Studio · genre: modern-minimal · theme: Furrow (deal 2/3, seed cwtfigo-claude-what-fuck-cc63·de16d5ac·2026-11-07·r0) · job: try · draw: 88f515
- * hero: Stage · nav: slab · footer: index columns · imagery: the product (terminal transcripts of a made-up visit) · signature: a whole visit, request to cw save, printed on the notebook card · copy: verbatim
- * axes: light/grotesk-sans/warm · posture: committed · contrast: pass · fold: pass · v2.0.0 */
-/* Hallmark · pre-emit critique: P4 H4 E4 S5 R4 V4 · weakest: P, a disclosure page by nature; argued "asks first, writes down, admits when it stops" with the parked card and real ending shares instead of feature tiles */
-/* Hallmark · waive 47b · one frame kind, the notebook card holding real cw output · the transcript is the product */
-/* Hallmark · dismissed 58 · about half the page words are transcript lines inside pre, the product shown working; prose alone is near 600 */
-/* Hallmark · waive 44c · hero text column centre 482px, cw status card centre 483px at 1440 · the copy button docks in the install head above the commands, so the measured text block stops short of the commands it copies */
-/* Hallmark · swaps: the survey map left out (no land here, the record is the place); dark tokens added for prefers-color-scheme; CJK from a system stack in every font role, zh/ja rules after base */
+/* CWTFIGO landing page. Hero (banner, line, install) fills the first screen; a walkthrough
+ * (details accordion, one fixed picture panel); questions beside the clone install; footer.
+ * One accent: the banner's orange. Light and dark from prefers-color-scheme. */
 
 /* fonts: Red Hat Display/Text/Mono are inlined in fonts.css (OFL), so they arrive with the CSS: no swap. CJK comes from the system (--font-cjk). */
 
