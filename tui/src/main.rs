@@ -128,7 +128,9 @@ fn main() {
         pane: 0,
         scroll: 0,
         mode: Mode::Normal,
-        message: String::new(),
+        message: env::var("CWTFIGO_UPDATED_FROM")
+            .map(|from| format!("updated from {from} to {}", env!("CARGO_PKG_VERSION")))
+            .unwrap_or_default(),
         probing: HashSet::new(),
         pulling: false,
         update,
@@ -240,7 +242,8 @@ fn own_build(home: &Path) -> bool {
 fn update(terminal: &mut DefaultTerminal, app: &mut App) {
     let mut cmd = cw(app);
     cmd.arg("tui");
-    match run_external(terminal, &mut cmd, true) {
+    // No pause on success: the new TUI says it was updated. A failure still stops to show why.
+    match run_external(terminal, &mut cmd, false) {
         Ok(s) if s.success() => {
             let bin = PathBuf::from(env::var_os("HOME").unwrap_or_default()).join(".local/bin/cwtfigo");
             ratatui::restore();
@@ -257,7 +260,9 @@ fn update(terminal: &mut DefaultTerminal, app: &mut App) {
 /// Only returns on failure.
 #[cfg(unix)]
 fn reexec(bin: &Path) -> std::io::Error {
-    std::os::unix::process::CommandExt::exec(Command::new(bin).args(env::args_os().skip(1)))
+    let mut cmd = Command::new(bin);
+    cmd.args(env::args_os().skip(1)).env("CWTFIGO_UPDATED_FROM", env!("CARGO_PKG_VERSION"));
+    std::os::unix::process::CommandExt::exec(&mut cmd)
 }
 #[cfg(not(unix))]
 fn reexec(_: &Path) -> std::io::Error {
@@ -660,7 +665,9 @@ fn got(app: &mut App, m: Msg) {
             if matches!(app.mode, Mode::PickArg(_)) {
                 app.mode = Mode::Normal;
             }
-            app.message = message;
+            // The pull's word comes a second after start: it mustn't wipe out "updated from".
+            app.message =
+                if app.message.starts_with("updated from") { format!("{}, {message}", app.message) } else { message };
         }
     }
 }
