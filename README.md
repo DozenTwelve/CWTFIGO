@@ -84,7 +84,7 @@ When the plugin updates, the menu offers `u` to follow it. More in [`tui/README.
 
 ## When something goes wrong
 
-Tell it: "CWTFIGO, that didn't work", or "CWTFIGO, open an issue about this". It drafts a bug report with the version and what happened, shows it to you, and posts it under your GitHub account only on your yes. Or open one yourself: [new issue](https://github.com/DozenTwelve/CWTFIGO/issues/new/choose). Security problems: see [SECURITY.md](SECURITY.md).
+Tell it: "CWTFIGO, that didn't work", or "CWTFIGO, open an issue about this". It drafts a bug report with the version and what happened, shows it to you, and posts it under your GitHub account only on your yes. Posting needs GitHub's `gh` tool, installed and logged in (`gh auth login`). Or open one yourself: [new issue](https://github.com/DozenTwelve/CWTFIGO/issues/new/choose). Security problems: see [SECURITY.md](SECURITY.md).
 
 <details>
 <summary>Install from a clone, to change it while you use it</summary>
