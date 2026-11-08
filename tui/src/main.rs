@@ -830,7 +830,7 @@ fn draw(f: &mut Frame, app: &mut App) {
     let [left, mid, right] =
         Layout::horizontal([Constraint::Length(left_w), Constraint::Percentage(35), Constraint::Fill(1)]).areas(main);
 
-    // Title bar, as in lanman: name, the record, how many machines answer.
+    // Title bar: name, the record, how many machines answer.
     let up = app.hosts.iter().filter(|h| h.here || h.online == Some(true)).count();
     let count = format!(" {up}/{} online ", app.hosts.len());
     let [name, status] = Layout::horizontal([Constraint::Fill(1), Constraint::Length(count.len() as u16)]).areas(top);
