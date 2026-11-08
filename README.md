@@ -68,6 +68,12 @@ Without Claude Code at hand, this gets the newest release instead:
 mkdir -p ~/.local/bin && curl -fsSL https://github.com/DozenTwelve/CWTFIGO/releases/latest/download/cwtfigo-tui-$(uname -s)-$(uname -m).tar.gz | tar -xz -C ~/.local/bin cwtfigo
 ```
 
+Then type `cwtfigo`. If the terminal says it's not found, `~/.local/bin` isn't on your `PATH` yet (a Mac doesn't have it there by default). Add it and open a new terminal (on Linux with bash, `~/.bashrc` instead of `~/.zshrc`):
+
+```
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+```
+
 When the plugin updates, the menu offers `u` to follow it. More in [`tui/README.md`](tui/README.md).
 
 ## Privacy
