@@ -166,29 +166,21 @@
     },
     {
       "kind": "root cause",
-      "description": "The cause of the bug, whether confirmed, reasoned from code, suspected or guessed, and the mechanism behind it.",
+      "description": "The cause of the bug, confirmed or reasoned from code or measurements, and the mechanism behind it. A guess at the cause is a hypothesis.",
       "members": [
         "root cause",
-        "suspected cause",
         "root cause (reasoned from code)",
         "root cause (reasoned)",
         "root cause (code-reasoned)",
-        "root cause hypothesis",
-        "likely cause",
         "cause",
         "diagnosis",
         "mechanism",
         "root cause evidence",
-        "suspected cause (unverified)",
         "root cause (measured)",
         "root cause location",
         "root cause (code reading)",
-        "cause hypothesis",
-        "suspected root cause",
         "root cause (from code)",
         "root cause confidence",
-        "likely root cause",
-        "root cause guess",
         "root cause attribution",
         "root cause confirmation",
         "root cause (code reasoning)",
@@ -202,24 +194,14 @@
         "root cause (from source)",
         "final root cause",
         "upstream cause",
-        "unverified cause",
-        "possible cause",
-        "possible root cause",
-        "possible cause (guess)",
-        "likely cause (guess)",
-        "suspected cause (unconfirmed)",
-        "suspected cause (guess)",
-        "suggested cause",
-        "reported cause (ai triage, unverified)",
         "mechanism (code-reasoned)",
         "crash mechanism",
-        "code defect (reasoned)",
-        "unverified cause"
+        "code defect (reasoned)"
       ]
     },
     {
       "kind": "hypothesis",
-      "description": "Unverified claims, guesses and interpretations that have not been confirmed, to be treated with caution.",
+      "description": "Unverified claims, guesses and interpretations that have not been confirmed, a suspected or likely cause among them, to be treated with caution.",
       "members": [
         "hypothesis",
         "unverified hypothesis",
@@ -239,7 +221,24 @@
         "inference",
         "interpretation",
         "disputed claim",
-        "possibly related"
+        "possibly related",
+        "suspected cause",
+        "root cause hypothesis",
+        "likely cause",
+        "suspected cause (unverified)",
+        "cause hypothesis",
+        "suspected root cause",
+        "likely root cause",
+        "root cause guess",
+        "unverified cause",
+        "possible cause",
+        "possible root cause",
+        "possible cause (guess)",
+        "likely cause (guess)",
+        "suspected cause (unconfirmed)",
+        "suspected cause (guess)",
+        "suggested cause",
+        "reported cause (ai triage, unverified)"
       ]
     },
     {
@@ -313,14 +312,12 @@
         "root cause / fix",
         "fix mechanism",
         "fix semantics",
-        "fix evidence",
-        "fix attempt",
-        "fix"
+        "fix evidence"
       ]
     },
     {
       "kind": "proposed fix",
-      "description": "Fixes, designs or approaches suggested but not confirmed, including alternatives, for trying or implementing.",
+      "description": "Fixes, designs or approaches suggested or tried but not confirmed to work, including alternatives, for trying or implementing.",
       "members": [
         "proposed fix",
         "suggested fix",
@@ -344,7 +341,8 @@
         "suggested fix (untested)",
         "proposed fix (untested)",
         "suggestion",
-        "advice"
+        "advice",
+        "fix attempt"
       ]
     },
     {

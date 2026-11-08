@@ -228,5 +228,19 @@ esac"
   done
 fi
 
+# knowledge/kinds.json, which case items take their kind from: valid JSON, each label in one kind only, and no guess
+# or attempt under root cause or resolution (cw search reads any resolution as fixed).
+o=$(python3 - "$S/knowledge/kinds.json" <<'EOF' 2>&1
+import collections, json, re, sys
+k = json.load(open(sys.argv[1]))["kinds"]
+n = collections.Counter(m for x in k for m in x["members"])
+print(*sorted(m for m in n if n[m] > 1), sep="\n")
+for x in k:
+    if x["kind"] in ("root cause", "resolution"):
+        print(*(m for m in x["members"] if re.search(r"possible|likely|suspect|guess|unverified|unconfirmed|hypothes|attempt|suggest", m)), sep="\n")
+EOF
+)
+[ -z "$(echo "$o" | tr -d '[:space:]')" ] || fail "kinds.json: labels in two kinds, or guesses under root cause or resolution: $o"
+
 # Temp dirs are left for the OS to clean (under $TMPDIR); a failing run's copy is $D/script.
 echo "ok"
