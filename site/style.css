@@ -15,7 +15,7 @@
   --container: 1440px; --gutter: 64px; --gap-columns: 32px; --gap-split: 64px; --nav-h: 64px;
   --color-paper: #f4ede0; /* the light banner's background */ --color-paper-2: oklch(99.5% 0.005 85); --color-paper-3: oklch(92% 0.016 85);
   --color-ink: oklch(18% 0.006 60); --color-ink-2: oklch(28% 0.008 60); --color-muted: oklch(44% 0.012 60); --color-rule: oklch(88% 0.013 85);
-  --color-accent: oklch(70% 0.19 40); --color-accent-ink: oklch(18% 0.006 60); --color-focus: oklch(60% 0.19 40);
+  --color-accent: #ee611e; /* the banner's orange */ --color-accent-ink: oklch(18% 0.006 60); --color-focus: oklch(60% 0.19 40);
   --color-head: oklch(18% 0.006 60); --color-head-ink: oklch(96% 0.011 85);
   --color-sheet: oklch(99.3% 0.004 85);
   --color-term: #1c1c2c; --color-term-ink: #e4e4ee; --color-term-dim: #a9a9bd; /* the screenshots' terminal, dark in both themes */
