@@ -720,15 +720,16 @@ C=$(mktemp -d)/rec; mkdir -p "$C/hosts/box"; cp "$H/cases.jsonl" "$C/hosts/box/"
 out=$(CWTFIGO_HOME=$C sh "$CW" search lid 2>&1) || fail "cases without an archive should still be searched"
 echo "$out" | grep -q 'your own visit on box' || fail "cases without an archive should be found: $out"
 # Own cases are boosted: one scoring a bit below an archive thread comes first, one sharing only a common word doesn't.
+# The second sits at about 1/1.7 of the archive thread's score: a boost of 2 would put it first.
 O=$(mktemp -d)/rec; mkdir -p "$O/hosts/box"
 printf '%s\n' '{"source":"cwtfigo:box/b","title":"Battery drains in sleep","items":[{"kind":"symptom","text":"battery is low after a night asleep"}]}' \
-  '{"source":"cwtfigo:box/f","title":"Fan loud","items":[{"kind":"symptom","text":"the fan spins up at idle"}]}' > "$O/hosts/box/cases.jsonl"
+  '{"source":"cwtfigo:box/f","title":"Fan keeps spinning","items":[{"kind":"symptom","text":"it keeps spinning"}]}' > "$O/hosts/box/cases.jsonl"
 printf '%s\n' '{"source":"https://x/b","title":"Battery drains in sleep","items":[{"kind":"symptom","text":"battery empty overnight"}]}' \
-  '{"source":"https://x/d","title":"Docker container keeps restarting","items":[{"kind":"symptom","text":"docker restart loop after the update"}]}' \
+  '{"source":"https://x/d","title":"Container keeps restarting","items":[{"kind":"symptom","text":"restart loop after the update"}]}' \
   '{"source":"https://x/w","title":"Wifi drops","items":[{"kind":"symptom","text":"wifi gone after resume"}]}' > "$O/archive.jsonl"
 out=$(CWTFIGO_HOME=$O CWTFIGO_ARCHIVE=$O/archive.jsonl sh "$CW" search battery sleep 2>&1)
 echo "$out" | sed -n 2p | grep -q 'cwtfigo:box/b' || fail "an own case scoring a bit below an archive thread should come first: $out"
-out=$(CWTFIGO_HOME=$O CWTFIGO_ARCHIVE=$O/archive.jsonl sh "$CW" search docker keeps restarting the 2>&1)
+out=$(CWTFIGO_HOME=$O CWTFIGO_ARCHIVE=$O/archive.jsonl sh "$CW" search docker keeps restarting 2>&1)
 echo "$out" | sed -n 2p | grep -q 'https://x/d' || fail "an own case sharing only a common word should not beat a strong archive match: $out"
 # Who said it, the derived ending, stone zones (2026-11-05 corpus analysis). `from` is P<participant> #<post>.
 cat >> "$CWTFIGO_HOME/archive/archive.jsonl" <<'EOF'
