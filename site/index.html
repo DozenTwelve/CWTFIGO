@@ -49,7 +49,7 @@
   <p class="lead">Call Claude by name. It finds what’s wrong, fixes it on your OK, and remembers.</p>
   <div class="install">
     <div class="install__box">
-      <div class="install__head"><span class="install__status" role="status">Paste into Claude Code</span><button class="btn btn--primary" type="button" data-copy="install-1">Copy the install</button></div>
+      <div class="install__head"><span class="install__status" role="status">Paste into Claude Code, one line at a time</span><button class="btn btn--primary" type="button" data-copy="install-1">Copy line 1</button></div>
       <pre id="install-1" tabindex="0"><code><span class="ln">/plugin marketplace add DozenTwelve/<wbr>CWTFIGO</span><span class="ln">/plugin install cwtfigo@cwtfigo</span></code></pre>
     </div>
   </div>
@@ -160,12 +160,18 @@ Debian file server. Backups only.
 </footer>
 
 <script>
-document.querySelectorAll('[data-copy]').forEach((b) => b.addEventListener('click', () => {
-  const pre = document.getElementById(b.dataset.copy), out = b.closest('.install').querySelector('[role=status]');
-  out.dataset.label ??= out.textContent;
-  navigator.clipboard.writeText(pre.innerText.trim()).then(() => { out.textContent = 'Copied. ' + out.dataset.label; },
-    () => { getSelection().selectAllChildren(pre); out.textContent = 'Selected. Copy it with your keyboard.'; });
-}));
+// One line per click: Claude Code takes a paste as one message, so both /plugin lines at once aren't two commands.
+document.querySelectorAll('[data-copy]').forEach((b) => {
+  const lines = document.getElementById(b.dataset.copy).querySelectorAll('.ln'), out = b.closest('.install').querySelector('[role=status]');
+  let i = 0;
+  b.addEventListener('click', () => {
+    const ln = lines[i], n = i + 1;
+    i = n % lines.length;
+    b.textContent = 'Copy line ' + (i + 1);
+    navigator.clipboard.writeText(ln.innerText.trim()).then(() => { out.textContent = 'Copied line ' + n + '. Paste it into Claude Code and press Enter.'; },
+      () => { getSelection().selectAllChildren(ln); out.textContent = 'Selected line ' + n + '. Copy it with your keyboard.'; });
+  });
+});
 </script>
 </body>
 </html>

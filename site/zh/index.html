@@ -49,7 +49,7 @@
   <p class="lead">喊 Claude 的名字。它找出哪里不对，你点头才修，还会记住。</p>
   <div class="install">
     <div class="install__box">
-      <div class="install__head"><span class="install__status" role="status">粘贴到 Claude Code</span><button class="btn btn--primary" type="button" data-copy="install-1">复制安装命令</button></div>
+      <div class="install__head"><span class="install__status" role="status">一行一行粘贴到 Claude Code</span><button class="btn btn--primary" type="button" data-copy="install-1">复制第 1 行</button></div>
       <pre id="install-1" tabindex="0"><code><span class="ln">/plugin marketplace add DozenTwelve/<wbr>CWTFIGO</span><span class="ln">/plugin install cwtfigo@cwtfigo</span></code></pre>
     </div>
   </div>
@@ -160,12 +160,18 @@ Debian 文件服务器，只做备份。
 </footer>
 
 <script>
-document.querySelectorAll('[data-copy]').forEach((b) => b.addEventListener('click', () => {
-  const pre = document.getElementById(b.dataset.copy), out = b.closest('.install').querySelector('[role=status]');
-  out.dataset.label ??= out.textContent;
-  navigator.clipboard.writeText(pre.innerText.trim()).then(() => { out.textContent = '已复制。' + out.dataset.label; },
-    () => { getSelection().selectAllChildren(pre); out.textContent = '已选中，用键盘复制。'; });
-}));
+// One line per click: Claude Code takes a paste as one message, so both /plugin lines at once aren't two commands.
+document.querySelectorAll('[data-copy]').forEach((b) => {
+  const lines = document.getElementById(b.dataset.copy).querySelectorAll('.ln'), out = b.closest('.install').querySelector('[role=status]');
+  let i = 0;
+  b.addEventListener('click', () => {
+    const ln = lines[i], n = i + 1;
+    i = n % lines.length;
+    b.textContent = '复制第 ' + (i + 1) + ' 行';
+    navigator.clipboard.writeText(ln.innerText.trim()).then(() => { out.textContent = '已复制第 ' + n + ' 行。粘贴到 Claude Code，按回车。'; },
+      () => { getSelection().selectAllChildren(ln); out.textContent = '已选中第 ' + n + ' 行，用键盘复制。'; });
+  });
+});
 </script>
 </body>
 </html>

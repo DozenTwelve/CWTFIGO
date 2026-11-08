@@ -17,7 +17,7 @@ A plugin for [Claude Code](https://claude.com/claude-code) ([website](https://cw
 
 ## Install
 
-In Claude Code:
+In Claude Code, paste one line at a time:
 
 ```
 /plugin marketplace add DozenTwelve/CWTFIGO
