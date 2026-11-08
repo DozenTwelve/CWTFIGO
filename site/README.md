@@ -6,7 +6,7 @@ Copied from the repo's `assets/` (which is not deployed); recopy them when those
 
 - `banner-light.png`, `banner-dark.png` (1280x640): the hero, swapped by `prefers-color-scheme`. The page background (`--color-paper` in `style.css`) is set to each banner's own background colour, so keep the two in step.
 - `report.png`, `approve.png`, `tui.png`: the walkthrough's screenshots, letterboxed in its fixed panel. `report.png` is cropped to the summary line and the Health table.
-- `robot.png` (61x64, shown at 32px tall): the robot's head, cut from `assets/banner-light.png` with its flat background made transparent. It is the favicon and the mark beside the wordmark in the nav and footer of both pages.
+- `robot.png` (206x216, shown at 32px tall): the robot's head, cut from `assets/banner-light.png` at full resolution (x 200, y 96, 206x216) with its flat background made transparent by a flood fill from the top edge and the upper sides (filling from the bottom leaks into the body). It is the favicon, the mark beside the wordmark in the nav and footer of both pages, and the home-screen icon.
 
 `mascot.svg` is the older placeholder face. The pages no longer use it, but `og-image.html` still does, so `og-image.png` and `apple-touch-icon.png` still show it; they were left alone. The two PNGs are rendered from `og-image.html`, which shows the mascot next to the headline:
 
