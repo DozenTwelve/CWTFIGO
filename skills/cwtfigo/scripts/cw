@@ -16,7 +16,7 @@
 #
 # <alias>: the SSH alias, also the host's dir in hosts/. "local", or this machine's own name ($REC/self), runs here.
 # A record not shared with other computers (no remote) names this machine from its hostname on the first "local".
-# <script>: collect | check | maintain | hosts/<alias>/<name>.sh, else scripts/probes/<name>.sh | a path. .ps1 on Windows.
+# <script>: collect | check | maintain | hosts/<alias>/<name>.sh, else scripts/probes/<name>.sh. .ps1 on Windows.
 # A missing check.sh / maintain.sh is copied from foundations/<os>/ (os from device.json); run and approve refuse it
 # until the model has adapted it and deleted its CWTFIGO-FOUNDATION line. Unapproved scripts print (the plugin's own: header and path) and exit 3 (under yolo: print and run).
 # collect writes hosts/<alias>/facts.md and exits 4 if the machine id no longer matches or another host has it.
@@ -202,6 +202,10 @@ resolve() {
        [ -f "$F" ] || { F=$1; plug=; } ;;
   esac
   [ -f "$F" ] || die "no such script: $1"
+  # Only the host's own scripts and the plugin's: anything else (a bare name found in the shell's current dir, a key)
+  # would be run, and under YOLO approved, by a hash nobody saw the file of.
+  case $F in "$H"/*|"$SKILL/scripts/collect.$X"|"$SKILL"/scripts/probes/*) ;;
+    *) die "$1 isn't one of $alias's own scripts ($H) or the plugin's: cw runs only those. Write it into $H first, then run it by its name" ;; esac
 }
 
 # PowerShell loader, base64 UTF-16LE so no shell in between can mangle it. stdin: the number of args, one arg per line
@@ -322,11 +326,7 @@ run)
     elif [ -n "$plug" ]; then
       awk 'NR == 1 && /^#!/ { next } !/^#/ { exit } { print }' "$F"; echo "full script: $O"
     else
-      # Shown in full only from the record or the plugin: given a path, any file (a key, a .env) would go to the model.
-      case $O in
-        "$REC"/*|"$SKILL"/*) cat "$F" ;;
-        *) echo "not shown: $O is outside the record and the plugin. Read it with your own tools first (that asks the owner)." ;;
-      esac
+      cat "$F"
     fi
     [ -n "$y" ] || exit 3
     mkh; echo "$(sha "$F")  $name  $(date +%F)  yolo" >> "$H/approved.sha256"

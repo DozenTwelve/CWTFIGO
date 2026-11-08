@@ -410,11 +410,19 @@ printf '# Reads uptime.\necho outside-body\n' > "$PC/evil.sh"
 sh "$CW" run local "$PC/cwtfigo/scripts/../../evil.sh" >/dev/null 2>&1; [ $? = 1 ] || fail "a path with .. should be refused"
 sh "$CW" approve local "$PC/cwtfigo/scripts/../../evil.sh" >/dev/null 2>&1 && fail "approving a path with .. should be refused"
 sh "$CW" run local ../box/maintain >/dev/null 2>&1; [ $? = 1 ] || fail "a script name with .. should be refused"
-# A path outside the record and the plugin (a key, a .env) is not printed: it would go to the model unasked.
+# A path outside the host's dir and the plugin's scripts (a key, a .env) is refused: not printed, never run.
 printf 'SECRET-KEY-MATERIAL\n' > "$PC/id_ed25519"
-out=$(sh "$CW" run local "$PC/id_ed25519"); [ $? = 3 ] || fail "an unapproved path should exit 3"
+out=$(sh "$CW" run local "$PC/id_ed25519" 2>&1); [ $? = 1 ] || fail "a path outside should be refused: $out"
 echo "$out" | grep -q SECRET && fail "a file outside the record and the plugin must not be printed: $out"
-echo "$out" | grep -q "^not shown: $PC/id_ed25519 is outside" || fail "a path outside should say it's not shown: $out"
+echo "$out" | grep -q "isn't one of box's own scripts" || fail "a path outside should say why it's refused: $out"
+# A bare name that is no script of the host's or the plugin's, but a file in the shell's current dir: refused, under
+# YOLO too, so it is neither run nor approved unseen. Nor approved by name.
+printf 'touch "%s/ran"\n' "$PC" > "$PC/cwd"; cp "$H/approved.sha256" "$PC/before"
+sh "$CW" yolo >/dev/null; (cd "$PC" && sh "$CW" run local cwd >/dev/null 2>&1); r=$?; sh "$CW" yolo off >/dev/null
+[ $r = 1 ] && [ ! -e "$PC/ran" ] && cmp -s "$H/approved.sha256" "$PC/before" || fail "a file in the current dir must not run under YOLO, nor be approved: rc $r"
+(cd "$PC" && sh "$CW" approve local cwd >/dev/null 2>&1) && fail "approving a file in the current dir should be refused"
+sh "$CW" approve local "$PC/cwd" >/dev/null 2>&1 && fail "approving a path outside should be refused"
+cmp -s "$H/approved.sha256" "$PC/before" || fail "a refused approval must write nothing"
 rm -rf "$PC"
 sh "$CW" save "test" >/dev/null || fail "save"
 echo "# don't touch X" >> "$H/maintain.sh"
