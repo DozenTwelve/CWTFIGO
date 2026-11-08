@@ -1,8 +1,13 @@
 Static landing page: preview with `cd site && python3 -m http.server` (Chinese at `/zh/`), or open `index.html` as a file; deploys to Cloudflare Pages as a static directory, build command none, output directory `site`.
 
-## Mascot and images (placeholders)
+## Images
 
-`mascot.svg` is the one source. It is used as-is for the favicon and the mark beside the wordmark in the nav and footer of both pages. The two PNGs are rendered from `og-image.html`, which shows the mascot next to the headline:
+Copied from the repo's `assets/` (which is not deployed); recopy them when those change:
+
+- `banner-light.png`, `banner-dark.png` (1280x640): the hero, swapped by `prefers-color-scheme`. The page background (`--color-paper` in `style.css`) is set to each banner's own background colour, so keep the two in step.
+- `report.png`, `approve.png`, `tui.png`: the walkthrough's screenshots, letterboxed in its fixed panel.
+
+`mascot.svg` is used as-is for the favicon and the mark beside the wordmark in the nav and footer of both pages. The two PNGs below are rendered from `og-image.html`, which shows the mascot next to the headline:
 
 - `og-image.png`, 1200x630, the social card (`og:image` on both pages)
 - `apple-touch-icon.png`, 180x180, the same page at `og-image.html#icon`
