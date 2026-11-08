@@ -81,7 +81,7 @@ struct App {
 
 /// What a background thread reports: a probe's answer, or how `cw status` (the pull) ended.
 enum Msg {
-    Online(String, bool),
+    Online(String, Option<bool>),
     Pulled(String),
 }
 
@@ -655,7 +655,7 @@ fn got(app: &mut App, m: Msg) {
         Msg::Online(name, online) => {
             app.probing.remove(&name);
             if let Some(h) = app.hosts.iter_mut().find(|h| h.name == name) {
-                h.online = Some(online);
+                h.online = online;
             }
         }
         Msg::Pulled(message) => {
@@ -746,15 +746,26 @@ fn probe(name: String, tx: Sender<Msg>) {
             .unwrap_or_default();
         let get = |k: &str| cfg.lines().find_map(|l| l.strip_prefix(k)).map(|v| v.trim().to_string());
         let online = match (get("hostname "), get("port ").and_then(|p| p.parse::<u16>().ok())) {
-            (Some(h), Some(p)) => (h.as_str(), p)
-                .to_socket_addrs()
-                .ok()
-                .and_then(|mut a| a.next())
-                .is_some_and(|a| TcpStream::connect_timeout(&a, Duration::from_millis(800)).is_ok()),
-            _ => false,
+            (Some(h), Some(p)) => reach(&h, p),
+            _ => None,
         };
         let _ = tx.send(Msg::Online(name, online));
     });
+}
+
+/// Some(true) if the port answers, Some(false) if it doesn't, None (unknown) if the name doesn't resolve here: ssh may
+/// still find it. The Linux build is static musl, whose resolver skips NSS (no mDNS, so no `.local`); getent asks the
+/// system's.
+fn reach(host: &str, port: u16) -> Option<bool> {
+    let addr = (host, port).to_socket_addrs().ok().and_then(|mut a| a.next()).or_else(|| {
+        if !cfg!(target_os = "linux") {
+            return None;
+        }
+        let out = Command::new("getent").args(["hosts", host]).output().ok()?;
+        let ip = String::from_utf8_lossy(&out.stdout).split_whitespace().next()?.parse::<std::net::IpAddr>().ok()?;
+        Some((ip, port).into())
+    })?;
+    Some(TcpStream::connect_timeout(&addr, Duration::from_millis(800)).is_ok())
 }
 
 const ACCENT: Color = Color::Cyan;
@@ -1153,6 +1164,17 @@ mod tests {
         assert_eq!(installed_cw(r#"{"plugins":{"cwtfigo@cwtfigo":[{"installPath":"/a"},{"installPath":"/b"}]}}"#).len(), 2);
         assert!(installed_cw(r#"{"plugins":{"caveman@caveman":[]}}"#).is_empty());
         assert!(installed_cw("").is_empty());
+    }
+
+    #[test]
+    fn a_name_that_does_not_resolve_is_unknown_not_offline() {
+        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = l.local_addr().unwrap().port();
+        assert_eq!(reach("127.0.0.1", port), Some(true));
+        drop(l);
+        assert_eq!(reach("127.0.0.1", port), Some(false), "resolves, nothing listens: offline");
+        // .invalid never resolves (RFC 6761), as a .local name doesn't through musl's resolver.
+        assert_eq!(reach("cwtfigo-test.invalid", 22), None);
     }
 
     #[test]
