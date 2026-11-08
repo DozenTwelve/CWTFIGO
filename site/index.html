@@ -103,20 +103,36 @@ Debian file server. Backups only.
   <h2 id="questions-title">Questions</h2>
   <div class="faq">
     <details>
-      <summary>Where do my notes go?</summary>
-      <p>Into <code>~/.cwtfigo</code> on your computer. Delete that folder and they’re gone. What Claude reads passes through Anthropic, like anything in Claude Code.</p>
+      <summary>What do I need?</summary>
+      <p>Claude Code, <code>git</code> and <code>python3</code>, which it uses to search past fixes. On a Mac, get <code>git</code> with <code>xcode-select --install</code>. On Windows it runs in Git Bash, which Claude Code needs there anyway. The first visit goes best on Opus: <code>/model opus</code>.</p>
     </details>
     <details>
-      <summary>What do I need?</summary>
-      <p>Claude Code, <code>git</code> and <code>python3</code>. On a Mac, run <code>xcode-select --install</code> first. The first visit goes best on Opus: <code>/model opus</code>.</p>
+      <summary>Which computers does it work on?</summary>
+      <p>Macs, Linux, Windows, Steam Deck and routers: the one in front of you, or others on your network over SSH. Your laptop can look after your server, your NAS and your router, with the notes for all of them in one place.</p>
+    </details>
+    <details>
+      <summary>Why not just ask Claude?</summary>
+      <p>Without notes, every chat starts from zero: what this machine is, what you tried last month. CWTFIGO remembers. Each machine also gets its own health check and upkeep script, written by Claude for that machine and approved by you, then rerun every visit and rewritten when something new is learned.</p>
+    </details>
+    <details>
+      <summary>Can I use it without AI?</summary>
+      <p>Yes, on Mac and Linux. A small menu in your terminal runs the scripts Claude has written and you’ve approved, machine by machine, so on day one it’s empty and it fills as you use CWTFIGO. In Claude Code, say “CWTFIGO install the TUI”, then type <code>cwtfigo</code> in a terminal.</p>
+    </details>
+    <details>
+      <summary>Where do my notes go?</summary>
+      <p>Into <code>~/.cwtfigo</code>, a git folder on your computer. Delete it and they’re gone. Several computers can share them through a private git remote you own, never a public one.</p>
+    </details>
+    <details>
+      <summary>What does Claude see?</summary>
+      <p>What it reads (names, paths, ports, log lines) passes through Anthropic, like anything else you show Claude Code. For a cleanup it measures sizes, never what’s in your files.</p>
     </details>
     <details>
       <summary>Will it touch things I didn’t ask about?</summary>
-      <p>It starts only when you call it by name, and only on the computer you point it at.</p>
+      <p>It only starts when you call it by name. Describe a problem without the name and you get a normal Claude answer. It never touches a machine you didn’t point it at.</p>
     </details>
     <details>
       <summary>Something went wrong?</summary>
-      <p>Tell it “CWTFIGO, that didn’t work”. It drafts a bug report and posts it only on your yes. Or <a href="https://github.com/DozenTwelve/CWTFIGO/issues/new/choose">open an issue</a> yourself.</p>
+      <p>Tell it “CWTFIGO, that didn’t work”, or “CWTFIGO, open an issue about this”. It drafts a bug report with the version and what happened, shows it to you, and posts it under your GitHub account only on your yes. Or <a href="https://github.com/DozenTwelve/CWTFIGO/issues/new/choose">open one yourself</a>. Security problems: see <a href="https://github.com/DozenTwelve/CWTFIGO/blob/main/SECURITY.md">SECURITY.md</a>.</p>
     </details>
   </div>
 </section>

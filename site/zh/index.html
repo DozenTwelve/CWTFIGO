@@ -103,20 +103,36 @@ Debian 文件服务器，只做备份。
   <h2 id="questions-title">常见问题</h2>
   <div class="faq">
     <details>
-      <summary>笔记存在哪儿？</summary>
-      <p>存在你电脑上的 <code>~/.cwtfigo</code>，删掉这个文件夹就没了。Claude 读到的内容会经过 Anthropic，Claude Code 里的一切都是这样。</p>
+      <summary>需要装什么？</summary>
+      <p>Claude Code、<code>git</code> 和 <code>python3</code>，后者用来搜过去的修法。Mac 上用 <code>xcode-select --install</code> 装 <code>git</code>。Windows 上它跑在 Git Bash 里，反正 Claude Code 在那边也要它。第一次用 Opus 效果最好：<code>/model opus</code>。</p>
     </details>
     <details>
-      <summary>需要装什么？</summary>
-      <p>Claude Code、<code>git</code> 和 <code>python3</code>。Mac 上先运行 <code>xcode-select --install</code>。第一次用 Opus 效果最好：<code>/model opus</code>。</p>
+      <summary>能管哪些电脑？</summary>
+      <p>Mac、Linux、Windows、Steam Deck 和路由器：你面前这台，或者同一网络里经 SSH 连到的其他机器。你的笔记本可以照看服务器、NAS 和路由器，所有机器的笔记放在一处。</p>
+    </details>
+    <details>
+      <summary>为什么不直接问 Claude？</summary>
+      <p>没有笔记，每次对话都从零开始：这台机器是什么、上个月试过什么。CWTFIGO 记得。每台机器还有自己的体检和保养脚本，由 Claude 为这台机器写、你点头同意，之后每次都重跑，学到新东西就改写。</p>
+    </details>
+    <details>
+      <summary>不用 AI 能用吗？</summary>
+      <p>能，Mac 和 Linux 上。终端里有个小菜单，按机器列出 Claude 写好、你同意过的脚本，直接就能跑；所以第一天它是空的，用得越多越满。在 Claude Code 里说“CWTFIGO install the TUI”，然后在终端里输入 <code>cwtfigo</code>。</p>
+    </details>
+    <details>
+      <summary>笔记存在哪儿？</summary>
+      <p>存在 <code>~/.cwtfigo</code>，你电脑上的一个 git 文件夹。删掉它就没了。几台电脑可以通过你自己的私有 git 远端共用这些笔记，绝不用公开的。</p>
+    </details>
+    <details>
+      <summary>Claude 能看到什么？</summary>
+      <p>它读到的内容（名字、路径、端口、日志行）会经过 Anthropic，和你给 Claude Code 看的其他东西一样。清理时它只量大小，从不看文件内容。</p>
     </details>
     <details>
       <summary>它会动我没让它动的东西吗？</summary>
-      <p>只有你喊它名字时它才开始，也只碰你指给它的那台电脑。</p>
+      <p>只有你喊它名字时它才开始。不带名字描述问题，你得到的是普通的 Claude 回答。你没指给它的机器，它从不碰。</p>
     </details>
     <details>
       <summary>出问题了怎么办？</summary>
-      <p>告诉它“CWTFIGO，刚才那个没用”。它会起草一份 bug 报告，你点头才发出去。也可以自己<a href="https://github.com/DozenTwelve/CWTFIGO/issues/new/choose">开一个 issue</a>。</p>
+      <p>告诉它“CWTFIGO，刚才那个没用”，或者“CWTFIGO，就这个开个 issue”。它会起草一份 bug 报告，写上版本和经过，先给你看，你点头才用你的 GitHub 账号发出去。也可以<a href="https://github.com/DozenTwelve/CWTFIGO/issues/new/choose">自己开一个</a>。安全问题见 <a href="https://github.com/DozenTwelve/CWTFIGO/blob/main/SECURITY.md">SECURITY.md</a>。</p>
     </details>
   </div>
 </section>
