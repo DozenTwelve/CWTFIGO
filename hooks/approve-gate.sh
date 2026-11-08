@@ -3,7 +3,9 @@
 # different things. Before that (working on the plugin, running its tests, a contributor's PR) nothing here asks.
 # Started = this session called the cwtfigo skill: a Skill call (PreToolUse, tool_input {"skill":"cwtfigo:cwtfigo"})
 # or a prompt beginning /cwtfigo or /cwtfigo:cwtfigo (UserPromptSubmit). Either one leaves a marker file
-# ${TMPDIR:-/tmp}/cwtfigo-visit/<session_id>. No session_id in stdin: treated as started (fail closed).
+# ${XDG_RUNTIME_DIR:-~/.cache}/cwtfigo-visit/<session_id>, the user's own (not /tmp, which every user on a Linux box
+# shares: whoever made it first would own it). No session_id in stdin, or a marker dir this user can't write: treated
+# as started (fail closed).
 # Residual risk, accepted by the owner: in a session that never started the plugin, the model can write approved.sha256
 # directly without being asked.
 #
@@ -37,7 +39,7 @@
 # The rest gets no output. YOLO (cw yolo) is the third level: cw's, not this hook's.
 # What it is: a string match that stops the model approving by habit or by mistake. What it is not: a wall. A model set
 # on getting around it can: build the words at run time (eval, base64, printf), write a script with Write and run it
-# (Write content isn't read), use a glob or a copy of the host dir it doesn't name, or clear $TMPDIR as a whole.
+# (Write content isn't read), use a glob or a copy of the host dir it doesn't name, or clear the marker dir as a whole.
 # Limits of the allow itself, known: an approved script's args aren't hashed (wifi --test runs as freely as wifi); a
 # host script edited between the run that showed it and a cw approve by plain name is approved as edited (cw approve
 # <alias> <script>@<hash start>, as run prints it, refuses that); and cw run and cw status pull the shared record
@@ -52,9 +54,12 @@
 # words: spaces between yolo and off (`cw yolo "" off` is YOLO on), then a space, ; & | ), the end of the command or a
 # newline after off.
 in=$(cat)
-d=${TMPDIR:-/tmp}/cwtfigo-visit
+d=${XDG_RUNTIME_DIR:-$HOME/.cache}/cwtfigo-visit
 sid=$(printf '%s' "$in" | sed -nE 's/.*"session_id" *: *"([^"]*)".*/\1/p' | head -n 1 | tr -cd 'A-Za-z0-9_-')
-mark() { [ -n "$sid" ] && mkdir -p "$d" && : > "$d/$sid"; exit 0; }
+# Quiet on failure: a UserPromptSubmit hook's error lands in the owner's prompt. A marker it couldn't write leaves the
+# gate on: below, a dir it can't write counts as started. (true, not :, whose failed redirect ends dash.)
+mkd() { (umask 077; mkdir -p "$d") 2>/dev/null && [ -w "$d" ]; }
+mark() { [ -n "$sid" ] && mkd && { true > "$d/$sid"; } 2>/dev/null; exit 0; }
 if printf '%s' "$in" | grep -Eq '"hook_event_name" *: *"UserPromptSubmit"'; then
   printf '%s' "$in" | grep -Eiq '"prompt" *: *"[[:space:]]*/cwtfigo(:cwtfigo)?([" \\]|$)' && mark
   exit 0
@@ -63,7 +68,7 @@ if printf '%s' "$in" | grep -Eq '"tool_name" *: *"Skill"'; then
   printf '%s' "$in" | grep -Eq '"skill" *: *"(cwtfigo:)?cwtfigo"' && mark
   exit 0
 fi
-[ -n "$sid" ] && [ ! -e "$d/$sid" ] && exit 0
+[ -n "$sid" ] && [ ! -e "$d/$sid" ] && mkd && exit 0
 # The command as typed, still JSON-escaped (\" for ", \n for a newline).
 cmd=$(printf '%s' "$in" | sed -nE 's/.*"command" *: *"(([^"\\]|\\.)*)".*/\1/p' | head -n 1)
 if printf '%s' "$in" | grep -Eq '"tool_name" *: *"Bash"'; then
