@@ -111,9 +111,10 @@ have=$(cat "$REC/schema" 2>/dev/null || echo 0)
 # Once other hosts exist, their operators may know it by an alias: ask.
 autoname() {
   for d in "$REC"/hosts/*/; do [ -d "$d" ] && die "$NONAME"; done
-  if [ "$(uname -s)" = Darwin ]; then n=$(scutil --get LocalHostName 2>/dev/null); else n=$(hostname -s 2>/dev/null); fi
-  [ -n "$n" ] || n=$(hostname 2>/dev/null)
-  n=$(printf %s "$n" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9-')
+  # A Mac's LocalHostName, else uname -n (POSIX: stock Arch has no hostname command) up to its domain: MacBook-Air.local is macbook-air.
+  n=; [ "$(uname -s)" = Darwin ] && n=$(scutil --get LocalHostName 2>/dev/null)
+  [ -n "$n" ] || n=$(uname -n 2>/dev/null)
+  n=$(printf %s "${n%%.*}" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9-')
   case $n in ''|local) die "$NONAME" ;; esac
   setname "$n"; echo "cw: this machine is called $n in the record. Another name? cw name <name>" >&2
 }

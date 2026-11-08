@@ -91,22 +91,25 @@ out=$(sh "$CW" run local collect 2>&1); [ $? = 1 ] || fail "local without a name
 echo "$out" | grep -q 'cw name <name>' || fail "local without a name should ask for cw name"
 [ -f "$CWTFIGO_HOME/self" ] && fail "no automatic name once another host is in the record"
 rm -r "$CWTFIGO_HOME/hosts/nas"
-# Alone in the record: local takes the hostname, made a valid name.
-N=$(mktemp -d); printf '#!/bin/sh\necho My_Mac.Air-2\n' > "$N/scutil"; cp "$N/scutil" "$N/hostname"; chmod +x "$N/scutil" "$N/hostname"
+# Alone in the record: local takes the hostname, made a valid name: uname -n up to its domain (stock Arch has no
+# hostname command), a Mac's LocalHostName first.
+N=$(mktemp -d); printf '#!/bin/sh\nexit 127\n' > "$N/hostname"; printf '#!/bin/sh\nexit 1\n' > "$N/scutil"; printf '#!/bin/sh\n' > "$N/xcode-select"
+printf '#!/bin/sh\ncase $1 in -n) echo "${FAKE_N:-My_Box-2.lan}" ;; *) echo "${FAKE_OS:-Linux}" ;; esac\n' > "$N/uname"; chmod +x "$N"/*
+out=$(PATH=$N:$PATH FAKE_OS=Darwin FAKE_N=MacBook-Air.local CWTFIGO_HOME=$N/rec sh "$CW" run local collect 2>&1); [ $? = 3 ] && grep -qx macbook-air "$N/rec/self" || fail "a Mac with no LocalHostName: $out"
 out=$(PATH=$N:$PATH sh "$CW" run local collect 2>&1); [ $? = 3 ] || fail "local alone in the record should name itself and go on: $out"
-grep -qx mymacair-2 "$CWTFIGO_HOME/self" || fail "automatic name: $(cat "$CWTFIGO_HOME/self")"
-echo "$out" | grep -q 'called mymacair-2 in the record.*cw name' || fail "automatic name should be said: $out"
+grep -qx mybox-2 "$CWTFIGO_HOME/self" || fail "automatic name: $(cat "$CWTFIGO_HOME/self")"
+echo "$out" | grep -q 'called mybox-2 in the record.*cw name' || fail "automatic name should be said: $out"
 [ -d "$CWTFIGO_HOME/hosts/local" ] && fail "hosts/local must never be created"
 # Stopped at approval (the owner said no, or left): no host dir, so no machine row, and the owner is still new.
-[ -e "$CWTFIGO_HOME/hosts/mymacair-2" ] && fail "a run that stops before approval must leave no host dir"
+[ -e "$CWTFIGO_HOME/hosts/mybox-2" ] && fail "a run that stops before approval must leave no host dir"
 sh "$CW" status 2>&1 >/dev/null | grep -q '^hint: this record is new' || fail "a run that stopped before approval: the owner is still new"
-mkdir "$CWTFIGO_HOME/hosts/mymacair-2"; touch "$CWTFIGO_HOME/hosts/mymacair-2/approved.sha256"
+mkdir "$CWTFIGO_HOME/hosts/mybox-2"; touch "$CWTFIGO_HOME/hosts/mybox-2/approved.sha256"
 for n in '' local a/b 'a b'; do sh "$CW" name "$n" >/dev/null 2>&1 && fail "cw name '$n' should be refused"; done
 mkdir "$CWTFIGO_HOME/hosts/nas"; sh "$CW" name nas >/dev/null 2>&1 && fail "cw name onto an existing host dir should be refused"
 rm -r "$CWTFIGO_HOME/hosts/nas"
 sh "$CW" name box | grep -q box || fail "cw name should say the name"
 grep -qx box "$CWTFIGO_HOME/self" || fail "self not written"
-[ -f "$H/approved.sha256" ] && [ ! -e "$CWTFIGO_HOME/hosts/mymacair-2" ] || fail "cw name should rename this machine's dir"
+[ -f "$H/approved.sha256" ] && [ ! -e "$CWTFIGO_HOME/hosts/mybox-2" ] || fail "cw name should rename this machine's dir"
 
 out=$(sh "$CW" run local collect); [ $? = 3 ] || fail "unapproved collect should exit 3"
 echo "$out" | grep -q '^Tell the human in one line what it reads or changes, then run cw approve box collect@[0-9a-f]\{12\} right away: the permission prompt they get is the question' || fail "never-approved script should ask for one line, not a diff, then approve right away: $out"
