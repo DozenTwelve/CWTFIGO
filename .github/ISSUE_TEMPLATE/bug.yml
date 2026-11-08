@@ -1,0 +1,71 @@
+name: Bug
+description: CWTFIGO did something wrong, broke, or wouldn't start.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. The fields below are what it takes to reproduce it.
+        **Before pasting anything, replace hostnames, IPs, usernames and home paths with `<host>`, `<ip>`, `<user>`.**
+        A bug in your machine's own software (not in CWTFIGO) belongs in that project's tracker.
+  - type: input
+    id: version
+    attributes:
+      label: CWTFIGO version
+      description: "Shown in `/plugin`, or the `version` line of `.claude-plugin/plugin.json` in the plugin directory (`~/.claude/plugins/cache/cwtfigo/cwtfigo/<version>/`). Claude Code version too if you have it (`claude --version`)."
+      placeholder: "0.5.7, Claude Code 2.1.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: operator-os
+    attributes:
+      label: Operator OS
+      description: The machine Claude Code runs on.
+      options:
+        - macOS
+        - Linux
+        - Windows (Git Bash)
+        - Other (say below)
+    validations:
+      required: true
+  - type: input
+    id: target
+    attributes:
+      label: Target machine
+      description: "The machine CWTFIGO was working on: its OS and version, and how it was reached (local, or SSH from the operator)."
+      placeholder: "Debian 12 over SSH / same Mac, local / OpenWrt router over SSH"
+    validations:
+      required: true
+  - type: input
+    id: model
+    attributes:
+      label: Model
+      description: "The model Claude Code used (`/model`)."
+      placeholder: "Opus, Sonnet, ..."
+    validations:
+      required: true
+  - type: textarea
+    id: status
+    attributes:
+      label: Output of `cw status`
+      description: |
+        Ask Claude "run cw status and show me all of its output, hint lines included", or run it yourself:
+        `sh ~/.claude/plugins/cache/cwtfigo/cwtfigo/<version>/skills/cwtfigo/scripts/cw status 2>&1` (or `skills/cwtfigo/scripts/cw` in your clone, if you installed from one).
+        The machine names in it are your SSH aliases: redact them if they say too much.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: asked
+    attributes:
+      label: What you asked
+      description: Your message to Claude, as typed.
+    validations:
+      required: true
+  - type: textarea
+    id: happened
+    attributes:
+      label: What happened, and what you expected
+      description: Paste errors and command output as printed; say where it went wrong (status, a script, approval, the record, search).
+    validations:
+      required: true

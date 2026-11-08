@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CWTFIGO: Claude, what the fuck is going on?</title>
+<meta name="description" content="A Claude Code plugin that fixes your machines and writes everything down. Linux, macOS, Windows, Steam Deck and OpenWrt routers, locally or over SSH. It asks before it reads.">
+<meta property="og:title" content="CWTFIGO: Claude, what the fuck is going on?">
+<meta property="og:description" content="A Claude Code plugin that fixes your machines and writes everything down.">
+<meta property="og:type" content="website">
+<meta name="color-scheme" content="light dark">
+<link rel="alternate" hreflang="en" href="./">
+<link rel="alternate" hreflang="zh" href="zh/">
+<link rel="icon" href="mascot.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta property="og:image" content="https://cwtf.diamonddoge.org/og-image.png">
+<meta property="og:url" content="https://cwtf.diamonddoge.org/">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="fonts.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="slab">
+  <nav class="container slab__row" aria-label="Main">
+    <a class="wordmark" href="./"><img src="mascot.svg" alt="" width="28" height="28">CWTFIGO</a>
+    <ul class="slab__links">
+      <li><a href="#visit">A visit</a></li>
+      <li><a href="#ask">Asking first</a></li>
+      <li><a href="#endings">Endings</a></li>
+      <li><a href="#questions">Questions</a></li>
+    </ul>
+    <ul class="slab__end">
+      <li><a href="zh/" hreflang="zh" lang="zh">中文</a></li>
+      <li><a href="https://github.com/DozenTwelve/CWTFIGO">GitHub</a></li>
+    </ul>
+  </nav>
+</header>
+
+<main id="main">
+
+<section class="hero container" aria-labelledby="hero-title">
+  <div class="hero__text">
+    <h1 id="hero-title">Claude, what the fuck is going on?</h1>
+    <p class="lead">A Claude Code plugin that fixes your machines and writes everything down.</p>
+    <div class="install">
+      <div class="install__box">
+        <div class="install__head"><span class="install__status" role="status">Paste into Claude Code</span><button class="btn btn--primary" type="button" data-copy="install-1">Copy the install</button></div>
+        <pre id="install-1" tabindex="0"><code><span class="ln">/plugin marketplace add DozenTwelve/<wbr>CWTFIGO</span><span class="ln">/plugin install cwtfigo@cwtfigo</span></code></pre>
+      </div>
+      <a class="install__alt" href="#install">Install from a clone</a>
+    </div>
+  </div>
+
+  <figure class="entry hero__entry" aria-label="A visit opening in Claude Code: the CWTFIGO welcome panel">
+    <div class="entry__head"><span>Claude Code on kettle</span><time class="num" datetime="2026-11-07T09:41">09:41</time></div>
+    <pre class="entry__body" tabindex="0"><code><span class="you">&gt; CWTFIGO, kettle hits 90°C on every video call</span>
+
+<span class="cmd">$ cw status</span>
+<span class="out">   .------------------------------------.
+  (  Claude, what the fuck is going on?  )
+   '---.  .-----------------------------'
+        \ |
+     .--------.
+     | O    o |    C  W  T  F  I  G  O
+     |  ~~~~  |    Something's on fire? Show me.
+     '---..---'
+     ____||____
+    [__________]
+
+  Reads nothing without your yes. Changes nothing without your OK.
+  Notes stay on your side: ~/.cwtfigo and your private remote
+
+  attic                  debian 12        last visit 2026-11-02  0 open, 1 parked
+  couch                  steamos 3.7      last visit 2026-10-19  0 open
+  den                    windows 11       last visit 2026-10-30  1 open
+  kettle (this machine)  arch             last visit 2026-11-06  0 open
+  lighthouse             openwrt 24.10.4  last visit 2026-11-04  0 open
+  studio                 macos 15.6       last visit never       0 open
+
+  Another machine? Tell me its SSH alias.</span></code></pre>
+  </figure>
+</section>
+
+<section class="split split--lead container" id="visit" aria-labelledby="visit-title">
+  <div class="split__text">
+    <h2 id="visit-title">Say its name. Then watch.</h2>
+    <p>It wakes for “CWTFIGO”, “what the fuck is going on” or “<span lang="ja">一体どうなってやがるんだ</span>”, anywhere in a sentence. Describe a problem without the name and you get a normal answer.</p>
+    <p>Every claim comes with the output behind it.</p>
+  </div>
+  <figure class="entry" aria-label="The rest of the visit: a hot laptop traced to a missing video driver">
+    <div class="entry__head"><span>Same visit, continued</span><time class="num" datetime="2026-11-07T09:43">09:43</time></div>
+    <pre class="entry__body" tabindex="0"><code><span class="say">The record has kettle’s baseline: 52°C idle on 2026-10-28. To see what’s hot I’d run perf: top processes, clocks, temperatures, throttling. Read-only. OK?</span>
+
+<span class="you">&gt; yes, I'm on a call now</span>
+
+<span class="cmd">$ cw approve kettle perf &amp;&amp; cw run kettle perf</span>
+<span class="out">## top-cpu
+ 38.4  firefox: RDD Process
+ 11.0  pipewire
+## cpu
+package throttle events since boot: 212
+## temps-fans
+Package id 0:  +91.0°C  (high = +100.0°C)</span>
+
+<span class="say">Firefox is decoding the video on the CPU. Is VA-API there?</span>
+
+<span class="cmd">$ vainfo</span>
+<span class="out">libva info: Trying to open /usr/lib/dri/iHD_drv_video.so
+libva info: va_openDriver() returns -1</span>
+
+<span class="say">The Intel media driver is missing. Installing it needs sudo, so that one is yours, in your own terminal:</span>
+<span class="cmd">  sudo pacman -S intel-media-driver</span>
+<span class="say">Then restart Firefox and stay on the call.</span>
+
+<span class="you">&gt; done</span>
+
+<span class="cmd">$ cw run kettle perf</span>
+<span class="out"> 6.2  firefox: RDD Process
+Package id 0:  +71.0°C  (high = +100.0°C)</span>
+
+<span class="say">91°C to 71°C on the same call. Fixed, unverified until tomorrow’s real one. A line in check.sh will catch the driver going missing after an update.</span>
+
+<span class="cmd">$ cw save "kettle: intel-media-driver, 91°C to 71°C on calls"</span>
+<span class="out">saved</span></code></pre>
+  </figure>
+</section>
+
+<section class="split container gap-l" id="ask" aria-labelledby="ask-title">
+  <div class="split__text">
+    <h2 id="ask-title">Nothing gets read without a yes.</h2>
+    <p>The first visit learns only what the machine is. Every new kind of read asks first, and you approve each script once, by its hash. Change one byte and it asks again.</p>
+    <p>What it reads does pass through your model provider. It says so.</p>
+  </div>
+  <figure class="entry" aria-label="A first visit to a Mac: the collector waits for approval">
+    <div class="entry__head"><span>First visit to studio</span><time class="num" datetime="2026-11-07T10:12">10:12</time></div>
+    <pre class="entry__body" tabindex="0"><code><span class="cmd">$ cw run studio collect</span>
+<span class="out">NOT APPROVED: collect on studio, never approved here (sha256 5c1d…)
+# First-visit collector: what this machine is, nothing more.
+# No logs, ports, processes or sensors: those are probes/,
+# run only when a request needs them.</span>
+
+<span class="say">First time on studio. collect reads what it is: OS, hardware model, package managers. Nothing else. OK?</span>
+
+<span class="you">&gt; ok</span>
+
+<span class="cmd">$ cw approve studio collect</span>
+<span class="out">approved: collect on studio</span></code></pre>
+  </figure>
+</section>
+
+<section class="split container gap-s" id="endings" aria-labelledby="endings-title">
+  <div class="split__text">
+    <h2 id="endings-title">Through, around, or stopped.</h2>
+    <p>A problem meets a stone the way a root does. CWTFIGO names which one you got.</p>
+    <table class="endings">
+      <caption>How the public bug threads we studied ended</caption>
+      <tbody>
+        <tr><th scope="row">Fixed</th><td class="endings__n num">45%</td><td>Only once the real trigger has been through it.</td></tr>
+        <tr><th scope="row">Worked around</th><td class="endings__n num">24%</td><td>The harm goes, the cause stays, and the record says so.</td></tr>
+        <tr><th scope="row">Stopped</th><td class="endings__n num">26%</td><td>What didn’t help is put back; the problem is parked with a recheck.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <figure class="entry" aria-label="A parked problem as the record keeps it">
+    <div class="entry__head"><span>hosts/attic/notes.md</span><span class="chip">Parked</span></div>
+    <pre class="entry__body" tabindex="0"><code><span class="out">## Don't touch
+- /srv/backup/.old: looks like junk, holds the 2024 photos
+
+## Parked
+- 2026-11-02 Backup disk wakes every few minutes
+  - stone: the USB enclosure ignores spin-down
+  - tried: hdparm -S 120: no change; hd-idle: sleeps,
+    wakes again within 10 min
+  - ruled out: smartd (stopped for the test),
+    the rsync timer (same)
+  - recheck: the new enclosure arrives</span></code></pre>
+  </figure>
+</section>
+
+<section class="split container gap-l" id="record" aria-labelledby="record-title">
+  <div class="split__text">
+    <h2 id="record-title">Every visit is cheaper than the last.</h2>
+    <p>What it learns goes into <code>~/.cwtfigo</code>, a private git repo on your side: what each machine is, its don’t-touch rules, its scripts, what was tried. Several machines of yours can share it through a private remote. Delete the folder and it’s gone.</p>
+  </div>
+  <table class="machines">
+    <caption>One record, any of these, locally or over SSH. Nothing is installed on the machine being fixed.</caption>
+    <thead><tr><th scope="col">In the record as</th><th scope="col">What it is</th><th scope="col">Reached</th></tr></thead>
+    <tbody>
+      <tr><td class="num">kettle</td><td>Arch Linux laptop</td><td>local</td></tr>
+      <tr><td class="num">studio</td><td>Mac mini, macOS</td><td>SSH</td></tr>
+      <tr><td class="num">den</td><td>Windows 11 desktop</td><td>SSH</td></tr>
+      <tr><td class="num">couch</td><td>Steam Deck</td><td>SSH</td></tr>
+      <tr><td class="num">attic</td><td>Debian file server</td><td>SSH</td></tr>
+      <tr><td class="num">lighthouse</td><td>OpenWrt router</td><td>SSH</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="split container" id="search" aria-labelledby="search-title">
+  <div class="split__text">
+    <h2 id="search-title">It reads what’s newer than Claude.</h2>
+    <p>Training stops at a date; your packages don’t. CWTFIGO searches the failing project’s upstream tracker live, with the exact error strings.</p>
+  </div>
+  <figure class="sheet">
+    <div class="figures">
+      <p><span class="figure-big num">52%</span><span>the model alone</span></p>
+      <p><span class="figure-big num">79%</span><span>with live upstream search</span></p>
+    </div>
+    <figcaption>Right diagnoses on 42 real GitHub bug reports, with search seeing GitHub as it stood when each was opened. Median $0.13 and 75 seconds a report. Report text only: it can’t measure what reading your machine adds.</figcaption>
+  </figure>
+</section>
+
+<section class="split container gap-l" id="questions" aria-labelledby="questions-title">
+  <div class="split__text">
+    <h2 id="questions-title">Questions</h2>
+  </div>
+  <div class="faq">
+    <details>
+      <summary>Where does my data go?</summary>
+      <p>The record stays in <code>~/.cwtfigo</code> on your machine, plus a private remote if you add one. What it reads during a visit passes through your model provider, like anything in Claude Code. A bug report it drafts for upstream goes out only on your yes, with names, IPs and paths redacted.</p>
+    </details>
+    <details>
+      <summary>What does it need?</summary>
+      <p><code>git</code>, and <code>python3</code> for search. On a Mac that means the Command Line Tools: <code>xcode-select --install</code>. On Windows it runs in Git Bash, which Claude Code needs there anyway.</p>
+    </details>
+    <details>
+      <summary>Can I make it stop asking?</summary>
+      <p>It already asks less as it goes: a read you’ve said yes to once runs without asking again, and only changes ask. To skip the remaining questions for 12 hours, tell Claude to turn on YOLO; only you can, and “YOLO off” ends it early. Deleting data, touching partitions or anything that could lock out SSH still needs a typed yes.</p>
+    </details>
+    <details>
+      <summary>Can I run it without AI?</summary>
+      <p>On Mac and Linux, yes: <code>cwtfigo</code> is a small menu in the terminal that runs the scripts you’ve already said yes to, with no model involved. In Claude Code, say “CWTFIGO install the TUI”. There’s no Windows build.</p>
+    </details>
+    <details>
+      <summary>What if it can’t fix it?</summary>
+      <p>It says so, puts back what it changed that didn’t help, and parks the problem with what would make it worth another look: a package version, an upstream issue closing, a part arriving.</p>
+    </details>
+    <details>
+      <summary>Anything that needs sudo?</summary>
+      <p>Comes to you as a command to run in your own terminal, where sudo can ask for your password. It never sees the password.</p>
+    </details>
+  </div>
+</section>
+
+<section class="split container gap-l" id="install" aria-labelledby="install-title">
+  <div class="split__text">
+    <h2 id="install-title">Point it at the broken one.</h2>
+    <div class="install">
+      <div class="install__box">
+        <div class="install__head"><span class="install__status" role="status">Paste into Claude Code</span><button class="btn btn--primary" type="button" data-copy="install-2">Copy the install</button></div>
+        <pre id="install-2" tabindex="0"><code><span class="ln">/plugin marketplace add DozenTwelve/<wbr>CWTFIGO</span><span class="ln">/plugin install cwtfigo@cwtfigo</span></code></pre>
+      </div>
+    </div>
+    <p>Or from a clone, to change it while you use it:</p>
+    <div class="install">
+      <div class="install__box">
+        <div class="install__head"><span class="install__status" role="status">In a shell, then Claude Code</span><button class="btn" type="button" data-copy="install-3">Copy</button></div>
+        <pre id="install-3" tabindex="0"><code><span class="ln">git clone https://github.com/<wbr>DozenTwelve/<wbr>CWTFIGO</span><span class="ln">/plugin marketplace add ./CWTFIGO</span><span class="ln">/plugin install cwtfigo@cwtfigo</span></code></pre>
+      </div>
+    </div>
+  </div>
+  <figure class="entry" aria-label="The visit as the record logs it">
+    <div class="entry__head"><span>hosts/kettle/log.md</span><span class="chip chip--green">Fixed, unverified</span></div>
+    <pre class="entry__body" tabindex="0"><code><span class="out">## 2026-11-07 hot on video calls
+- perf on a call: 91°C, firefox RDD 38%, throttling
+- vainfo: iHD driver missing
+- owner installed intel-media-driver (sudo)
+- perf, same call: 71°C, firefox RDD 6%
+- check.sh: warn if intel-media-driver is gone
+
+## 2026-11-06 upgrade
+- maintain dry run: 143 updates, 2.1 GB of cache
+- maintain --apply: upgraded, 2.1 GB freed
+- rebooted for the new kernel</span></code></pre>
+  </figure>
+</section>
+
+</main>
+
+<footer class="foot">
+  <div class="container foot__cols">
+    <p class="wordmark"><img src="mascot.svg" alt="" width="28" height="28">CWTFIGO</p>
+    <ul>
+      <li><a href="https://github.com/DozenTwelve/CWTFIGO">Source on GitHub</a></li>
+      <li><a href="https://github.com/DozenTwelve/CWTFIGO/blob/main/skills/cwtfigo/SKILL.md">Read the skill</a></li>
+      <li><a href="https://github.com/DozenTwelve/CWTFIGO/blob/main/LICENSE">MIT license</a></li>
+    </ul>
+    <ul>
+      <li><a href="./" aria-current="page">English</a></li>
+      <li><a href="zh/" hreflang="zh" lang="zh">中文</a></li>
+    </ul>
+    <p class="foot__note">An independent plugin for Claude Code, not made by Anthropic. The machines on this page are made up.</p>
+  </div>
+</footer>
+
+<script>
+document.querySelectorAll('[data-copy]').forEach((b) => b.addEventListener('click', () => {
+  const pre = document.getElementById(b.dataset.copy), out = b.closest('.install').querySelector('[role=status]');
+  out.dataset.label ??= out.textContent;
+  navigator.clipboard.writeText(pre.innerText.trim()).then(() => { out.textContent = 'Copied. ' + out.dataset.label; },
+    () => { getSelection().selectAllChildren(pre); out.textContent = 'Selected. Copy it with your keyboard.'; });
+}));
+</script>
+</body>
+</html>

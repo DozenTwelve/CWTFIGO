@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily CWTFIGO unattended check
+
+[Timer]
+# Evening, when the machines that are often off are more likely on. Change to taste.
+OnCalendar=*-*-* 19:00
+RandomizedDelaySec=30min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

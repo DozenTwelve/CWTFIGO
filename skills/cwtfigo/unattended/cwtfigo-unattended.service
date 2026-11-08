@@ -1,0 +1,15 @@
+[Unit]
+Description=CWTFIGO unattended check: approved scripts on every reachable machine, Discord when something needs the owner
+
+[Service]
+Type=oneshot
+# ANTHROPIC_API_KEY lives only in this file (chmod 600), never here.
+EnvironmentFile=%h/.config/cwtfigo/env
+# systemd's user PATH has no ~/.local/bin, where claude usually is.
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+# %h/.local/share/cwtfigo/plugin: symlink to the plugin's root dir (see README).
+ExecStart=/bin/sh %h/.local/share/cwtfigo/plugin/skills/cwtfigo/scripts/unattended.sh
+# Backstop only: each step has its own limit (cw run, git and the model call CWTFIGO_TIMEOUT, default 10 min; ssh
+# drops a dead link within a minute; the post 30 s). Worst case about (2 x hosts + 5) x 10 min, so 6 h covers 15
+# hosts; more hosts or a bigger CWTFIGO_TIMEOUT, raise this. Killed here, a run posts nothing and marks nothing seen.
+TimeoutStartSec=6h

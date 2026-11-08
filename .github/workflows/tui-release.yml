@@ -1,0 +1,99 @@
+# Every plugin version bump bumps tui/Cargo.toml (and Cargo.lock) to the same version and pushes tui-v<version> with
+# it: git push --atomic origin main tui-v<version>. cw tui fetches that tag; a push to main whose version has none fails.
+# Prebuilt cwtfigo-tui for Mac and Linux. Push a tui-v* tag (or run it by hand on one) to get a GitHub Release with a
+# tar.gz and .sha256 per target, named by `uname -s`-`uname -m` so releases/latest/download/<name> needs no mapping; run it by hand on a branch to get the same files as workflow artifacts only.
+# Plain cargo + gh rather than cargo-dist: four targets and one binary are ~60 lines here, cargo-dist would generate
+# a longer workflow plus config and installers we don't ship. Only the repo's own GITHUB_TOKEN, so it works private.
+name: tui-release
+
+on:
+  push:
+    branches: [main]
+    tags: ["tui-v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # main's plugin.json version must have its tui-v tag, or cw tui and the TUI's u fail for everyone on that version.
+  tagged:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: tui-v<plugin version> exists
+        run: |
+          v=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' .claude-plugin/plugin.json)
+          git ls-remote --exit-code --tags origin "refs/tags/tui-v$v" >/dev/null || { echo "no tag tui-v$v: push it (git push origin tui-v$v)"; exit 1; }
+
+  build:
+    if: github.ref != 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: aarch64-apple-darwin, uname: Darwin-arm64, os: macos-latest }
+          - { target: x86_64-apple-darwin, uname: Darwin-x86_64, os: macos-latest }
+          # musl: static, so one binary runs on any distro and glibc version. rust-lld links it without a cross
+          # toolchain (checked on macOS for both); Linux arm runners aren't needed.
+          - { target: x86_64-unknown-linux-musl, uname: Linux-x86_64, os: ubuntu-latest }
+          - { target: aarch64-unknown-linux-musl, uname: Linux-aarch64, os: ubuntu-latest }
+    runs-on: ${{ matrix.os }}
+    env:
+      CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: rust-lld
+      CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: rust-lld
+    steps:
+      - uses: actions/checkout@v5
+      # A tag whose binary reports another version would have u reinstall it forever.
+      - name: Tag matches Cargo.toml
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: sh
+        run: |
+          v=$(sed -n 's/^version = "\(.*\)"$/\1/p' tui/Cargo.toml)
+          [ "${GITHUB_REF_NAME#tui-v}" = "$v" ] || { echo "tag $GITHUB_REF_NAME but tui/Cargo.toml says $v"; exit 1; }
+      - run: rustup target add ${{ matrix.target }}
+      - run: cargo build --release --locked --target ${{ matrix.target }}
+        working-directory: tui
+      - name: Package
+        shell: sh
+        run: |
+          set -eu
+          # Version-less, and the binary at the top level already named cwtfigo: the README's one curl line
+          # untars it straight into ~/.local/bin.
+          name="cwtfigo-tui-${{ matrix.uname }}"
+          mkdir -p dist/pkg
+          cp "tui/target/${{ matrix.target }}/release/cwtfigo-tui" dist/pkg/cwtfigo
+          cp LICENSE dist/pkg/
+          cd dist
+          tar -czf "$name.tar.gz" -C pkg cwtfigo LICENSE
+          # Same format on both OSes, so `shasum -a 256 -c` checks it.
+          shasum -a 256 "$name.tar.gz" > "$name.tar.gz.sha256"
+      - uses: actions/upload-artifact@v5
+        with:
+          name: ${{ matrix.target }}
+          path: dist/*.tar.gz*
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          ls -l dist
+          # Re-running on the same tag replaces the files instead of failing on an existing release.
+          if gh release view "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/* --clobber -R "$GITHUB_REPOSITORY"
+          else
+            gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --notes "cwtfigo-tui prebuilt for Mac and Linux. Install: see tui/README.md." -R "$GITHUB_REPOSITORY"
+          fi

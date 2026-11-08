@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+<!-- Placeholder mascot: the little computer from the cw status banner (big O eye, small o eye, ~~~~ mouth, a stand).
+     Source for the favicon, the nav/footer mark, apple-touch-icon.png and og-image.png (see README.md). -->
+<style>
+.frame{fill:#14110f}.edge{stroke:#14110f}.face{fill:#14110f}.line{fill:none;stroke:#14110f;stroke-linecap:round}
+@media (prefers-color-scheme:dark){.frame{fill:#eeebe4}.edge{stroke:#eeebe4}}
+</style>
+<rect class="frame" x="27" y="45" width="10" height="8"/>
+<rect class="frame" x="12" y="51" width="40" height="9" rx="4.5"/>
+<rect class="edge" x="5" y="4" width="54" height="42" rx="11" fill="#fc6b33" stroke-width="4"/>
+<circle class="line" cx="22" cy="21" r="6.5" stroke-width="4"/>
+<circle class="face" cx="43" cy="22.5" r="4"/>
+<path class="line" d="M21 34.5q2.75-3.5 5.5 0t5.5 0t5.5 0t5.5 0" stroke-width="3.5"/>
+</svg>

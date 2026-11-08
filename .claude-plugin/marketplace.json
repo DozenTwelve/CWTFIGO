@@ -1,0 +1,14 @@
+{
+  "name": "cwtfigo",
+  "owner": {
+    "name": "yzr"
+  },
+  "description": "CWTFIGO: an ops plugin for Claude Code that keeps a record of every machine it touches.",
+  "plugins": [
+    {
+      "name": "cwtfigo",
+      "source": "./",
+      "description": "All-round ops for your own and LAN machines: cleanup, upgrades, optimization and debugging."
+    }
+  ]
+}

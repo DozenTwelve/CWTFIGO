@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex">
+<meta name="color-scheme" content="light">
+<title>CWTFIGO social card</title>
+<!-- Source of og-image.png (1200x630) and, as og-image.html#icon, apple-touch-icon.png (180x180). Commands in README.md. -->
+<link rel="stylesheet" href="fonts.css">
+<style>
+:root { --paper: #f5f1ea; --ink: #14110f; --ink-2: #2c2825; --rule: #ddd6ca; --sheet: #fdfbf8; }
+html, body { margin: 0; width: 1200px; height: 630px; overflow: hidden; background: var(--paper); color: var(--ink); }
+body { display: grid; grid-template-columns: 1fr 380px; align-items: center; gap: 56px; box-sizing: border-box; padding: 64px 80px; font-family: "Red Hat Text", sans-serif; }
+h1 { margin: 0 0 24px; font-family: "Red Hat Display", sans-serif; font-weight: 600; font-size: 78px; line-height: 1.02; letter-spacing: -0.035em; }
+p { margin: 0 0 32px; font-size: 28px; line-height: 1.35; color: var(--ink-2); }
+code { display: inline-block; padding: 14px 20px; border-radius: 14px; background: var(--sheet); box-shadow: 0 0 0 2px var(--ink); font: 500 22px "Red Hat Mono", monospace; }
+img { width: 380px; height: 380px; }
+:root { color-scheme: light; }
+#icon { display: none; }
+#icon:target { display: grid; place-items: center; position: fixed; top: 0; left: 0; width: 180px; height: 180px; background: var(--paper); }
+#icon img { width: 144px; height: 144px; }
+</style>
+</head>
+<body>
+<div>
+  <h1>Claude, what the fuck is going on?</h1>
+  <p>A Claude Code plugin that fixes your machines and writes everything down.</p>
+  <code>github.com/DozenTwelve/CWTFIGO</code>
+</div>
+<img src="mascot.svg" alt="">
+<div id="icon"><img src="mascot.svg" alt=""></div>
+</body>
+</html>

@@ -1,0 +1,20 @@
+{
+  "description": "CWTFIGO: once the plugin has started in a session, ask the human before anything approves a script, turns on YOLO or changes the mode; in normal mode, let cw's reads and record edits run without a prompt",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Write|Edit|Skill",
+        "hooks": [
+          { "type": "command", "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/approve-gate.sh\"", "timeout": 10 }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          { "type": "command", "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/approve-gate.sh\"", "timeout": 10 }
+        ]
+      }
+    ]
+  }
+}

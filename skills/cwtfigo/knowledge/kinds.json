@@ -1,0 +1,903 @@
+{
+  "kinds": [
+    {
+      "kind": "symptom",
+      "description": "What visibly goes wrong on the machine (failure, crash, bad output, user-reported problem), so you can check whether your problem matches.",
+      "members": [
+        "symptom",
+        "reported symptom",
+        "error symptom",
+        "symptom detail",
+        "failure symptom",
+        "user symptom",
+        "symptom scope",
+        "symptom context",
+        "bug symptom",
+        "bug",
+        "problem",
+        "observed symptom",
+        "reported behavior",
+        "device symptom",
+        "symptom variant",
+        "secondary symptom",
+        "side symptom",
+        "related symptom",
+        "symptom report",
+        "crash symptom",
+        "symptom pattern",
+        "measured symptom",
+        "variant",
+        "symptom timing"
+      ]
+    },
+    {
+      "kind": "observation",
+      "description": "A neutral observed behavior or state noted in the thread, not necessarily a fault, that helps characterize the system's actual behavior.",
+      "members": [
+        "observation",
+        "observed behavior",
+        "current behavior",
+        "behavior",
+        "behavior note",
+        "related behavior",
+        "existing behavior",
+        "client behavior",
+        "measured behavior",
+        "observed state",
+        "observed output",
+        "side observation",
+        "user observation",
+        "reporter observation",
+        "related observation",
+        "diagnostic observation",
+        "finding",
+        "pattern",
+        "correlation",
+        "fix behavior"
+      ]
+    },
+    {
+      "kind": "environment",
+      "description": "The software, distro, build, setup and context of the machine where the bug appeared, to judge whether yours is similar.",
+      "members": [
+        "environment",
+        "setup",
+        "context",
+        "background",
+        "setup context",
+        "build environment",
+        "build context",
+        "build config",
+        "affected environment",
+        "reporter environment",
+        "environment note",
+        "environment detail",
+        "environment limitation",
+        "packaging",
+        "version and install",
+        "device state",
+        "affected component",
+        "affected packages"
+      ]
+    },
+    {
+      "kind": "hardware",
+      "description": "Hardware, device identity and topology involved in the bug, to match against your own devices.",
+      "members": [
+        "hardware",
+        "hardware context",
+        "affected hardware",
+        "hardware detail",
+        "hardware layout",
+        "hardware fact",
+        "hardware topology",
+        "hardware finding",
+        "topology",
+        "device identity",
+        "partition layout"
+      ]
+    },
+    {
+      "kind": "version",
+      "description": "Software versions present in the report, to compare with what is installed.",
+      "members": [
+        "version",
+        "versions",
+        "version info",
+        "version context",
+        "environment versions",
+        "version check",
+        "version mismatch",
+        "version difference",
+        "version and symptom"
+      ]
+    },
+    {
+      "kind": "affected version",
+      "description": "Which versions are or are not affected by the bug.",
+      "members": [
+        "affected version",
+        "affected versions",
+        "versions affected",
+        "version scope",
+        "version affected",
+        "version boundary"
+      ]
+    },
+    {
+      "kind": "regression",
+      "description": "Whether and when the behavior regressed, including the good/bad range, bisect results and the triggering change.",
+      "members": [
+        "regression",
+        "regression range",
+        "regression status",
+        "regression timing",
+        "regression window",
+        "regression scope",
+        "regression origin",
+        "regression trigger",
+        "regression report",
+        "regression hint",
+        "regression bisect",
+        "bisect result"
+      ]
+    },
+    {
+      "kind": "ruled out",
+      "description": "Causes, fixes, workarounds or paths that were tried or checked and did not pan out, so you can skip them.",
+      "members": [
+        "ruled out",
+        "ruled out cause",
+        "ruled out hypothesis",
+        "ruled out approach",
+        "config ruled out",
+        "dead end",
+        "wrong path",
+        "did not help",
+        "failed attempt",
+        "ruled out fix",
+        "ruled out workaround",
+        "ruled-out workaround",
+        "workaround ruled out",
+        "failed workaround",
+        "wrong hypothesis",
+        "misdiagnosis"
+      ]
+    },
+    {
+      "kind": "root cause",
+      "description": "The cause of the bug, whether confirmed, reasoned from code, suspected or guessed, and the mechanism behind it.",
+      "members": [
+        "root cause",
+        "suspected cause",
+        "root cause (reasoned from code)",
+        "root cause (reasoned)",
+        "root cause (code-reasoned)",
+        "root cause hypothesis",
+        "likely cause",
+        "cause",
+        "diagnosis",
+        "mechanism",
+        "root cause evidence",
+        "suspected cause (unverified)",
+        "root cause (measured)",
+        "root cause location",
+        "root cause (code reading)",
+        "cause hypothesis",
+        "suspected root cause",
+        "root cause (from code)",
+        "root cause confidence",
+        "likely root cause",
+        "root cause guess",
+        "root cause attribution",
+        "root cause confirmation",
+        "root cause (code reasoning)",
+        "root cause mechanism",
+        "root cause claim",
+        "root cause error",
+        "root cause detail",
+        "root cause confirmed",
+        "root cause analysis",
+        "root cause (reporter's analysis)",
+        "root cause (from source)",
+        "final root cause",
+        "upstream cause",
+        "unverified cause",
+        "possible cause",
+        "possible root cause",
+        "possible cause (guess)",
+        "likely cause (guess)",
+        "suspected cause (unconfirmed)",
+        "suspected cause (guess)",
+        "suggested cause",
+        "reported cause (ai triage, unverified)",
+        "mechanism (code-reasoned)",
+        "crash mechanism",
+        "code defect (reasoned)",
+        "unverified cause"
+      ]
+    },
+    {
+      "kind": "hypothesis",
+      "description": "Unverified claims, guesses and interpretations that have not been confirmed, to be treated with caution.",
+      "members": [
+        "hypothesis",
+        "unverified hypothesis",
+        "unverified claim",
+        "unverified",
+        "unverified guess",
+        "unconfirmed hypothesis",
+        "unconfirmed",
+        "unconfirmed guess",
+        "guess",
+        "reporter hypothesis",
+        "reporter guess",
+        "reporter claim",
+        "unverified lead",
+        "unverified suggestion",
+        "hypothesis, unverified",
+        "inference",
+        "interpretation",
+        "disputed claim",
+        "possibly related"
+      ]
+    },
+    {
+      "kind": "confidence",
+      "description": "How certain a fact is and how strong its evidence is.",
+      "members": [
+        "confidence",
+        "certainty",
+        "evidence level",
+        "uncertainty"
+      ]
+    },
+    {
+      "kind": "retracted claim",
+      "description": "Claims that were withdrawn or corrected later in the thread, so you don't rely on them.",
+      "members": [
+        "retracted claim",
+        "retracted hypothesis",
+        "retracted",
+        "retraction",
+        "correction"
+      ]
+    },
+    {
+      "kind": "workaround",
+      "description": "Ways to avoid or recover from the problem without a real fix, with their limits and whether they worked.",
+      "members": [
+        "workaround",
+        "suggested workaround",
+        "workaround confirmed",
+        "workaround observed",
+        "partial workaround",
+        "workaround caveat",
+        "workaround limitation",
+        "working workaround",
+        "manual workaround",
+        "recommended workaround",
+        "workaround (measured)",
+        "workaround hint",
+        "workaround direction",
+        "workaround status",
+        "workaround observation",
+        "workaround limits",
+        "workaround detail",
+        "verified workaround",
+        "suggested workaround (untested)",
+        "mitigation",
+        "recovery",
+        "recovery method",
+        "no workaround",
+        "workaround/fix"
+      ]
+    },
+    {
+      "kind": "resolution",
+      "description": "What actually fixed the problem and was confirmed to work, so you can apply it.",
+      "members": [
+        "resolution",
+        "fix",
+        "fix confirmed",
+        "working fix",
+        "fix that worked",
+        "fix verified",
+        "verified fix",
+        "fix (measured)",
+        "fix confirmation",
+        "fix verification",
+        "solution",
+        "accepted answer",
+        "root cause and fix",
+        "root cause / fix",
+        "fix mechanism",
+        "fix semantics",
+        "fix evidence",
+        "fix attempt",
+        "fix"
+      ]
+    },
+    {
+      "kind": "proposed fix",
+      "description": "Fixes, designs or approaches suggested but not confirmed, including alternatives, for trying or implementing.",
+      "members": [
+        "proposed fix",
+        "suggested fix",
+        "fix direction",
+        "alternative fix",
+        "possible fix",
+        "fix design",
+        "candidate fix",
+        "recommended fix",
+        "fix options",
+        "fix approach",
+        "suggested remedy",
+        "proposed design",
+        "planned fix",
+        "fix suggestion",
+        "fix variant",
+        "alternative fixes",
+        "alternative",
+        "alternative approach",
+        "suggested fix (unverified)",
+        "suggested fix (untested)",
+        "proposed fix (untested)",
+        "suggestion",
+        "advice"
+      ]
+    },
+    {
+      "kind": "fix status",
+      "description": "Whether and where a fix exists upstream (versions, PRs, commits, tracking), so you can find or wait for it.",
+      "members": [
+        "fix status",
+        "fix availability",
+        "fix version",
+        "pending fix",
+        "upstream fix",
+        "fix reference",
+        "fix pointer",
+        "fix location",
+        "related fix",
+        "related change",
+        "related prs",
+        "related pr",
+        "related fixes",
+        "upstream status",
+        "upstream tracking",
+        "upstream",
+        "upstream reference",
+        "partial fix"
+      ]
+    },
+    {
+      "kind": "thread outcome",
+      "description": "How the thread or issue ended or stands now (resolved, open, closed, unresolved).",
+      "members": [
+        "thread outcome",
+        "outcome",
+        "issue outcome",
+        "thread status",
+        "status",
+        "triage outcome",
+        "issue status",
+        "triage status",
+        "resolution status",
+        "project status",
+        "unresolved",
+        "no resolution",
+        "unresolved cause",
+        "handoff condition",
+        "test status"
+      ]
+    },
+    {
+      "kind": "reproduction",
+      "description": "Steps, commands and configuration that reproduce the bug, for reproducing it on your machine.",
+      "members": [
+        "reproduction",
+        "repro",
+        "reproduction steps",
+        "repro steps",
+        "repro command",
+        "reproduction command",
+        "minimal repro",
+        "reproduction (measured)",
+        "reproduction condition",
+        "reproduction conditions",
+        "reproduction setup",
+        "reproduction config",
+        "repro config",
+        "reproduction measured",
+        "measured reproduction",
+        "reproduction scope",
+        "failing command"
+      ]
+    },
+    {
+      "kind": "reproducibility",
+      "description": "How reliably or often the bug occurs, or whether it could be reproduced at all.",
+      "members": [
+        "reproducibility",
+        "intermittency",
+        "frequency",
+        "recurrence",
+        "persistence",
+        "not reproduced",
+        "not reproducible",
+        "non-reproduction",
+        "reproduction status"
+      ]
+    },
+    {
+      "kind": "trigger",
+      "description": "The conditions, actions or configuration that set the bug off.",
+      "members": [
+        "trigger",
+        "trigger condition",
+        "trigger conditions",
+        "trigger config",
+        "trigger context",
+        "trigger pattern",
+        "trigger path",
+        "trigger variant",
+        "likely trigger",
+        "real-world trigger",
+        "trigger sequence"
+      ]
+    },
+    {
+      "kind": "scope",
+      "description": "Which components, apps, commands or situations are and aren't affected.",
+      "members": [
+        "scope",
+        "scope note",
+        "scope limit",
+        "affected scope",
+        "scope of failure",
+        "affected apps",
+        "affected commands",
+        "impact scope"
+      ]
+    },
+    {
+      "kind": "impact",
+      "description": "Consequences of the bug for users or downstream software.",
+      "members": [
+        "impact",
+        "user impact",
+        "downstream impact",
+        "consequence"
+      ]
+    },
+    {
+      "kind": "diagnostic",
+      "description": "Commands, checks and steps to run to investigate the problem and tell causes apart.",
+      "members": [
+        "diagnostic",
+        "diagnostic hint",
+        "diagnostic command",
+        "diagnostic step",
+        "diagnostic check",
+        "diagnostic method",
+        "diagnostic suggestion",
+        "suggested check",
+        "suggested diagnostic",
+        "diagnostic tip",
+        "diagnostic technique",
+        "diagnostic commands",
+        "diagnostic request",
+        "requested diagnostics",
+        "check command",
+        "how to check",
+        "detection method",
+        "verification command",
+        "verification method",
+        "diagnostic procedure",
+        "diagnostic approach",
+        "diagnostic steps",
+        "diagnostic path",
+        "diagnosis hint",
+        "where to look",
+        "suggested step",
+        "next step",
+        "suggested next step",
+        "discriminating test",
+        "test method",
+        "diagnostics",
+        "diagnostic clue",
+        "diagnostic location",
+        "tooling note"
+      ]
+    },
+    {
+      "kind": "diagnostic evidence",
+      "description": "Output and evidence gathered from diagnostics, measurements or traces that supports or contradicts a conclusion.",
+      "members": [
+        "diagnostic evidence",
+        "diagnostic output",
+        "diagnostic result",
+        "diagnostic finding",
+        "diagnostic signal",
+        "diagnostic state",
+        "diagnostic note",
+        "evidence",
+        "measured evidence",
+        "counter-evidence",
+        "trace evidence",
+        "crash evidence",
+        "corroboration",
+        "diagnostic caveat"
+      ]
+    },
+    {
+      "kind": "measurement",
+      "description": "Measured or tested results and verification outcomes, with numbers or pass/fail from actually trying something.",
+      "members": [
+        "measurement",
+        "measured result",
+        "measured",
+        "measured state",
+        "measured test",
+        "test result",
+        "verification",
+        "validation",
+        "confirmation",
+        "control test"
+      ]
+    },
+    {
+      "kind": "log evidence",
+      "description": "What the logs (journal, kernel, boot, app) showed, and where to look.",
+      "members": [
+        "log evidence",
+        "logs",
+        "kernel log",
+        "kernel log evidence",
+        "log observation",
+        "log finding",
+        "log sequence",
+        "boot log fact",
+        "log symptom",
+        "log location",
+        "log collection",
+        "no logs"
+      ]
+    },
+    {
+      "kind": "error message",
+      "description": "Exact error text, codes and log or crash signatures to grep for or match against your own output.",
+      "members": [
+        "error message",
+        "error signature",
+        "log signature",
+        "crash signature",
+        "error log",
+        "error output",
+        "error code",
+        "error detail",
+        "log line",
+        "log error",
+        "kernel log signature",
+        "build error",
+        "error",
+        "diagnostic signature",
+        "symptom signature",
+        "error meaning"
+      ]
+    },
+    {
+      "kind": "stack trace",
+      "description": "Backtraces and stack traces showing where a crash occurred.",
+      "members": [
+        "stack trace",
+        "backtrace",
+        "crash stack",
+        "stack trace location",
+        "crash location"
+      ]
+    },
+    {
+      "kind": "code location",
+      "description": "Source files, functions and code paths where the bug or relevant logic lives.",
+      "members": [
+        "code location",
+        "file location",
+        "file locations",
+        "file path",
+        "code pointer",
+        "code reference",
+        "relevant code",
+        "relevant files",
+        "affected files",
+        "failure location",
+        "failure point",
+        "error location",
+        "call path",
+        "code path",
+        "code reading",
+        "code analysis",
+        "codegen finding",
+        "failing component"
+      ]
+    },
+    {
+      "kind": "config",
+      "description": "Configuration settings and files involved in the problem.",
+      "members": [
+        "config",
+        "configuration",
+        "config detail",
+        "config context",
+        "config note",
+        "config state",
+        "relevant config",
+        "config location",
+        "setting location"
+      ]
+    },
+    {
+      "kind": "expected behavior",
+      "description": "What the software is supposed or documented to do.",
+      "members": [
+        "expected behavior",
+        "expected behaviour",
+        "intended behavior",
+        "documented behavior",
+        "reference behavior",
+        "design intent"
+      ]
+    },
+    {
+      "kind": "comparison",
+      "description": "How other setups, compositors or versions behave on the same test, useful as a contrast or baseline.",
+      "members": [
+        "comparison",
+        "contrast",
+        "compositor comparison",
+        "cross-compositor test",
+        "cross-compositor comparison",
+        "control case",
+        "working baseline",
+        "baseline",
+        "works"
+      ]
+    },
+    {
+      "kind": "related issue",
+      "description": "Other issues, reports and known issues linked to this one.",
+      "members": [
+        "related issue",
+        "related issues",
+        "related report",
+        "related reports",
+        "related work",
+        "related",
+        "related bug",
+        "additional report",
+        "second report",
+        "known bug report",
+        "known issue",
+        "known-issue mapping",
+        "known issue (ai-triage guess)",
+        "known issue (ai-triage, unverified)"
+      ]
+    },
+    {
+      "kind": "duplicate",
+      "description": "Whether this issue duplicates another and which one.",
+      "members": [
+        "duplicate",
+        "possible duplicate",
+        "duplicate status",
+        "duplicates",
+        "duplicate pointer",
+        "duplicate issue",
+        "possible duplicates",
+        "duplicate resolution",
+        "duplicate mapping (ai guess)"
+      ]
+    },
+    {
+      "kind": "maintainer decision",
+      "description": "Decisions, verdicts, policy and rejections by maintainers on what will or won't be done.",
+      "members": [
+        "maintainer decision",
+        "maintainer verdict",
+        "maintainer stance",
+        "maintainer position",
+        "maintainer direction",
+        "maintainer conclusion",
+        "maintainer policy",
+        "rejected alternative",
+        "rejected proposal",
+        "rejected approach",
+        "design decision",
+        "support status"
+      ]
+    },
+    {
+      "kind": "maintainer response",
+      "description": "Maintainers' answers, diagnoses, opinions and reasoning about the problem.",
+      "members": [
+        "maintainer response",
+        "maintainer answer",
+        "maintainer diagnosis",
+        "maintainer opinion",
+        "maintainer assessment",
+        "maintainer view",
+        "maintainer rationale",
+        "maintainer guidance",
+        "maintainer reasoning",
+        "maintainer statement",
+        "maintainer advice"
+      ]
+    },
+    {
+      "kind": "design note",
+      "description": "Design rationale, constraints and explanations of why the software behaves as it does.",
+      "members": [
+        "design note",
+        "design rationale",
+        "design",
+        "design constraint",
+        "constraint",
+        "rationale",
+        "reasoning",
+        "explanation",
+        "tradeoff"
+      ]
+    },
+    {
+      "kind": "missing feature",
+      "description": "Capabilities the software doesn't have or support.",
+      "members": [
+        "missing feature",
+        "missing capability",
+        "feature not available",
+        "feature status",
+        "existing feature"
+      ]
+    },
+    {
+      "kind": "user goal",
+      "description": "What the user is trying to achieve or asks for.",
+      "members": [
+        "user goal",
+        "user need",
+        "use case",
+        "requested feature",
+        "requested behavior",
+        "requested change"
+      ]
+    },
+    {
+      "kind": "missing info",
+      "description": "Information absent from the thread that would be needed to progress.",
+      "members": [
+        "missing info",
+        "missing information",
+        "missing evidence",
+        "missing data",
+        "missing detail",
+        "missing diagnostics",
+        "diagnostic gap",
+        "gap",
+        "report quality",
+        "thread limits",
+        "diagnostic limitation"
+      ]
+    },
+    {
+      "kind": "open question",
+      "description": "Questions left unanswered or unknown in the thread.",
+      "members": [
+        "open question",
+        "unanswered question",
+        "unanswered",
+        "diagnostic question",
+        "unknown",
+        "unknown cause"
+      ]
+    },
+    {
+      "kind": "caveat",
+      "description": "Limitations, side effects and pitfalls to watch out for when applying or testing something.",
+      "members": [
+        "caveat",
+        "limitation",
+        "side effect",
+        "pitfall",
+        "gotcha",
+        "edge case",
+        "fix caveat",
+        "fix limitation",
+        "test caveat",
+        "test weakness"
+      ]
+    },
+    {
+      "kind": "misleading signal",
+      "description": "Symptoms or messages that look relevant but point the wrong way.",
+      "members": [
+        "misleading symptom",
+        "misleading signal",
+        "misleading output",
+        "misleading message",
+        "misleading lead",
+        "red herring"
+      ]
+    },
+    {
+      "kind": "unrelated noise",
+      "description": "Log lines or failures that appear but are unrelated to the bug and can be ignored.",
+      "members": [
+        "unrelated noise",
+        "noise",
+        "unrelated failures",
+        "unrelated warning",
+        "unrelated warnings",
+        "unrelated",
+        "unrelated finding",
+        "unrelated log noise",
+        "unrelated symptom",
+        "unrelated failure",
+        "log noise",
+        "ruled out noise"
+      ]
+    },
+    {
+      "kind": "side issue",
+      "description": "A separate secondary problem noticed alongside the main one.",
+      "members": [
+        "side issue",
+        "secondary bug",
+        "separate issue",
+        "side finding",
+        "side note"
+      ]
+    },
+    {
+      "kind": "history",
+      "description": "Timeline and timing of when things happened.",
+      "members": [
+        "history",
+        "timeline",
+        "timing"
+      ]
+    },
+    {
+      "kind": "documentation pointer",
+      "description": "Pointers to docs, references and gaps in documentation.",
+      "members": [
+        "documentation pointer",
+        "documentation",
+        "docs reference",
+        "docs pointer",
+        "reference",
+        "pointer",
+        "upstream reference doc"
+      ]
+    },
+    {
+      "kind": "documentation gap",
+      "description": "Documentation that is missing or lacking on this behavior.",
+      "members": [
+        "documentation gap",
+        "docs gap"
+      ]
+    },
+    {
+      "kind": "triage note",
+      "description": "Triage classification and process notes about how the thread was handled.",
+      "members": [
+        "triage note",
+        "triage",
+        "classification",
+        "process note",
+        "provenance"
+      ]
+    }
+  ]
+}
