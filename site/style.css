@@ -68,7 +68,7 @@ h2:lang(zh) { line-height: 1.22; word-break: keep-all; }
 .slab { background: var(--color-paper-3); border-bottom: var(--rule-hair) solid var(--color-ink); }
 .slab__row { display: flex; align-items: center; gap: var(--space-xl); min-height: var(--nav-h); }
 .wordmark { display: inline-flex; align-items: center; gap: var(--space-xs); font-family: var(--font-display); font-weight: var(--display-weight); font-size: var(--text-lg); letter-spacing: -0.01em; text-decoration: none; }
-.wordmark img { width: 1.4em; height: 1.4em; }
+.wordmark img { width: auto; height: 1.6em; }
 .slab__links, .slab__end { display: flex; gap: var(--space-lg); font-size: var(--text-sm); font-weight: 500; }
 .slab__end { margin-left: auto; }
 .slab a { display: inline-flex; align-items: center; min-height: 44px; text-decoration: none; white-space: nowrap; }
