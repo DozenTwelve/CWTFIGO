@@ -109,10 +109,6 @@ h2:lang(zh) { line-height: 1.22; word-break: keep-all; }
 .skip { position: absolute; left: var(--space-md); top: var(--space-xs); z-index: 10; padding: var(--space-xs) var(--space-md); background: var(--color-ink); color: var(--color-paper); border-radius: var(--radius-pill); transform: translateY(-200%); }
 .skip:focus { transform: none; }
 
-/* questions */
-.end { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: var(--gap-split); align-items: start; padding-block: var(--space-2xl); }
-.questions { display: grid; gap: var(--space-lg); }
-
 /* walkthrough: an exclusive accordion; the open item's picture sits in one fixed panel on the right */
 .walk-section { padding-block: var(--space-2xl); }
 .walk { position: relative; display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); column-gap: var(--gap-split); align-content: start; margin-top: var(--space-xl); }
@@ -130,6 +126,7 @@ h2:lang(zh) { line-height: 1.22; word-break: keep-all; }
 .walk details p { max-width: 42ch; padding-bottom: var(--space-lg); color: var(--color-ink-2); }
 
 /* questions */
+.questions { display: grid; gap: var(--space-lg); padding-block: var(--space-2xl); }
 .faq { border-top: var(--rule-hair) solid var(--color-ink); }
 .faq details { border-bottom: var(--rule-hair) solid var(--color-rule); }
 .faq summary, .walk summary { display: flex; justify-content: space-between; align-items: center; gap: var(--space-md); min-height: 64px; padding-block: var(--space-sm); font-size: var(--text-title); font-family: var(--font-display); font-weight: var(--display-weight); letter-spacing: -0.015em; cursor: pointer; list-style: none; }
@@ -155,7 +152,6 @@ h2:lang(zh) { line-height: 1.22; word-break: keep-all; }
   .walk::after { content: none; }
   .walk__pic { position: static; width: 100%; aspect-ratio: auto; margin-bottom: var(--space-lg); }
   .walk__pic img { height: auto; }
-  .end { grid-template-columns: minmax(0, 1fr); }
   .foot__cols { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 }
 @media (max-width: 40rem) {
