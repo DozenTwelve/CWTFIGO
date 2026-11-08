@@ -43,46 +43,19 @@
 <main id="main">
 
 <section class="hero container" aria-labelledby="hero-title">
-  <div class="hero__text">
-    <h1 id="hero-title">Claude, what the fuck is going on?</h1>
-    <p class="lead">A Claude Code plugin that fixes your machines and writes everything down.</p>
-    <div class="install">
-      <div class="install__box">
-        <div class="install__head"><span class="install__status" role="status">Paste into Claude Code</span><button class="btn btn--primary" type="button" data-copy="install-1">Copy the install</button></div>
-        <pre id="install-1" tabindex="0"><code><span class="ln">/plugin marketplace add DozenTwelve/<wbr>CWTFIGO</span><span class="ln">/plugin install cwtfigo@cwtfigo</span></code></pre>
-      </div>
-      <a class="install__alt" href="#install">Install from a clone</a>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="banner-dark.png">
+    <img class="hero__banner" src="banner-light.png" alt="CWTFIGO: an orange robot with a cigar" width="1280" height="640" fetchpriority="high">
+  </picture>
+  <h1 id="hero-title">Claude, what the fuck is going on?</h1>
+  <p class="lead">Your computer acts up? Call Claude by name. It finds what’s wrong, fixes it once you say OK, and remembers.</p>
+  <div class="install">
+    <div class="install__box">
+      <div class="install__head"><span class="install__status" role="status">Paste into Claude Code</span><button class="btn btn--primary" type="button" data-copy="install-1">Copy the install</button></div>
+      <pre id="install-1" tabindex="0"><code><span class="ln">/plugin marketplace add DozenTwelve/<wbr>CWTFIGO</span><span class="ln">/plugin install cwtfigo@cwtfigo</span></code></pre>
     </div>
   </div>
-
-  <figure class="entry hero__entry" aria-label="A visit opening in Claude Code: the CWTFIGO welcome panel">
-    <div class="entry__head"><span>Claude Code on kettle</span><time class="num" datetime="2026-11-07T09:41">09:41</time></div>
-    <pre class="entry__body" tabindex="0"><code><span class="you">&gt; CWTFIGO, kettle hits 90°C on every video call</span>
-
-<span class="cmd">$ cw status</span>
-<span class="out">   .------------------------------------.
-  (  Claude, what the fuck is going on?  )
-   '---.  .-----------------------------'
-        \ |
-     .--------.
-     | O    o |    C  W  T  F  I  G  O
-     |  ~~~~  |    Something's on fire? Show me.
-     '---..---'
-     ____||____
-    [__________]
-
-  Reads nothing without your yes. Changes nothing without your OK.
-  Notes stay on your side: ~/.cwtfigo and your private remote
-
-  attic                  debian 12        last visit 2026-11-02  0 open, 1 parked
-  couch                  steamos 3.7      last visit 2026-10-19  0 open
-  den                    windows 11       last visit 2026-10-30  1 open
-  kettle (this machine)  arch             last visit 2026-11-06  0 open
-  lighthouse             openwrt 24.10.4  last visit 2026-11-04  0 open
-  studio                 macos 15.6       last visit never       0 open
-
-  Another machine? Tell me its SSH alias.</span></code></pre>
-  </figure>
+  <p class="hero__then">Then type <code>cwtfigo</code>. If it offers you a checkup of this computer, it’s working. <a href="#install">Install from a clone</a></p>
 </section>
 
 <section class="split split--lead container" id="visit" aria-labelledby="visit-title">
