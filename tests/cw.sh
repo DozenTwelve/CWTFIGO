@@ -35,7 +35,7 @@ printf '#!/bin/sh\necho new\n' > "$T/pkg/cwtfigo"; echo MIT > "$T/pkg/LICENSE"; 
 tsum() { { sha256sum "$1" 2>/dev/null || shasum -a 256 "$1"; } | cut -d' ' -f1; }
 echo "$(tsum "$T/srv.tar.gz")  $A" > "$T/srv.sha256"
 printf '#!/bin/sh\ncase $1 in -m) echo "${FAKE_M:-x86_64}" ;; *) echo "${FAKE_OS:-Linux}" ;; esac\n' > "$T/bin/uname"
-printf '#!/bin/sh\necho "$*" >> "$FAKE/curl.args"; [ -e "$FAKE/curl.fail" ] && exit 22\nwhile [ $# -gt 1 ]; do [ "$1" = -o ] && o=$2; shift; done\ncase $1 in *.sha256) cp "$FAKE/srv.sha256" "$o" ;; *) cp "$FAKE/srv.tar.gz" "$o" ;; esac\n' > "$T/bin/curl"
+printf '#!/bin/sh\necho "$*" >> "$FAKE/curl.args"; [ -e "$FAKE/curl.fail" ] && { cat "$FAKE/curl.fail"; exit 22; }\nwhile [ $# -gt 1 ]; do [ "$1" = -o ] && o=$2; shift; done\ncase $1 in *.sha256) cp "$FAKE/srv.sha256" "$o" ;; *) cp "$FAKE/srv.tar.gz" "$o" ;; esac\n' > "$T/bin/curl"
 printf '#!/bin/sh\necho "$*" >> "$FAKE/gh.args"\nwhile [ $# -gt 0 ]; do [ "$1" = -D ] && d=$2; shift; done\ncp "$FAKE/srv.tar.gz" "$d/%s"; cp "$FAKE/srv.sha256" "$d/%s.sha256"\n' "$A" "$A" > "$T/bin/gh"
 chmod +x "$T/bin/uname" "$T/bin/curl" "$T/bin/gh"
 tw() { PATH=$T/bin:$PATH HOME=$T/home FAKE=$T SHELL=${TSH:-/bin/zsh} "${SH:-sh}" "$CW" tui; }
@@ -62,10 +62,21 @@ out=$(tw 2>&1) && fail "cw tui should refuse a tarball that doesn't match its .s
 echo "$out" | grep -q "doesn't match" || fail "a sha mismatch should say so: $out"
 [ "$(cat "$T/home/.local/bin/cwtfigo")" = old ] && [ "$(ls -A "$T/home/.local/bin")" = cwtfigo ] || fail "a sha mismatch must leave ~/.local/bin as it was: $(ls -A "$T/home/.local/bin")"
 echo "$(tsum "$T/srv.tar.gz")  $A" > "$T/srv.sha256"
-# curl failing (right after a plugin update the release is still building): try again later, the old binary stays, no gh.
-echo old > "$T/home/.local/bin/cwtfigo"; touch "$T/curl.fail"; out=$(tw 2>&1) && fail "cw tui should fail when curl does"
-echo "$out" | grep -q "isn't ready to download yet.*Try again in 5 minutes" || fail "a failed download should say to try again later: $out"
+grep -q -- '--connect-timeout [0-9]* --max-time [0-9]*' "$T/curl.args" || fail "cw tui's curl needs timeouts, a stalled download would hang the TUI's u: $(cat "$T/curl.args")"
+# A 404 (right after a plugin update the release is still building): try again later, the old binary stays, no gh.
+echo old > "$T/home/.local/bin/cwtfigo"; printf 404 > "$T/curl.fail"; out=$(tw 2>&1) && fail "cw tui should fail when curl does"
+echo "$out" | grep -q "isn't ready to download yet.*Try again in 5 minutes" || fail "a 404 should say to try again later: $out"
 [ "$(cat "$T/home/.local/bin/cwtfigo")" = old ] && [ ! -e "$T/gh.args" ] || fail "a failed download must leave the old binary and not try gh"
+# No connection (no DNS, a timeout: curl's code 000) is not "not ready yet".
+printf 000 > "$T/curl.fail"; out=$(tw 2>&1) && fail "cw tui should fail with no connection"
+echo "$out" | grep -q "couldn't reach GitHub" && ! echo "$out" | grep -q "isn't ready" || fail "no connection should say so: $out"
+[ "$(ls -A "$T/home/.local/bin")" = cwtfigo ] || fail "a failed download must leave no temp file: $(ls -A "$T/home/.local/bin")"
+rm "$T/curl.fail"
+# No curl at all: how to get it, before anything is fetched or created.
+mkdir "$T/nc"; for c in dirname sed sha256sum shasum; do p=$(command -v $c) && ln -s "$p" "$T/nc/$c"; done; cp "$T/bin/uname" "$T/nc/"
+out=$(PATH=$T/nc HOME=$T/home "$(command -v sh)" "$CW" tui 2>&1) && fail "cw tui without curl should fail"
+echo "$out" | grep -q "doesn't have: install it (Debian/Ubuntu/Mint: sudo apt install curl;.*Arch: sudo pacman -S curl; a Mac has it)" || fail "cw tui without curl should say how to install it: $out"
+touch "$T/curl.fail"
 # Windows (Git Bash) has no build: one line, nothing fetched.
 rm "$T/curl.args"; out=$(FAKE_OS=MINGW64_NT-10.0 tw 2>&1) && fail "cw tui should refuse Windows"
 echo "$out" | grep -q "Mac and Linux only, there's no Windows build" && [ ! -e "$T/curl.args" ] || fail "cw tui on Windows: $out"

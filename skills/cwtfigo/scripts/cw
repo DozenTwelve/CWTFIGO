@@ -53,6 +53,7 @@ if [ "$1" = tui ]; then
   # The builds tui-release.yml makes: anything else would 404 and read like a login problem.
   case $os-$m in Darwin-arm64|Darwin-x86_64|Linux-x86_64|Linux-aarch64) ;; *) die "there's no TUI build for this processor ($m): only 64-bit Intel/AMD and 64-bit ARM" ;; esac
   v=$VERSION; [ -n "$v" ] || die "no version in $PJ"
+  command -v curl >/dev/null || die "the TUI downloads with curl, which this computer doesn't have: install it (Debian/Ubuntu/Mint: sudo apt install curl; Fedora: sudo dnf install curl; Arch: sudo pacman -S curl; a Mac has it), then try again"
   tag=tui-v$v; a=cwtfigo-tui-$os-$m.tar.gz; B=$HOME/.local/bin; u=https://github.com/DozenTwelve/CWTFIGO/releases/download/$tag/$a
   # A clone's own build, linked there (tui/README): replacing the link would cut it off from later rebuilds.
   [ -L "$B/cwtfigo" ] && die "~/.local/bin/cwtfigo is a link to your own build, $(readlink "$B/cwtfigo"): nothing installed. Rebuild it instead (git pull, then cargo build --release in tui/)"
@@ -62,8 +63,11 @@ if [ "$1" = tui ]; then
   n=$B/.cwtfigo.$$; T=$(mktemp -d) || die "no temp dir"
   trap 'rm -rf "${T:?}"; rm -f "$n"' EXIT; trap 'exit 1' INT TERM HUP
   # Right after a plugin update its TUI is still building (a few minutes), and GitHub caches the 404 a while longer.
-  curl -fsSL -o "$T/$a" "$u" && curl -fsSL -o "$T/$a.sha256" "$u.sha256" ||
-    die "the TUI for $v isn't ready to download yet: after a plugin update it takes a few minutes to build. Try again in 5 minutes (in the TUI: u). Still failing then? Check the connection to github.com"
+  # Only a 404 says so; anything else is the connection. The timeouts end a stalled one (the TUI's u waits on this).
+  get() { c=$(curl -fsSL --connect-timeout 15 --max-time 300 -w '%{http_code}' -o "$1" "$2") && return
+    [ "$c" = 404 ] && die "the TUI for $v isn't ready to download yet: after a plugin update it takes a few minutes to build. Try again in 5 minutes (in the TUI: u)"
+    die "couldn't reach GitHub to download the TUI (curl's error is above): check the connection to github.com, then try again"; }
+  get "$T/$a" "$u"; get "$T/$a.sha256" "$u.sha256"
   read -r s _ < "$T/$a.sha256"
   [ -n "$s" ] && [ "$(sha "$T/$a")" = "$s" ] || die "$a doesn't match its .sha256: nothing installed"
   tar -xzf "$T/$a" -C "$T" cwtfigo && cp "$T/cwtfigo" "$n" && chmod +x "$n" && mv -f "$n" "$B/cwtfigo" || die "cannot install $a into $B"
