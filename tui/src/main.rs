@@ -81,7 +81,7 @@ struct App {
 
 /// What a background thread reports: a probe's answer, or how `cw status` (the pull) ended.
 enum Msg {
-    Online(String, bool),
+    Online(String, Option<bool>),
     Pulled(String),
 }
 
@@ -177,7 +177,7 @@ fn find_cw() -> Result<PathBuf, String> {
     let claude = env::var_os("CLAUDE_CONFIG_DIR").map(PathBuf::from).unwrap_or_else(|| home.join(".claude"));
     let list = claude.join("plugins/installed_plugins.json");
     let dev = DEV_CW.map(PathBuf::from);
-    installed_cw(&fs::read_to_string(&list).unwrap_or_default())
+    installed_cw(&fs::read_to_string(&list).unwrap_or_default(), &env::current_dir().unwrap_or_default())
         .into_iter()
         .chain(dev.clone())
         .find(|p| p.is_file())
@@ -194,20 +194,23 @@ fn find_cw() -> Result<PathBuf, String> {
         })
 }
 
-/// scripts/cw in every cwtfigo@cwtfigo install Claude Code lists, scope user first. Old versions stay in the cache,
-/// so the list (not the newest directory there) says which one is live.
-fn installed_cw(json: &str) -> Vec<PathBuf> {
+/// scripts/cw in every cwtfigo@cwtfigo install Claude Code lists: scope user first, then the project install for the
+/// directory the TUI runs in, then the newest version. Old versions stay in the cache, so the list (not the newest
+/// directory there) says which one is live.
+fn installed_cw(json: &str, cwd: &Path) -> Vec<PathBuf> {
     // ponytail: string split, not a JSON parser: entries are flat objects and the paths sit under $HOME, so no `]`, `}`
     // or `"` in them. A path with one of those breaks it; serde_json if that ever happens.
     let Some(list) = json.split("\"cwtfigo@cwtfigo\"").nth(1).and_then(|s| s.split(']').next()) else { return vec![] };
-    let mut found: Vec<(bool, PathBuf)> = list
+    let mut found: Vec<_> = list
         .split('}')
         .filter_map(|e| {
             let path = PathBuf::from(field(e, "installPath")?).join("skills/cwtfigo/scripts/cw");
-            Some((field(e, "scope").as_deref() != Some("user"), path))
+            let user = field(e, "scope").as_deref() == Some("user");
+            let here = field(e, "projectPath").is_some_and(|p| cwd.starts_with(p));
+            Some(((!user, !here, std::cmp::Reverse(num(&field(e, "version").unwrap_or_default()))), path))
         })
         .collect();
-    found.sort_by_key(|f| f.0); // stable: same scope keeps the file's order
+    found.sort_by(|a, b| a.0.cmp(&b.0)); // stable: a tie keeps the file's order
     found.into_iter().map(|f| f.1).collect()
 }
 
@@ -227,9 +230,13 @@ fn plugin_version(cw: &Path) -> Option<String> {
 /// What `u` offers when this build isn't the plugin's version: `cw tui` installs exactly the plugin's, older or newer.
 /// An older one is a switch, never called an update.
 fn update_to(plugin: Option<&str>, mine: &str) -> Option<String> {
-    let num = |v: &str| v.split('.').map(|x| x.parse::<u64>().unwrap_or(0)).collect::<Vec<_>>();
     let p = plugin.filter(|p| *p != mine)?;
     Some(format!("{} TUI to {p}", if num(p) > num(mine) { "update" } else { "switch" }))
+}
+
+/// A version's numbers, compared as numbers: 0.5.10 is newer than 0.5.9.
+fn num(v: &str) -> Vec<u64> {
+    v.split('.').map(|x| x.parse().unwrap_or(0)).collect()
 }
 
 /// ~/.local/bin/cwtfigo links to a build from a clone (tui/README's setup): rebuilt there, not by `cw tui`.
@@ -240,21 +247,51 @@ fn own_build(home: &Path) -> bool {
 /// `cw tui` installs the plugin's version into ~/.local/bin; then this process becomes it, same args. On failure the
 /// TUI stays as it was.
 fn update(terminal: &mut DefaultTerminal, app: &mut App) {
+    let bin = PathBuf::from(env::var_os("HOME").unwrap_or_default()).join(".local/bin/cwtfigo");
+    // Before cw tui renames the new file over it: after, Linux names a replaced running binary "... (deleted)".
+    let here = env::current_exe().and_then(|e| e.canonicalize()).ok();
     let mut cmd = cw(app);
     cmd.arg("tui");
-    // No pause on success: the new TUI says it was updated. A failure still stops to show why.
-    match run_external(terminal, &mut cmd, false) {
-        Ok(s) if s.success() => {
-            let bin = PathBuf::from(env::var_os("HOME").unwrap_or_default()).join(".local/bin/cwtfigo");
-            ratatui::restore();
-            let e = reexec(&bin);
-            *terminal = ratatui::init();
-            let _ = terminal.clear();
-            app.message = format!("updated, but cannot start {}: {e}", bin.display());
-        }
-        Ok(s) => app.message = format!("TUI update failed: cw tui {s}"),
-        Err(e) => app.message = format!("cannot start sh: {e}"),
+    ratatui::restore();
+    // stdout read for the PATH warnings after "installed"; cw's errors go to stderr, straight to the screen.
+    let res = cmd.stderr(Stdio::inherit()).output();
+    match &res {
+        Ok(o) => print!("{}", String::from_utf8_lossy(&o.stdout)),
+        Err(e) => println!("cannot start: {e}"),
     }
+    // No pause on a plain success: the new TUI says it was updated. A failure or a warning stops to show why.
+    let ok = matches!(&res, Ok(o) if o.status.success());
+    let note = res.as_ref().ok().filter(|_| ok).and_then(|o| update_note(&String::from_utf8_lossy(&o.stdout), here.as_deref(), &bin));
+    if let Some(n) = &note {
+        println!("{n}");
+    }
+    if !ok || note.is_some() {
+        println!("\nPress Enter to {}.", if ok { "start the new one" } else { "return" });
+        let _ = std::io::stdin().read_line(&mut String::new());
+    }
+    if ok {
+        let e = reexec(&bin);
+        app.message = format!("updated, but cannot start {}: {e}", bin.display());
+    } else {
+        app.message = match res {
+            Ok(o) => format!("TUI update failed: cw tui {}", o.status),
+            Err(e) => format!("cannot start sh: {e}"),
+        };
+    }
+    *terminal = ratatui::init();
+    let _ = terminal.clear();
+}
+
+/// What to stop and show after `cw tui` installed into bin, before starting it: cw's warnings after its "installed"
+/// line (another cwtfigo first on PATH, ~/.local/bin not on PATH), and a TUI started from somewhere else, which the
+/// next `cwtfigo` would start again, old.
+fn update_note(out: &str, here: Option<&Path>, bin: &Path) -> Option<String> {
+    let mut lines: Vec<String> = out.lines().skip_while(|l| !l.contains(" installed in ")).skip(1).map(str::to_string).collect();
+    if here != bin.canonicalize().ok().as_deref() {
+        let here = here.map_or("somewhere else".into(), |h| h.display().to_string());
+        lines.push(format!("This TUI ran from {here}, not {}: start the new one with ~/.local/bin/cwtfigo.", bin.display()));
+    }
+    (!lines.is_empty()).then(|| lines.join("\n"))
 }
 
 /// Only returns on failure.
@@ -655,7 +692,7 @@ fn got(app: &mut App, m: Msg) {
         Msg::Online(name, online) => {
             app.probing.remove(&name);
             if let Some(h) = app.hosts.iter_mut().find(|h| h.name == name) {
-                h.online = Some(online);
+                h.online = online;
             }
         }
         Msg::Pulled(message) => {
@@ -746,15 +783,26 @@ fn probe(name: String, tx: Sender<Msg>) {
             .unwrap_or_default();
         let get = |k: &str| cfg.lines().find_map(|l| l.strip_prefix(k)).map(|v| v.trim().to_string());
         let online = match (get("hostname "), get("port ").and_then(|p| p.parse::<u16>().ok())) {
-            (Some(h), Some(p)) => (h.as_str(), p)
-                .to_socket_addrs()
-                .ok()
-                .and_then(|mut a| a.next())
-                .is_some_and(|a| TcpStream::connect_timeout(&a, Duration::from_millis(800)).is_ok()),
-            _ => false,
+            (Some(h), Some(p)) => reach(&h, p),
+            _ => None,
         };
         let _ = tx.send(Msg::Online(name, online));
     });
+}
+
+/// Some(true) if the port answers, Some(false) if it doesn't, None (unknown) if the name doesn't resolve here: ssh may
+/// still find it. The Linux build is static musl, whose resolver skips NSS (no mDNS, so no `.local`); getent asks the
+/// system's.
+fn reach(host: &str, port: u16) -> Option<bool> {
+    let addr = (host, port).to_socket_addrs().ok().and_then(|mut a| a.next()).or_else(|| {
+        if !cfg!(target_os = "linux") {
+            return None;
+        }
+        let out = Command::new("getent").args(["hosts", host]).output().ok()?;
+        let ip = String::from_utf8_lossy(&out.stdout).split_whitespace().next()?.parse::<std::net::IpAddr>().ok()?;
+        Some((ip, port).into())
+    })?;
+    Some(TcpStream::connect_timeout(&addr, Duration::from_millis(800)).is_ok())
 }
 
 const ACCENT: Color = Color::Cyan;
@@ -782,7 +830,7 @@ fn draw(f: &mut Frame, app: &mut App) {
     let [left, mid, right] =
         Layout::horizontal([Constraint::Length(left_w), Constraint::Percentage(35), Constraint::Fill(1)]).areas(main);
 
-    // Title bar, as in lanman: name, the record, how many machines answer.
+    // Title bar: name, the record, how many machines answer.
     let up = app.hosts.iter().filter(|h| h.here || h.online == Some(true)).count();
     let count = format!(" {up}/{} online ", app.hosts.len());
     let [name, status] = Layout::horizontal([Constraint::Fill(1), Constraint::Length(count.len() as u16)]).areas(top);
@@ -1102,6 +1150,25 @@ mod tests {
         fs::remove_dir_all(&home).unwrap();
     }
 
+    #[test]
+    fn update_stops_on_a_path_warning_or_a_tui_run_from_elsewhere() {
+        let home = env::temp_dir().join(format!("cwtfigo-tui-note-{}", std::process::id()));
+        fs::create_dir_all(home.join(".local/bin")).unwrap();
+        let bin = home.join(".local/bin/cwtfigo");
+        fs::write(&bin, "").unwrap();
+        let canon = bin.canonicalize().unwrap();
+        let ok = "cwtfigo 0.5.10 installed in ~/.local/bin\n";
+        assert_eq!(update_note(ok, Some(&canon), &bin), None, "plain success: no stop");
+        let warn = format!("{ok}another cwtfigo comes first on PATH, /usr/local/bin/cwtfigo: remove it or move ~/.local/bin before it\n");
+        assert!(update_note(&warn, Some(&canon), &bin).unwrap().starts_with("another cwtfigo comes first on PATH"));
+        let off = format!("{ok}~/.local/bin isn't on PATH: add export PATH=... to ~/.zshrc, then open a new terminal\n");
+        assert!(update_note(&off, Some(&canon), &bin).unwrap().starts_with("~/.local/bin isn't on PATH"));
+        let n = update_note(ok, Some(Path::new("/usr/local/bin/cwtfigo")), &bin).unwrap();
+        assert!(n.contains("ran from /usr/local/bin/cwtfigo"), "{n}");
+        assert!(update_note(ok, None, &bin).is_some(), "can't tell where it ran from: say so");
+        fs::remove_dir_all(&home).unwrap();
+    }
+
     fn host(name: &str, items: Vec<Item>) -> Host {
         Host { name: name.into(), here: false, os: None, online: None, yolo: false, items }
     }
@@ -1149,10 +1216,42 @@ mod tests {
   }
 }"#;
         let cw = |v: &str| PathBuf::from(format!("/h/.claude/plugins/cache/cwtfigo/cwtfigo/{v}/skills/cwtfigo/scripts/cw"));
-        assert_eq!(installed_cw(json), [cw("0.4.9"), cw("0.4.8")]);
-        assert_eq!(installed_cw(r#"{"plugins":{"cwtfigo@cwtfigo":[{"installPath":"/a"},{"installPath":"/b"}]}}"#).len(), 2);
-        assert!(installed_cw(r#"{"plugins":{"caveman@caveman":[]}}"#).is_empty());
-        assert!(installed_cw("").is_empty());
+        let cwd = Path::new("/h");
+        assert_eq!(installed_cw(json, cwd), [cw("0.4.9"), cw("0.4.8")]);
+        assert_eq!(installed_cw(r#"{"plugins":{"cwtfigo@cwtfigo":[{"installPath":"/a"},{"installPath":"/b"}]}}"#, cwd).len(), 2);
+        assert!(installed_cw(r#"{"plugins":{"caveman@caveman":[]}}"#, cwd).is_empty());
+        assert!(installed_cw("", cwd).is_empty());
+    }
+
+    #[test]
+    fn with_no_user_install_the_projects_own_then_the_newest() {
+        let json = r#"{
+  "version": 2,
+  "plugins": {
+    "cwtfigo@cwtfigo": [
+      { "scope": "project", "projectPath": "/h/a", "installPath": "/c/0.5.2", "version": "0.5.2" },
+      { "scope": "local", "projectPath": "/h/b", "installPath": "/c/0.5.9", "version": "0.5.9" },
+      { "scope": "project", "projectPath": "/h/c", "installPath": "/c/0.5.10", "version": "0.5.10" }
+    ]
+  }
+}"#;
+        let cw = |v: &str| PathBuf::from(format!("/c/{v}/skills/cwtfigo/scripts/cw"));
+        assert_eq!(installed_cw(json, Path::new("/h/b/sub")), [cw("0.5.9"), cw("0.5.10"), cw("0.5.2")], "this project's, then newest");
+        assert_eq!(installed_cw(json, Path::new("/h")), [cw("0.5.10"), cw("0.5.9"), cw("0.5.2")], "newest by number, not text");
+        assert_eq!(installed_cw(json, Path::new("/h/bb"))[0], cw("0.5.10"), "/h/bb isn't inside /h/b");
+        let user = json.replace(r#""scope": "project", "projectPath": "/h/a""#, r#""scope": "user""#);
+        assert_eq!(installed_cw(&user, Path::new("/h/b"))[0], cw("0.5.2"), "user scope wins");
+    }
+
+    #[test]
+    fn a_name_that_does_not_resolve_is_unknown_not_offline() {
+        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = l.local_addr().unwrap().port();
+        assert_eq!(reach("127.0.0.1", port), Some(true));
+        drop(l);
+        assert_eq!(reach("127.0.0.1", port), Some(false), "resolves, nothing listens: offline");
+        // .invalid never resolves (RFC 6761), as a .local name doesn't through musl's resolver.
+        assert_eq!(reach("cwtfigo-test.invalid", 22), None);
     }
 
     #[test]
