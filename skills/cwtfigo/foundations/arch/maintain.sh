@@ -4,7 +4,8 @@
 # maintain.sh (Arch): updates and cleanup for this host.
 #   no argument: dry run. Unread Arch news, pending updates, what each cleanup item would free, orphans.
 #                Changes nothing (checkupdates syncs a private copy of the package database).
-#   --apply:     keyring, pacman -Syu, AUR, flatpak, clean the items in CLEAN, report space freed, .pacnew, reboot.
+#   --apply:     keyring, pacman -Syu, AUR, flatpak, clean the items in CLEAN (or only those named after --apply),
+#                report space freed, .pacnew, reboot.
 #                Uses sudo: the human runs it in their terminal. Read the news from the dry run first;
 #                an item there that needs manual intervention comes before --apply.
 #
@@ -23,7 +24,10 @@ JOURNAL_MAX=200M
 #   trash       empty the Trash. User data, irreversible. Only when the owner asked.
 # Never removed here: orphans (listed only; removal cascades, show the full list and confirm separately).
 
-APPLY=; [ "$1" = --apply ] && APPLY=1
+APPLY=; [ "$1" = --apply ] && APPLY=1 && shift
+# Items named after --apply are the owner's pick for this run, in place of CLEAN (none: clean nothing). The pick goes
+# as args, not as an edit: an edit changes the hash and asks for approval again. CLEAN stays the habit.
+[ $# -gt 0 ] && CLEAN="$*"
 has() { command -v "$1" >/dev/null 2>&1; }
 on() { case " $1 " in *" $2 "*) return 0;; esac; return 1; }
 sec() { echo; echo "## $1"; }

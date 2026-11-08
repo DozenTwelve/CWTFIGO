@@ -5,7 +5,7 @@
 #   no argument: dry run. Last upgrade, pending updates (from fresh package lists in a private dir), held and kept-back
 #                packages, what each cleanup item would free, autoremove candidates. Changes nothing.
 #   --apply:     apt-get update, apt-get upgrade --with-new-pkgs (apt asks before it changes anything), snap, flatpak,
-#                clean the items in CLEAN, report space freed, .dpkg-dist, reboot.
+#                clean the items in CLEAN (or only those named after --apply), report space freed, .dpkg-dist, reboot.
 #                Uses sudo: the human runs it in their terminal.
 #
 # This is where the host's habits live. Edit CLEAN and UPDATE to fit the machine and its owner;
@@ -28,7 +28,10 @@ JOURNAL_MAX=200M
 # Never removed here: autoremove candidates (listed only; removal cascades and can take a kernel or driver this host
 # keeps on purpose: show the full list, check notes.md, confirm separately).
 
-APPLY=; [ "$1" = --apply ] && APPLY=1
+APPLY=; [ "$1" = --apply ] && APPLY=1 && shift
+# Items named after --apply are the owner's pick for this run, in place of CLEAN (none: clean nothing). The pick goes
+# as args, not as an edit: an edit changes the hash and asks for approval again. CLEAN stays the habit.
+[ $# -gt 0 ] && CLEAN="$*"
 has() { command -v "$1" >/dev/null 2>&1; }
 on() { case " $1 " in *" $2 "*) return 0;; esac; return 1; }
 sec() { echo; echo "## $1"; }

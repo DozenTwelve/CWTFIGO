@@ -3,7 +3,8 @@
 # maintain.ps1 (Windows): updates and cleanup for this host. PowerShell 5.1, ASCII only.
 #   no argument: dry run. Lists pending upgrades and what each cleanup item would free. Changes nothing
 #                except refreshing package indexes (scoop update pulls scoop and its buckets).
-#   --apply:     upgrade what UPDATE names, clean the items in CLEAN, report space freed.
+#   --apply:     upgrade what UPDATE names, clean the items in CLEAN (or only those named after --apply),
+#                report space freed.
 #                cw doesn't elevate. If the session is already admin (an admin account over SSH gets an elevated
 #                token), admin-only steps run directly; if not, each prints its command for the human to run in an
 #                admin PowerShell. The dry run's first line says which.
@@ -33,6 +34,9 @@ $CHOCO_HOLD = 'python,python3'
 # Never touched: Windows.old, the component store (DISM), restore points: each ends a way back, ask separately.
 
 $APPLY = $args -contains '--apply'
+# Items named after --apply are the owner's pick for this run, in place of CLEAN (none: clean nothing). The pick goes
+# as args, not as an edit: an edit changes the hash and asks for approval again. CLEAN stays the habit.
+$pick = @($args | Where-Object { $_ -ne '--apply' }); if ($pick.Count) { $CLEAN = $pick -join ' ' }
 $ErrorActionPreference = 'SilentlyContinue'
 $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 function has($c) { [bool](Get-Command $c) }

@@ -114,6 +114,27 @@ echo "$out" | grep -qx '  partly: caches, [0-9]*M left (in use or protected)' ||
 [ -e "$X/gone" ] && fail "macos maintain: item should still clean what it can"
 echo "$out" | grep -qx '  failed: trash' || fail "macos maintain: without a dir a failed clean stays failed: $out"
 
+# maintain: items named after --apply replace CLEAN for that run (the owner's pick, no edit, no new hash); none
+# cleans nothing; no items keep CLEAN. Only the argument lines run, cut out of each script.
+fresh
+for s in macos debian arch; do
+  { sed -n '/^APPLY=/,/^\[ \$# -gt 0 \]/p' "$F/$s/maintain.sh"; echo 'echo "$APPLY|$CLEAN"'; } > "$D/args.sh"
+  c=$(sed -n 's/^CLEAN="\(.*\)"$/\1/p' "$F/$s/maintain.sh")
+  # args | APPLY | CLEAN after (= the script's own CLEAN)
+  for t in "--apply brew trash|1|brew trash" "--apply none|1|none" "--apply|1|=" "||="; do
+    a=${t%%|*}; w=${t#*|}; [ "${w#*|}" = = ] && w="${w%|*}|$c"
+    { echo "CLEAN=\"$c\""; cat "$D/args.sh"; } > "$D/a.sh"; o=$(PATH=$D/bin $SH "$D/a.sh" $a)
+    [ "$o" = "$w" ] || fail "$s maintain: args '$a' should give APPLY|CLEAN '$w', got '$o'"
+  done
+done
+# The dry run shows the pick as on/off too.
+fresh; stub id 'case $1 in -u) echo 1000 ;; -Gn) echo adm ;; *) echo u ;; esac'
+stub journalctl 'echo "Archived and active journals take up 8.0M in the file system."'
+for s in debian arch; do
+  run "$F/$s/maintain.sh" usercache 2>/dev/null | grep -Eq '^journal +off ' || fail "$s maintain: journal not in the pick should be off"
+  run "$F/$s/maintain.sh" 2>/dev/null | grep -Eq '^journal +on ' || fail "$s maintain: journal is in CLEAN, should be on"
+done
+
 # openwrt maintain: a package in UPGRADE whose upgrade would also move a core package is skipped, and the dry run says so.
 for pm in apk opkg; do
   fresh; mkdir "$D/etc"; echo "DISTRIB_ID=OpenWrt" > "$D/etc/openwrt_release"; stub id 'echo 0'

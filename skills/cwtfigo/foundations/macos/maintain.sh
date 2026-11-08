@@ -4,7 +4,7 @@
 # maintain.sh (macOS): updates and cleanup for this host.
 #   no argument: dry run. Lists pending updates and what each cleanup item would free. Changes nothing
 #                except refreshing Homebrew's package index.
-#   --apply:     upgrade, clean the items in CLEAN, report space freed.
+#   --apply:     upgrade, clean the items in CLEAN (or only those named after --apply), report space freed.
 #
 # This is where the host's habits live. Edit CLEAN and UPDATE to fit the machine and its owner;
 # an item missing here is never cleaned, whatever the dry run shows.
@@ -26,7 +26,10 @@ SNAPSHOT=no
 #   trash       empty the Trash. User data, irreversible. Only when the owner asked.
 # Never touched: Xcode Archives (dSYMs), iOS backups, anything under ~/Documents or ~/Desktop.
 
-APPLY=; [ "$1" = --apply ] && APPLY=1
+APPLY=; [ "$1" = --apply ] && APPLY=1 && shift
+# Items named after --apply are the owner's pick for this run, in place of CLEAN (none: clean nothing). The pick goes
+# as args, not as an edit: an edit changes the hash and asks for approval again. CLEAN stays the habit.
+[ $# -gt 0 ] && CLEAN="$*"
 has() { command -v "$1" >/dev/null 2>&1; }
 on() { case " $1 " in *" $2 "*) return 0;; esac; return 1; }
 sec() { echo; echo "## $1"; }
