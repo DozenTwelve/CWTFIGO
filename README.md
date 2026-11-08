@@ -24,7 +24,7 @@ In Claude Code:
 /plugin install cwtfigo@cwtfigo
 ```
 
-Then type `cwtfigo`. If it offers you a checkup of this computer, it's working.
+Then run `/reload-plugins` (or restart Claude Code) and type `cwtfigo`. If it offers you a checkup of this computer, it's working.
 
 It needs `git` (on a Mac: `xcode-select --install`; on Windows it runs in Git Bash, which Claude Code needs there anyway) and `python3` to search past fixes. The first visit goes best on Opus (`/model opus`).
 
