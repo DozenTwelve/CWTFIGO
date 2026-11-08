@@ -13,7 +13,7 @@ body:
     attributes:
       label: CWTFIGO version
       description: "Shown in `/plugin`, or the `version` line of `.claude-plugin/plugin.json` in the plugin directory (`~/.claude/plugins/cache/cwtfigo/cwtfigo/<version>/`). Claude Code version too if you have it (`claude --version`)."
-      placeholder: "0.5.7, Claude Code 2.1.0"
+      placeholder: "0.5.8, Claude Code 2.1.0"
     validations:
       required: true
   - type: dropdown
