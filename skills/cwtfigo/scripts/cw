@@ -61,11 +61,9 @@ if [ "$1" = tui ]; then
   # running TUI keeps its old file.
   n=$B/.cwtfigo.$$; T=$(mktemp -d) || die "no temp dir"
   trap 'rm -rf "${T:?}"; rm -f "$n"' EXIT; trap 'exit 1' INT TERM HUP
-  # gh: the repo is private until launch, and gh has the owner's login.
-  if ! { curl -fsSL -o "$T/$a" "$u" && curl -fsSL -o "$T/$a.sha256" "$u.sha256"; }; then
-    command -v gh >/dev/null || die "cannot download $u (curl failed, and there's no gh to try with a login)"
-    gh release download "$tag" -R DozenTwelve/CWTFIGO -p "$a*" -D "$T" --clobber || die "cannot download $a of $tag: curl and gh release download both failed"
-  fi
+  # Right after a plugin update its TUI is still building (a few minutes), and GitHub caches the 404 a while longer.
+  curl -fsSL -o "$T/$a" "$u" && curl -fsSL -o "$T/$a.sha256" "$u.sha256" ||
+    die "the TUI for $v isn't ready to download yet: after a plugin update it takes a few minutes to build. Try again in 5 minutes (in the TUI: u). Still failing then? Check the connection to github.com"
   read -r s _ < "$T/$a.sha256"
   [ -n "$s" ] && [ "$(sha "$T/$a")" = "$s" ] || die "$a doesn't match its .sha256: nothing installed"
   tar -xzf "$T/$a" -C "$T" cwtfigo && cp "$T/cwtfigo" "$n" && chmod +x "$n" && mv -f "$n" "$B/cwtfigo" || die "cannot install $a into $B"

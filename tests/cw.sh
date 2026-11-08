@@ -27,7 +27,7 @@ echo "$out" | grep -q 'cannot create' && fail "no git is not a permissions probl
 [ -e "$G/rec" ] && fail "no git: nothing should be created"
 
 # cw tui: the TUI of exactly this plugin's version, from its tui-v<version> release, checked by its .sha256. A fake
-# uname, curl and gh serve a tarball built here; HOME is a temp dir. Run by $SH (SH=dash sh tests/cw.sh) if set.
+# uname and curl serve a tarball built here (a fake gh only records whether it was called); HOME is a temp dir. Run by $SH (SH=dash sh tests/cw.sh) if set.
 T=$(mktemp -d); mkdir "$T/bin" "$T/pkg" "$T/home"
 V=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' "$(dirname "$CW")/../../../.claude-plugin/plugin.json"); [ -n "$V" ] || fail "no plugin version"
 A=cwtfigo-tui-Linux-x86_64.tar.gz
@@ -62,9 +62,10 @@ out=$(tw 2>&1) && fail "cw tui should refuse a tarball that doesn't match its .s
 echo "$out" | grep -q "doesn't match" || fail "a sha mismatch should say so: $out"
 [ "$(cat "$T/home/.local/bin/cwtfigo")" = old ] && [ "$(ls -A "$T/home/.local/bin")" = cwtfigo ] || fail "a sha mismatch must leave ~/.local/bin as it was: $(ls -A "$T/home/.local/bin")"
 echo "$(tsum "$T/srv.tar.gz")  $A" > "$T/srv.sha256"
-# curl failing (a private repo): gh with the owner's login, same tag and asset.
-touch "$T/curl.fail"; out=$(tw 2>&1) || fail "cw tui should fall back to gh: $out"
-grep -qF "release download tui-v$V -R DozenTwelve/CWTFIGO -p $A*" "$T/gh.args" && [ "$("$T/home/.local/bin/cwtfigo")" = new ] || fail "gh fallback: $(cat "$T/gh.args")"
+# curl failing (right after a plugin update the release is still building): try again later, the old binary stays, no gh.
+echo old > "$T/home/.local/bin/cwtfigo"; touch "$T/curl.fail"; out=$(tw 2>&1) && fail "cw tui should fail when curl does"
+echo "$out" | grep -q "isn't ready to download yet.*Try again in 5 minutes" || fail "a failed download should say to try again later: $out"
+[ "$(cat "$T/home/.local/bin/cwtfigo")" = old ] && [ ! -e "$T/gh.args" ] || fail "a failed download must leave the old binary and not try gh"
 # Windows (Git Bash) has no build: one line, nothing fetched.
 rm "$T/curl.args"; out=$(FAKE_OS=MINGW64_NT-10.0 tw 2>&1) && fail "cw tui should refuse Windows"
 echo "$out" | grep -q "Mac and Linux only, there's no Windows build" && [ ! -e "$T/curl.args" ] || fail "cw tui on Windows: $out"
