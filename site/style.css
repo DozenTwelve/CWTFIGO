@@ -1,5 +1,5 @@
 /* CWTFIGO landing page. Hero (banner, line, install) fills the first screen; a walkthrough
- * (details accordion, one fixed picture panel); questions beside the clone install; footer.
+ * (details accordion, one fixed picture panel); questions; footer.
  * One accent: the banner's orange. Light and dark from prefers-color-scheme. */
 
 /* fonts: Red Hat Display/Text/Mono are inlined in fonts.css (OFL), so they arrive with the CSS: no swap. CJK comes from the system (--font-cjk). */
@@ -109,11 +109,9 @@ h2:lang(zh) { line-height: 1.22; word-break: keep-all; }
 .skip { position: absolute; left: var(--space-md); top: var(--space-xs); z-index: 10; padding: var(--space-xs) var(--space-md); background: var(--color-ink); color: var(--color-paper); border-radius: var(--radius-pill); transform: translateY(-200%); }
 .skip:focus { transform: none; }
 
-/* questions and the clone install, side by side */
+/* questions */
 .end { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: var(--gap-split); align-items: start; padding-block: var(--space-2xl); }
-.questions, .clone { display: grid; gap: var(--space-lg); }
-.clone .install { margin-top: 0; }
-.clone > p { color: var(--color-ink-2); }
+.questions { display: grid; gap: var(--space-lg); }
 
 /* walkthrough: an exclusive accordion; the open item's picture sits in one fixed panel on the right */
 .walk-section { padding-block: var(--space-2xl); }
