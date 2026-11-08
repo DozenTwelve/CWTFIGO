@@ -49,11 +49,11 @@
   <p class="lead">Call Claude by name. It finds what’s wrong, fixes it on your OK, and remembers.</p>
   <div class="install">
     <div class="install__box">
-      <div class="install__head"><span class="install__status" role="status">Paste into Claude Code</span><button class="btn btn--primary" type="button" data-copy="install-1">Copy the install</button></div>
+      <div class="install__head"><span class="install__status" role="status">Paste into Claude Code, one line at a time</span><button class="btn btn--primary" type="button" data-copy="install-1">Copy line 1</button></div>
       <pre id="install-1" tabindex="0"><code><span class="ln">/plugin marketplace add DozenTwelve/<wbr>CWTFIGO</span><span class="ln">/plugin install cwtfigo@cwtfigo</span></code></pre>
     </div>
   </div>
-  <p class="hero__then">Then type <code>cwtfigo</code>. If it offers you a checkup of this computer, it’s working.</p>
+  <p class="hero__then">Then run <code>/reload-plugins</code> (or restart Claude Code) and type <code>cwtfigo</code>. If it offers you a checkup of this computer, it’s working.</p>
 </section>
 
 <section class="walk-section container" id="how" aria-labelledby="how-title">
@@ -132,7 +132,7 @@ Debian file server. Backups only.
     </details>
     <details>
       <summary>Something went wrong?</summary>
-      <p>Tell it “CWTFIGO, that didn’t work”, or “CWTFIGO, open an issue about this”. It drafts a bug report with the version and what happened, shows it to you, and posts it under your GitHub account only on your yes. Or <a href="https://github.com/DozenTwelve/CWTFIGO/issues/new/choose">open one yourself</a>. Security problems: see <a href="https://github.com/DozenTwelve/CWTFIGO/blob/main/SECURITY.md">SECURITY.md</a>.</p>
+      <p>Tell it “CWTFIGO, that didn’t work”, or “CWTFIGO, open an issue about this”. It drafts a bug report with the version and what happened, shows it to you, and posts it under your GitHub account only on your yes. Posting needs GitHub’s <code>gh</code> tool, installed and logged in (<code>gh auth login</code>). Or <a href="https://github.com/DozenTwelve/CWTFIGO/issues/new/choose">open one yourself</a>. Security problems: see <a href="https://github.com/DozenTwelve/CWTFIGO/blob/main/SECURITY.md">SECURITY.md</a>.</p>
     </details>
     <details>
       <summary>Does it make Claude smarter?</summary>
@@ -160,12 +160,18 @@ Debian file server. Backups only.
 </footer>
 
 <script>
-document.querySelectorAll('[data-copy]').forEach((b) => b.addEventListener('click', () => {
-  const pre = document.getElementById(b.dataset.copy), out = b.closest('.install').querySelector('[role=status]');
-  out.dataset.label ??= out.textContent;
-  navigator.clipboard.writeText(pre.innerText.trim()).then(() => { out.textContent = 'Copied. ' + out.dataset.label; },
-    () => { getSelection().selectAllChildren(pre); out.textContent = 'Selected. Copy it with your keyboard.'; });
-}));
+// One line per click: Claude Code takes a paste as one message, so both /plugin lines at once aren't two commands.
+document.querySelectorAll('[data-copy]').forEach((b) => {
+  const lines = document.getElementById(b.dataset.copy).querySelectorAll('.ln'), out = b.closest('.install').querySelector('[role=status]');
+  let i = 0;
+  b.addEventListener('click', () => {
+    const ln = lines[i], n = i + 1;
+    i = n % lines.length;
+    b.textContent = 'Copy line ' + (i + 1);
+    navigator.clipboard.writeText(ln.innerText.trim()).then(() => { out.textContent = 'Copied line ' + n + '. Paste it into Claude Code and press Enter.'; },
+      () => { getSelection().selectAllChildren(ln); out.textContent = 'Selected line ' + n + '. Copy it with your keyboard.'; });
+  });
+});
 </script>
 </body>
 </html>

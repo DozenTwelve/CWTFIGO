@@ -1,5 +1,7 @@
-# Every plugin version bump bumps tui/Cargo.toml (and Cargo.lock) to the same version and pushes tui-v<version> with
-# it: git push --atomic origin main tui-v<version>. cw tui fetches that tag; a push to main whose version has none fails.
+# Every plugin version bump bumps tui/Cargo.toml (and Cargo.lock) to the same version and tags it tui-v<version>. Push
+# the tag alone first (git push origin tui-v<version>), wait for its tui-release run to publish all 8 files, then push
+# main. cw tui fetches that release as soon as main has the version, and a 404 asked for too early stays cached by
+# GitHub's CDN for a while. A push to main whose version has no full release fails.
 # Prebuilt cwtfigo-tui for Mac and Linux. Push a tui-v* tag (or run it by hand on one) to get a GitHub Release with a
 # tar.gz and .sha256 per target, named by `uname -s`-`uname -m` so releases/latest/download/<name> needs no mapping; run it by hand on a branch to get the same files as workflow artifacts only.
 # Plain cargo + gh rather than cargo-dist: four targets and one binary are ~60 lines here, cargo-dist would generate
@@ -16,16 +18,22 @@ permissions:
   contents: read
 
 jobs:
-  # main's plugin.json version must have its tui-v tag, or cw tui and the TUI's u fail for everyone on that version.
+  # main's plugin.json version must have its tui-v release, all of it, or cw tui and the TUI's u fail for everyone on
+  # that version.
   tagged:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - name: tui-v<plugin version> exists
+      - name: tui-v<plugin version> is released with all 8 files
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           v=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' .claude-plugin/plugin.json)
           git ls-remote --exit-code --tags origin "refs/tags/tui-v$v" >/dev/null || { echo "no tag tui-v$v: push it (git push origin tui-v$v)"; exit 1; }
+          # 8: a tar.gz and its .sha256 for each of build's 4 targets.
+          n=$(gh release view "tui-v$v" -R "$GITHUB_REPOSITORY" --json assets --jq '.assets | length') || n=0
+          [ "$n" = 8 ] || { echo "release tui-v$v has $n of 8 files: wait for its tui-release run, rerun it if it failed"; exit 1; }
 
   build:
     if: github.ref != 'refs/heads/main' || github.event_name == 'workflow_dispatch'

@@ -17,14 +17,14 @@ A plugin for [Claude Code](https://claude.com/claude-code) ([website](https://cw
 
 ## Install
 
-In Claude Code:
+In Claude Code, paste one line at a time:
 
 ```
 /plugin marketplace add DozenTwelve/CWTFIGO
 /plugin install cwtfigo@cwtfigo
 ```
 
-Then type `cwtfigo`. If it offers you a checkup of this computer, it's working.
+Then run `/reload-plugins` (or restart Claude Code) and type `cwtfigo`. If it offers you a checkup of this computer, it's working.
 
 It needs `git` (on a Mac: `xcode-select --install`; on Windows it runs in Git Bash, which Claude Code needs there anyway) and `python3` to search past fixes. The first visit goes best on Opus (`/model opus`).
 
@@ -68,6 +68,12 @@ Without Claude Code at hand, this gets the newest release instead:
 mkdir -p ~/.local/bin && curl -fsSL https://github.com/DozenTwelve/CWTFIGO/releases/latest/download/cwtfigo-tui-$(uname -s)-$(uname -m).tar.gz | tar -xz -C ~/.local/bin cwtfigo
 ```
 
+Then type `cwtfigo`. If the terminal says it's not found, `~/.local/bin` isn't on your `PATH` yet (a Mac doesn't have it there by default). Add it and open a new terminal (on Linux with bash, `~/.bashrc` instead of `~/.zshrc`):
+
+```
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+```
+
 When the plugin updates, the menu offers `u` to follow it. More in [`tui/README.md`](tui/README.md).
 
 ## Privacy
@@ -78,16 +84,25 @@ When the plugin updates, the menu offers `u` to follow it. More in [`tui/README.
 
 ## When something goes wrong
 
-Tell it: "CWTFIGO, that didn't work", or "CWTFIGO, open an issue about this". It drafts a bug report with the version and what happened, shows it to you, and posts it under your GitHub account only on your yes. Or open one yourself: [new issue](https://github.com/DozenTwelve/CWTFIGO/issues/new/choose). Security problems: see [SECURITY.md](SECURITY.md).
+Tell it: "CWTFIGO, that didn't work", or "CWTFIGO, open an issue about this". It drafts a bug report with the version and what happened, shows it to you, and posts it under your GitHub account only on your yes. Posting needs GitHub's `gh` tool, installed and logged in (`gh auth login`). Or open one yourself: [new issue](https://github.com/DozenTwelve/CWTFIGO/issues/new/choose). Security problems: see [SECURITY.md](SECURITY.md).
 
 <details>
 <summary>Install from a clone, to change it while you use it</summary>
 
+In a terminal:
+
 ```
-git clone https://github.com/DozenTwelve/CWTFIGO
-/plugin marketplace add ./CWTFIGO
+git clone https://github.com/DozenTwelve/CWTFIGO ~/CWTFIGO
+```
+
+Then in Claude Code, one line at a time (the path is where you cloned it; a `./` path counts from the folder Claude Code was started in):
+
+```
+/plugin marketplace add ~/CWTFIGO
 /plugin install cwtfigo@cwtfigo
 ```
+
+Then `/reload-plugins`.
 
 </details>
 
