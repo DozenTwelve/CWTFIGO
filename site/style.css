@@ -156,6 +156,9 @@ h2:lang(zh) { line-height: 1.22; word-break: keep-all; }
 }
 @media (max-width: 40rem) {
   :root { --gutter: 16px; --gap-split: 32px; --gap-columns: 16px; }
+  /* a phone shrinks a terminal screenshot past reading: keep it at 640px and let it scroll sideways in its frame */
+  .walk__pic { overflow-x: auto; }
+  .walk__pic a { width: 640px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .btn { transition: none; }
