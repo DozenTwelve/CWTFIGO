@@ -496,6 +496,7 @@ EOF
   [ -z "$yw" ] || echo "  YOLO is on for $yw, up to $yh h left: new scripts run without your OK. Anything that changes a computer still asks every time."
   r=$REC; case $r in "$HOME"/*) r="~${r#"$HOME"}" ;; esac
   echo "  Notes stay on your side: $r$(remote && echo ' and your private remote')"
+  echo "  CWTFIGO version: ${VERSION:-unknown}"  # bug reports ask for it
   # Another operator machine on a newer plugin (the highest cw-version: trailer of the last 50 commits): probes approved
   # there have other hashes, so this one is asked again for no visible reason. Compared as numbers: 0.5.10 > 0.5.9.
   nv=$(git_rec log -n 50 --format=%B 2>/dev/null | awk -v me="$VERSION" '

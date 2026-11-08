@@ -654,6 +654,7 @@ echo "$out" | grep -q 'unknown command' && fail "no command is not an unknown on
 art=$(printf '%s\n' '       *' '       |' "  .----'----." '  |  _   _/ |    CWTFIGO' \
   '  | (-o)(-o)|    Claude, what the fuck is going on?' '  | [#####] |' "  '---------'    Scripts run only after your OK.")
 out=$(sh "$CW" status 2>/dev/null); [ "$(echo "$out" | head -7)" = "$art" ] || fail "status should open with the art: $out"
+echo "$out" | grep -qx "  CWTFIGO version: $V" || fail "status should say the plugin's version, bug reports ask for it: $out"
 echo "$out" | grep -q 'Mode\|C  W  T  F\|Reads nothing' && fail "status should have no mode line: $out"
 F=$(mktemp -d); out=$(CWTFIGO_HOME=$F/rec sh "$CW" status 2>/dev/null)
 [ "$(echo "$out" | head -7)" = "$art" ] || fail "a brand-new record's status should open with the art: $out"
