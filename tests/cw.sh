@@ -473,11 +473,10 @@ I=$(mktemp -d)/rec; GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 CWTFIGO_HO
 touch "$I/a"; GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 CWTFIGO_HOME=$I sh "$CW" save a >/dev/null || fail "save without a git identity"
 [ "$(git -C "$I" log -1 --format='%an <%ae>')" = 'cwtfigo <cwtfigo@localhost>' ] || fail "fallback identity: $(git -C "$I" log -1 --format='%an <%ae>')"
 [ "$(git -C "$I" log -1 --format=%B)" = "$(printf 'a\n\ncw-version: %s' "$V")" ] || fail "save should add a cw-version trailer: $(git -C "$I" log -1 --format=%B)"
-git -C "$I" config user.email me@x; touch "$I/b"
 # Only user.email set: git takes the name from the account's full name. An account without one (GitHub's Ubuntu
 # runner) can't commit then, and cw's ident() doesn't fill in the name: a cw bug, reported, not this check's.
-if GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git -C "$I" var GIT_AUTHOR_IDENT >/dev/null 2>&1; then
-GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 CWTFIGO_HOME=$I sh "$CW" save b >/dev/null
+if GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git -C "$I" -c user.email=me@x var GIT_AUTHOR_IDENT >/dev/null 2>&1; then
+git -C "$I" config user.email me@x; touch "$I/b"; GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 CWTFIGO_HOME=$I sh "$CW" save b >/dev/null
 [ "$(git -C "$I" log -1 --format=%ae)" = me@x ] || fail "a configured identity must not be overridden"
 else echo "skipped: configured identity check (this account has no full name, so git has no name with only user.email set)"; fi
 # A remote added by hand has no upstream: the first save sets it. A failed push says git's own error.
