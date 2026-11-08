@@ -151,7 +151,7 @@ h2:lang(zh) { line-height: 1.22; word-break: keep-all; }
 .foot { margin-top: var(--space-2xl); padding-block: var(--space-2xl); border-top: 2px solid var(--color-ink); background: var(--color-paper-3); font-size: var(--text-sm); }
 .foot__cols { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 3fr) minmax(0, 2fr) minmax(0, 3fr); gap: var(--gap-columns); align-items: start; }
 .foot ul { display: grid; gap: var(--space-2xs); }
-.foot a { display: inline-flex; align-items: center; min-height: 32px; }
+.foot a { display: inline-flex; align-items: center; min-height: 44px; }
 .foot__note { color: var(--color-muted); max-width: 40ch; }
 
 @media (max-width: 60rem) {
