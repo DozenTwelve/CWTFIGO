@@ -15,7 +15,7 @@
 #   cw tui                           install or update the TUI (~/.local/bin/cwtfigo) to this plugin's version, Mac and Linux
 #
 # <alias>: the SSH alias, also the host's dir in hosts/. "local", or this machine's own name ($REC/self), runs here.
-# A record with no self and no host yet names this machine from its hostname on the first "local".
+# A record not shared with other computers (no remote) names this machine from its hostname on the first "local".
 # <script>: collect | check | maintain | hosts/<alias>/<name>.sh, else scripts/probes/<name>.sh | a path. .ps1 on Windows.
 # A missing check.sh / maintain.sh is copied from foundations/<os>/ (os from device.json); run and approve refuse it
 # until the model has adapted it and deleted its CWTFIGO-FOUNDATION line. Unapproved scripts print (the plugin's own: header and path) and exit 3 (under yolo: print and run).
@@ -99,7 +99,7 @@ ignores() {
 }
 ignores
 SELF=$(cat "$REC/self" 2>/dev/null)
-NONAME="this machine has no name in the record yet. Ask the human what it's called (the SSH alias other machines use for it), then: cw name <name>"
+NONAME="this computer has no name in the notes yet. Ask the owner what to call it: the short name their other computers use to reach it, if they have one (the Host line in their ~/.ssh/config), then: cw name <name>"
 
 # Record layout version. Bump it with every layout change and add the step that upgrades the old one.
 SCHEMA=2
@@ -107,15 +107,17 @@ have=$(cat "$REC/schema" 2>/dev/null || echo 0)
 [ "$have" -gt $SCHEMA ] && die "the record is schema $have, this plugin knows $SCHEMA. Update the plugin (another operator machine wrote it)."
 [ "$have" = $SCHEMA ] || echo $SCHEMA > "$REC/schema"
 
-# One machine, nothing else in the record: name it after its hostname, no SSH alias to ask for.
-# Once other hosts exist, their operators may know it by an alias: ask.
+# One operator machine (the record isn't shared): name it after its hostname, nobody reaches it by an alias. Its hosts
+# so far may all be remote ones. Shared with other operators, and they know hosts: they may know it by an alias, ask.
 autoname() {
-  for d in "$REC"/hosts/*/; do [ -d "$d" ] && die "$NONAME"; done
+  remote && for d in "$REC"/hosts/*/; do [ -d "$d" ] && die "$NONAME"; done
   # A Mac's LocalHostName, else uname -n (POSIX: stock Arch has no hostname command) up to its domain: MacBook-Air.local is macbook-air.
   n=; [ "$(uname -s)" = Darwin ] && n=$(scutil --get LocalHostName 2>/dev/null)
   [ -n "$n" ] || n=$(uname -n 2>/dev/null)
   n=$(printf %s "${n%%.*}" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9-')
   case $n in ''|local) die "$NONAME" ;; esac
+  # Another machine's dir: this one would run with its approvals.
+  [ -e "$REC/hosts/$n" ] && die "another computer in the notes is already called $n. $NONAME"
   setname "$n"; echo "cw: this machine is called $n in the record. Another name? cw name <name>" >&2
 }
 

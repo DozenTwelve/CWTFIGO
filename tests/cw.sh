@@ -85,17 +85,22 @@ out=$(FAKE_M=armv7l tw 2>&1) && fail "cw tui should refuse armv7l"
 echo "$out" | grep -q 'no TUI build for this processor (armv7l)' && [ ! -e "$T/curl.args" ] || fail "cw tui on armv7l: $out"
 
 # A machine's dir is its SSH alias. "local" means this machine, whose name is in self.
-# Another host in the record already: local asks what this machine is called there.
-mkdir -p "$CWTFIGO_HOME/hosts/nas"
-out=$(sh "$CW" run local collect 2>&1); [ $? = 1 ] || fail "local without a name, another host known, should fail"
+# Shared with other operator machines that know hosts: local asks what this machine is called there, in plain words.
+mkdir -p "$CWTFIGO_HOME/hosts/nas"; git init -q "$CWTFIGO_HOME"; git -C "$CWTFIGO_HOME" remote add origin "$CWTFIGO_HOME/none.git"
+out=$(sh "$CW" run local collect 2>&1); [ $? = 1 ] || fail "local without a name, shared record with a host, should fail"
 echo "$out" | grep -q 'cw name <name>' || fail "local without a name should ask for cw name"
-[ -f "$CWTFIGO_HOME/self" ] && fail "no automatic name once another host is in the record"
-rm -r "$CWTFIGO_HOME/hosts/nas"
+echo "$out" | grep -q 'SSH alias' && fail "the name question in plain words: $out"
+[ -f "$CWTFIGO_HOME/self" ] && fail "no automatic name once the record is shared and has a host"
+git -C "$CWTFIGO_HOME" remote remove origin; rm -r "$CWTFIGO_HOME/hosts/nas"
 # Alone in the record: local takes the hostname, made a valid name: uname -n up to its domain (stock Arch has no
 # hostname command), a Mac's LocalHostName first.
 N=$(mktemp -d); printf '#!/bin/sh\nexit 127\n' > "$N/hostname"; printf '#!/bin/sh\nexit 1\n' > "$N/scutil"; printf '#!/bin/sh\n' > "$N/xcode-select"
 printf '#!/bin/sh\ncase $1 in -n) echo "${FAKE_N:-My_Box-2.lan}" ;; *) echo "${FAKE_OS:-Linux}" ;; esac\n' > "$N/uname"; chmod +x "$N"/*
 out=$(PATH=$N:$PATH FAKE_OS=Darwin FAKE_N=MacBook-Air.local CWTFIGO_HOME=$N/rec sh "$CW" run local collect 2>&1); [ $? = 3 ] && grep -qx macbook-air "$N/rec/self" || fail "a Mac with no LocalHostName: $out"
+# Not shared, its only host so far a remote one: still one operator, named the same way. Never another host's name.
+mkdir -p "$N/r2/hosts/nas"; out=$(PATH=$N:$PATH CWTFIGO_HOME=$N/r2 sh "$CW" run local collect 2>&1); [ $? = 3 ] && grep -qx mybox-2 "$N/r2/self" || fail "a record with only a remote host, not shared, should name this machine: $out"
+mkdir -p "$N/r3/hosts/nas"; out=$(PATH=$N:$PATH FAKE_N=nas CWTFIGO_HOME=$N/r3 sh "$CW" run local collect 2>&1); [ $? = 1 ] && [ ! -e "$N/r3/self" ] || fail "this machine must not take another host's name: $out"
+echo "$out" | grep -q 'already called nas.*cw name <name>' || fail "a hostname another host has should ask for a name: $out"
 out=$(PATH=$N:$PATH sh "$CW" run local collect 2>&1); [ $? = 3 ] || fail "local alone in the record should name itself and go on: $out"
 grep -qx mybox-2 "$CWTFIGO_HOME/self" || fail "automatic name: $(cat "$CWTFIGO_HOME/self")"
 echo "$out" | grep -q 'called mybox-2 in the record.*cw name' || fail "automatic name should be said: $out"
