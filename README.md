@@ -89,11 +89,20 @@ Tell it: "CWTFIGO, that didn't work", or "CWTFIGO, open an issue about this". It
 <details>
 <summary>Install from a clone, to change it while you use it</summary>
 
+In a terminal:
+
 ```
-git clone https://github.com/DozenTwelve/CWTFIGO
-/plugin marketplace add ./CWTFIGO
+git clone https://github.com/DozenTwelve/CWTFIGO ~/CWTFIGO
+```
+
+Then in Claude Code, one line at a time (the path is where you cloned it; a `./` path counts from the folder Claude Code was started in):
+
+```
+/plugin marketplace add ~/CWTFIGO
 /plugin install cwtfigo@cwtfigo
 ```
+
+Then `/reload-plugins`.
 
 </details>
 
