@@ -240,21 +240,51 @@ fn own_build(home: &Path) -> bool {
 /// `cw tui` installs the plugin's version into ~/.local/bin; then this process becomes it, same args. On failure the
 /// TUI stays as it was.
 fn update(terminal: &mut DefaultTerminal, app: &mut App) {
+    let bin = PathBuf::from(env::var_os("HOME").unwrap_or_default()).join(".local/bin/cwtfigo");
+    // Before cw tui renames the new file over it: after, Linux names a replaced running binary "... (deleted)".
+    let here = env::current_exe().and_then(|e| e.canonicalize()).ok();
     let mut cmd = cw(app);
     cmd.arg("tui");
-    // No pause on success: the new TUI says it was updated. A failure still stops to show why.
-    match run_external(terminal, &mut cmd, false) {
-        Ok(s) if s.success() => {
-            let bin = PathBuf::from(env::var_os("HOME").unwrap_or_default()).join(".local/bin/cwtfigo");
-            ratatui::restore();
-            let e = reexec(&bin);
-            *terminal = ratatui::init();
-            let _ = terminal.clear();
-            app.message = format!("updated, but cannot start {}: {e}", bin.display());
-        }
-        Ok(s) => app.message = format!("TUI update failed: cw tui {s}"),
-        Err(e) => app.message = format!("cannot start sh: {e}"),
+    ratatui::restore();
+    // stdout read for the PATH warnings after "installed"; cw's errors go to stderr, straight to the screen.
+    let res = cmd.stderr(Stdio::inherit()).output();
+    match &res {
+        Ok(o) => print!("{}", String::from_utf8_lossy(&o.stdout)),
+        Err(e) => println!("cannot start: {e}"),
     }
+    // No pause on a plain success: the new TUI says it was updated. A failure or a warning stops to show why.
+    let ok = matches!(&res, Ok(o) if o.status.success());
+    let note = res.as_ref().ok().filter(|_| ok).and_then(|o| update_note(&String::from_utf8_lossy(&o.stdout), here.as_deref(), &bin));
+    if let Some(n) = &note {
+        println!("{n}");
+    }
+    if !ok || note.is_some() {
+        println!("\nPress Enter to {}.", if ok { "start the new one" } else { "return" });
+        let _ = std::io::stdin().read_line(&mut String::new());
+    }
+    if ok {
+        let e = reexec(&bin);
+        app.message = format!("updated, but cannot start {}: {e}", bin.display());
+    } else {
+        app.message = match res {
+            Ok(o) => format!("TUI update failed: cw tui {}", o.status),
+            Err(e) => format!("cannot start sh: {e}"),
+        };
+    }
+    *terminal = ratatui::init();
+    let _ = terminal.clear();
+}
+
+/// What to stop and show after `cw tui` installed into bin, before starting it: cw's warnings after its "installed"
+/// line (another cwtfigo first on PATH, ~/.local/bin not on PATH), and a TUI started from somewhere else, which the
+/// next `cwtfigo` would start again, old.
+fn update_note(out: &str, here: Option<&Path>, bin: &Path) -> Option<String> {
+    let mut lines: Vec<String> = out.lines().skip_while(|l| !l.contains(" installed in ")).skip(1).map(str::to_string).collect();
+    if here != bin.canonicalize().ok().as_deref() {
+        let here = here.map_or("somewhere else".into(), |h| h.display().to_string());
+        lines.push(format!("This TUI ran from {here}, not {}: start the new one with ~/.local/bin/cwtfigo.", bin.display()));
+    }
+    (!lines.is_empty()).then(|| lines.join("\n"))
 }
 
 /// Only returns on failure.
@@ -1110,6 +1140,25 @@ mod tests {
         fs::remove_file(home.join(".local/bin/cwtfigo")).unwrap();
         std::os::unix::fs::symlink(home.join("target/release/cwtfigo-tui"), home.join(".local/bin/cwtfigo")).unwrap();
         assert!(own_build(&home));
+        fs::remove_dir_all(&home).unwrap();
+    }
+
+    #[test]
+    fn update_stops_on_a_path_warning_or_a_tui_run_from_elsewhere() {
+        let home = env::temp_dir().join(format!("cwtfigo-tui-note-{}", std::process::id()));
+        fs::create_dir_all(home.join(".local/bin")).unwrap();
+        let bin = home.join(".local/bin/cwtfigo");
+        fs::write(&bin, "").unwrap();
+        let canon = bin.canonicalize().unwrap();
+        let ok = "cwtfigo 0.5.10 installed in ~/.local/bin\n";
+        assert_eq!(update_note(ok, Some(&canon), &bin), None, "plain success: no stop");
+        let warn = format!("{ok}another cwtfigo comes first on PATH, /usr/local/bin/cwtfigo: remove it or move ~/.local/bin before it\n");
+        assert!(update_note(&warn, Some(&canon), &bin).unwrap().starts_with("another cwtfigo comes first on PATH"));
+        let off = format!("{ok}~/.local/bin isn't on PATH: add export PATH=... to ~/.zshrc, then open a new terminal\n");
+        assert!(update_note(&off, Some(&canon), &bin).unwrap().starts_with("~/.local/bin isn't on PATH"));
+        let n = update_note(ok, Some(Path::new("/usr/local/bin/cwtfigo")), &bin).unwrap();
+        assert!(n.contains("ran from /usr/local/bin/cwtfigo"), "{n}");
+        assert!(update_note(ok, None, &bin).is_some(), "can't tell where it ran from: say so");
         fs::remove_dir_all(&home).unwrap();
     }
 
