@@ -177,7 +177,7 @@ fn find_cw() -> Result<PathBuf, String> {
     let claude = env::var_os("CLAUDE_CONFIG_DIR").map(PathBuf::from).unwrap_or_else(|| home.join(".claude"));
     let list = claude.join("plugins/installed_plugins.json");
     let dev = DEV_CW.map(PathBuf::from);
-    installed_cw(&fs::read_to_string(&list).unwrap_or_default())
+    installed_cw(&fs::read_to_string(&list).unwrap_or_default(), &env::current_dir().unwrap_or_default())
         .into_iter()
         .chain(dev.clone())
         .find(|p| p.is_file())
@@ -194,20 +194,23 @@ fn find_cw() -> Result<PathBuf, String> {
         })
 }
 
-/// scripts/cw in every cwtfigo@cwtfigo install Claude Code lists, scope user first. Old versions stay in the cache,
-/// so the list (not the newest directory there) says which one is live.
-fn installed_cw(json: &str) -> Vec<PathBuf> {
+/// scripts/cw in every cwtfigo@cwtfigo install Claude Code lists: scope user first, then the project install for the
+/// directory the TUI runs in, then the newest version. Old versions stay in the cache, so the list (not the newest
+/// directory there) says which one is live.
+fn installed_cw(json: &str, cwd: &Path) -> Vec<PathBuf> {
     // ponytail: string split, not a JSON parser: entries are flat objects and the paths sit under $HOME, so no `]`, `}`
     // or `"` in them. A path with one of those breaks it; serde_json if that ever happens.
     let Some(list) = json.split("\"cwtfigo@cwtfigo\"").nth(1).and_then(|s| s.split(']').next()) else { return vec![] };
-    let mut found: Vec<(bool, PathBuf)> = list
+    let mut found: Vec<_> = list
         .split('}')
         .filter_map(|e| {
             let path = PathBuf::from(field(e, "installPath")?).join("skills/cwtfigo/scripts/cw");
-            Some((field(e, "scope").as_deref() != Some("user"), path))
+            let user = field(e, "scope").as_deref() == Some("user");
+            let here = field(e, "projectPath").is_some_and(|p| cwd.starts_with(p));
+            Some(((!user, !here, std::cmp::Reverse(num(&field(e, "version").unwrap_or_default()))), path))
         })
         .collect();
-    found.sort_by_key(|f| f.0); // stable: same scope keeps the file's order
+    found.sort_by(|a, b| a.0.cmp(&b.0)); // stable: a tie keeps the file's order
     found.into_iter().map(|f| f.1).collect()
 }
 
@@ -227,9 +230,13 @@ fn plugin_version(cw: &Path) -> Option<String> {
 /// What `u` offers when this build isn't the plugin's version: `cw tui` installs exactly the plugin's, older or newer.
 /// An older one is a switch, never called an update.
 fn update_to(plugin: Option<&str>, mine: &str) -> Option<String> {
-    let num = |v: &str| v.split('.').map(|x| x.parse::<u64>().unwrap_or(0)).collect::<Vec<_>>();
     let p = plugin.filter(|p| *p != mine)?;
     Some(format!("{} TUI to {p}", if num(p) > num(mine) { "update" } else { "switch" }))
+}
+
+/// A version's numbers, compared as numbers: 0.5.10 is newer than 0.5.9.
+fn num(v: &str) -> Vec<u64> {
+    v.split('.').map(|x| x.parse().unwrap_or(0)).collect()
 }
 
 /// ~/.local/bin/cwtfigo links to a build from a clone (tui/README's setup): rebuilt there, not by `cw tui`.
@@ -1209,10 +1216,31 @@ mod tests {
   }
 }"#;
         let cw = |v: &str| PathBuf::from(format!("/h/.claude/plugins/cache/cwtfigo/cwtfigo/{v}/skills/cwtfigo/scripts/cw"));
-        assert_eq!(installed_cw(json), [cw("0.4.9"), cw("0.4.8")]);
-        assert_eq!(installed_cw(r#"{"plugins":{"cwtfigo@cwtfigo":[{"installPath":"/a"},{"installPath":"/b"}]}}"#).len(), 2);
-        assert!(installed_cw(r#"{"plugins":{"caveman@caveman":[]}}"#).is_empty());
-        assert!(installed_cw("").is_empty());
+        let cwd = Path::new("/h");
+        assert_eq!(installed_cw(json, cwd), [cw("0.4.9"), cw("0.4.8")]);
+        assert_eq!(installed_cw(r#"{"plugins":{"cwtfigo@cwtfigo":[{"installPath":"/a"},{"installPath":"/b"}]}}"#, cwd).len(), 2);
+        assert!(installed_cw(r#"{"plugins":{"caveman@caveman":[]}}"#, cwd).is_empty());
+        assert!(installed_cw("", cwd).is_empty());
+    }
+
+    #[test]
+    fn with_no_user_install_the_projects_own_then_the_newest() {
+        let json = r#"{
+  "version": 2,
+  "plugins": {
+    "cwtfigo@cwtfigo": [
+      { "scope": "project", "projectPath": "/h/a", "installPath": "/c/0.5.2", "version": "0.5.2" },
+      { "scope": "local", "projectPath": "/h/b", "installPath": "/c/0.5.9", "version": "0.5.9" },
+      { "scope": "project", "projectPath": "/h/c", "installPath": "/c/0.5.10", "version": "0.5.10" }
+    ]
+  }
+}"#;
+        let cw = |v: &str| PathBuf::from(format!("/c/{v}/skills/cwtfigo/scripts/cw"));
+        assert_eq!(installed_cw(json, Path::new("/h/b/sub")), [cw("0.5.9"), cw("0.5.10"), cw("0.5.2")], "this project's, then newest");
+        assert_eq!(installed_cw(json, Path::new("/h")), [cw("0.5.10"), cw("0.5.9"), cw("0.5.2")], "newest by number, not text");
+        assert_eq!(installed_cw(json, Path::new("/h/bb"))[0], cw("0.5.10"), "/h/bb isn't inside /h/b");
+        let user = json.replace(r#""scope": "project", "projectPath": "/h/a""#, r#""scope": "user""#);
+        assert_eq!(installed_cw(&user, Path::new("/h/b"))[0], cw("0.5.2"), "user scope wins");
     }
 
     #[test]
