@@ -1,5 +1,5 @@
 name: Bug
-description: CWTFIGO did something wrong, broke, or wouldn't start.
+description: CWTFIGO did something wrong, broke, or wouldn't install or start.
 labels: [bug]
 body:
   - type: markdown
@@ -12,15 +12,15 @@ body:
     id: version
     attributes:
       label: CWTFIGO version
-      description: "Shown in `/plugin`, or the `version` line of `.claude-plugin/plugin.json` in the plugin directory (`~/.claude/plugins/cache/cwtfigo/cwtfigo/<version>/`). Claude Code version too if you have it (`claude --version`)."
+      description: "Shown in `/plugin`, or the `version` line of `.claude-plugin/plugin.json` in the plugin directory (`~/.claude/plugins/cache/cwtfigo/cwtfigo/<version>/`). Claude Code version too if you have it (`claude --version`). If CWTFIGO never installed, write \"couldn't install\"."
       placeholder: "0.5.9, Claude Code 2.1.0"
     validations:
       required: true
   - type: dropdown
     id: operator-os
     attributes:
-      label: Operator OS
-      description: The machine Claude Code runs on.
+      label: Your computer
+      description: The computer Claude Code runs on.
       options:
         - macOS
         - Linux
@@ -31,9 +31,9 @@ body:
   - type: input
     id: target
     attributes:
-      label: Target machine
-      description: "The machine CWTFIGO was working on: its OS and version, and how it was reached (local, or SSH from the operator)."
-      placeholder: "Debian 12 over SSH / same Mac, local / OpenWrt router over SSH"
+      label: The machine it was working on
+      description: "Its OS and version, and whether it was the same computer or another one reached over SSH."
+      placeholder: "Debian 12 over SSH / this same Mac / OpenWrt router over SSH"
     validations:
       required: true
   - type: input
@@ -51,10 +51,11 @@ body:
       description: |
         Ask Claude "CWTFIGO, run cw status and show me all of its output, hint lines included", or run it yourself:
         `sh ~/.claude/plugins/cache/cwtfigo/cwtfigo/<version>/skills/cwtfigo/scripts/cw status 2>&1` (or `skills/cwtfigo/scripts/cw` in your clone, if you installed from one).
-        The machine names in it are your SSH aliases: redact them if they say too much.
+        It lists your machines by the names you gave them: change any that say too much.
+        If CWTFIGO never installed, leave this empty.
       render: text
     validations:
-      required: true
+      required: false
   - type: textarea
     id: asked
     attributes:
