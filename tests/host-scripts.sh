@@ -127,6 +127,13 @@ echo "$out" | grep -q '^## report' || fail "macos maintain: the dry run should g
 stub softwareupdate 'echo "Software Update Tool"; echo "* Label: macOS Tahoe 26.1-25B78"'
 run "$D/m.sh" 2>/dev/null | grep -qx '  macOS Tahoe 26.1-25B78' || fail "macos maintain: softwareupdate -l label"
 
+# macos maintain: a Trash macOS won't list (no Full Disk Access) says so and how to allow it, not 0M.
+fresh; mkdir "$HOME/.Trash"; chmod 000 "$HOME/.Trash"
+out=$(run "$F/macos/maintain.sh" trash 2>/dev/null | grep '^trash'); chmod 755 "$HOME/.Trash"
+echo "$out" | grep -Eq '^trash +on +skipped, macOS blocks reading the Trash here\. To include it: .*Full Disk Access' || fail "macos maintain: an unreadable Trash should say macOS blocked it: $out"
+run "$F/macos/maintain.sh" 2>/dev/null | grep -Eqx 'trash +off +0M' || fail "macos maintain: a readable empty Trash is 0M, off"
+rmdir "$HOME/.Trash"
+
 # macos maintain --apply: a clean of a dir that leaves files in use or protected is "partly", not "failed".
 # item() alone, cut out of the script, on a temp dir; nothing else of --apply runs.
 fresh; ln -s "${SH%% *}" "$D/bin/sh"; X=$D/cache; mkdir -p "$X/locked"; touch "$X/gone" "$X/locked/f"; chmod 555 "$X/locked"
