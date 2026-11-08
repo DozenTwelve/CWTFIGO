@@ -141,8 +141,8 @@ h2:lang(zh) { line-height: 1.22; word-break: keep-all; }
 .faq details { border-bottom: var(--rule-hair) solid var(--color-rule); }
 .faq summary, .walk summary { display: flex; justify-content: space-between; align-items: center; gap: var(--space-md); min-height: 64px; padding-block: var(--space-sm); font-size: var(--text-title); font-family: var(--font-display); font-weight: var(--display-weight); letter-spacing: -0.015em; cursor: pointer; list-style: none; }
 .faq summary::-webkit-details-marker, .walk summary::-webkit-details-marker { display: none; }
-.faq summary::after, .walk summary::after { content: "+"; font-family: var(--font-body); font-weight: 400; color: var(--color-muted); }
-.faq details[open] summary::after, .walk details[open] summary::after { content: "\2212"; }
+.faq summary::after, .walk summary::after { content: "+" / ""; font-family: var(--font-body); font-weight: 400; color: var(--color-muted); }
+.faq details[open] summary::after, .walk details[open] summary::after { content: "\2212" / ""; }
 .faq summary:hover, .walk summary:hover { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 0.16em; }
 .faq summary:focus-visible, .walk summary:focus-visible { outline-offset: 4px; }
 .faq details p { max-width: 62ch; padding-bottom: var(--space-lg); color: var(--color-ink-2); }
