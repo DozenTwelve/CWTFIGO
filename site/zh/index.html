@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CWTFIGO: Claude, what the fuck is going on?</title>
-<meta name="description" content="一个 Claude Code 插件：修你的机器，并把一切记下来。Linux、macOS、Windows、Steam Deck、OpenWrt 路由器，本机或经 SSH。读之前先问。">
+<meta name="description" content="电脑出毛病了？喊 Claude 的名字。它找出哪里不对，你点头才动手，还会记住这台机器。一个 Claude Code 插件，支持 Mac、Linux、Windows、Steam Deck 和路由器。">
 <meta property="og:title" content="CWTFIGO: Claude, what the fuck is going on?">
-<meta property="og:description" content="一个 Claude Code 插件：修你的机器，并把一切记下来。">
+<meta property="og:description" content="电脑出毛病了？喊 Claude 的名字。它找出哪里不对，你点头才动手，还会记住这台机器。">
 <meta property="og:type" content="website">
 <meta name="color-scheme" content="light dark">
 <link rel="alternate" hreflang="en" href="../">
@@ -28,10 +28,9 @@
   <nav class="container slab__row" aria-label="主导航">
     <a class="wordmark" href="./"><img src="../mascot.svg" alt="" width="28" height="28">CWTFIGO</a>
     <ul class="slab__links">
-      <li><a href="#visit">一次访问</a></li>
-      <li><a href="#ask">先问再读</a></li>
-      <li><a href="#endings">三种结局</a></li>
+      <li><a href="#how">怎么用</a></li>
       <li><a href="#questions">常见问题</a></li>
+      <li><a href="#install">从克隆安装</a></li>
     </ul>
     <ul class="slab__end">
       <li><a href="../" hreflang="en" lang="en">English</a></li>
@@ -43,241 +42,98 @@
 <main id="main">
 
 <section class="hero container" aria-labelledby="hero-title">
-  <div class="hero__text">
-    <h1 id="hero-title" lang="en">Claude, what the fuck is going on?</h1>
-    <p class="lead">一个 Claude Code 插件：修你的机器，并把一切记下来。</p>
-    <div class="install">
-      <div class="install__box">
-        <div class="install__head"><span class="install__status" role="status">粘贴到 Claude Code</span><button class="btn btn--primary" type="button" data-copy="install-1">复制安装命令</button></div>
-        <pre id="install-1" tabindex="0"><code><span class="ln">/plugin marketplace add DozenTwelve/<wbr>CWTFIGO</span><span class="ln">/plugin install cwtfigo@cwtfigo</span></code></pre>
-      </div>
-      <a class="install__alt" href="#install">从克隆安装</a>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="../banner-dark.png">
+    <img class="hero__banner" src="../banner-light.png" alt="CWTFIGO：一个叼着雪茄的橙色机器人" width="1280" height="640" fetchpriority="high">
+  </picture>
+  <h1 id="hero-title" lang="en">Claude, what the fuck is going on?</h1>
+  <p class="lead">电脑出毛病了？喊 Claude 的名字。它找出哪里不对，你点头才动手，还会记住这台机器。</p>
+  <div class="install">
+    <div class="install__box">
+      <div class="install__head"><span class="install__status" role="status">粘贴到 Claude Code</span><button class="btn btn--primary" type="button" data-copy="install-1">复制安装命令</button></div>
+      <pre id="install-1" tabindex="0"><code><span class="ln">/plugin marketplace add DozenTwelve/<wbr>CWTFIGO</span><span class="ln">/plugin install cwtfigo@cwtfigo</span></code></pre>
     </div>
   </div>
-
-  <figure class="entry hero__entry" aria-label="在 Claude Code 里开始一次访问：CWTFIGO 的欢迎面板">
-    <div class="entry__head"><span>kettle 上的 Claude Code</span><time class="num" datetime="2026-11-07T09:41">09:41</time></div>
-    <pre class="entry__body" tabindex="0"><code><span class="you">&gt; CWTFIGO，kettle 一开视频会议就 90°C</span>
-
-<span class="cmd">$ cw status</span>
-<span class="out">   .------------------------------------.
-  (  Claude, what the fuck is going on?  )
-   '---.  .-----------------------------'
-        \ |
-     .--------.
-     | O    o |    C  W  T  F  I  G  O
-     |  ~~~~  |    Something's on fire? Show me.
-     '---..---'
-     ____||____
-    [__________]
-
-  Reads nothing without your yes. Changes nothing without your OK.
-  Notes stay on your side: ~/.cwtfigo and your private remote
-
-  attic                  debian 12        last visit 2026-11-02  0 open, 1 parked
-  couch                  steamos 3.7      last visit 2026-10-19  0 open
-  den                    windows 11       last visit 2026-10-30  1 open
-  kettle (this machine)  arch             last visit 2026-11-06  0 open
-  lighthouse             openwrt 24.10.4  last visit 2026-11-04  0 open
-  studio                 macos 15.6       last visit never       0 open
-
-  Another machine? Tell me its SSH alias.</span></code></pre>
-  </figure>
+  <p class="hero__then">然后输入 <code>cwtfigo</code>。它提出给这台电脑做个体检，就说明装好了。<a href="#install">从克隆安装</a></p>
 </section>
 
-<section class="split split--lead container" id="visit" aria-labelledby="visit-title">
-  <div class="split__text">
-    <h2 id="visit-title">叫它的名字，然后看着。</h2>
-    <p>句子里出现 “CWTFIGO”、“what the fuck is going on” 或 “<span lang="ja">一体どうなってやがるんだ</span>” 它才会醒。不叫名字只描述问题，你得到的是普通回答。</p>
-    <p>每个结论都附上它依据的输出。</p>
-  </div>
-  <figure class="entry" aria-label="访问的后半段：发烫的笔记本，查到是缺了视频驱动">
-    <div class="entry__head"><span>同一次访问，接上</span><time class="num" datetime="2026-11-07T09:43">09:43</time></div>
-    <pre class="entry__body" tabindex="0"><code><span class="say">记录里有 kettle 的基线：2026-10-28 空闲 52°C。要看现在是什么在发热，我想跑 perf：占用最高的进程、频率、温度、降频。只读。可以吗？</span>
+<section class="walk-section container" id="how" aria-labelledby="how-title">
+  <h2 id="how-title">怎么用</h2>
+  <div class="walk">
+    <div class="walk__items">
+    <details name="walk" open>
+      <summary>喊它的名字</summary>
+      <p>输入“CWTFIGO”，再说哪里不对。或者只输入“cwtfigo”，它会提出做个体检。</p>
+      <figure class="walk__pic"><a href="../report.png"><img src="../report.png" width="1180" height="963" alt="一台 MacBook Air 的首次体检：磁盘、内存、温度和后台服务都正常，电池剩原始容量的 79%，有两个小更新和 1.1 GB 应用缓存可以清，最后问你想怎么做。"></a></figure>
+    </details>
+    <details name="walk">
+      <summary>读之前先问</summary>
+      <p>每个新脚本运行前，Claude Code 都会先问你。会改动电脑的事，每次都问。</p>
+      <figure class="walk__pic"><a href="../approve.png"><img src="../approve.png" width="1180" height="585" loading="lazy" alt="Claude Code 在运行一个只读脚本前问“Do you want to proceed?”。这个脚本只描述这台机器是什么；提示说同意一次之后就不再问，除非脚本变了。"></a></figure>
+    </details>
+    <details name="walk">
+      <summary>它记得</summary>
+      <p>笔记留在你的电脑上，一台机器一个文件夹，经 SSH 连到的其他机器也一样。下次从这里接着来。</p>
+      <figure class="walk__pic" aria-label="一台机器的笔记文件">
+        <pre tabindex="0"><code><span class="cmd">$ ls ~/.cwtfigo/hosts</span>
+macbook  nas  router  steam-deck
 
-<span class="you">&gt; 可以，我正在开会</span>
+<span class="cmd">$ cat ~/.cwtfigo/hosts/nas/notes.md</span>
+Debian 文件服务器，只做备份。
 
-<span class="cmd">$ cw approve kettle perf &amp;&amp; cw run kettle perf</span>
-<span class="out">## top-cpu
- 38.4  firefox: RDD Process
- 11.0  pipewire
-## cpu
-package throttle events since boot: 212
-## temps-fans
-Package id 0:  +91.0°C  (high = +100.0°C)</span>
-
-<span class="say">Firefox 在用 CPU 解码视频。VA-API 在不在？</span>
-
-<span class="cmd">$ vainfo</span>
-<span class="out">libva info: Trying to open /usr/lib/dri/iHD_drv_video.so
-libva info: va_openDriver() returns -1</span>
-
-<span class="say">缺 Intel 媒体驱动。装它要 sudo，所以这条归你，在你自己的终端里跑：</span>
-<span class="cmd">  sudo pacman -S intel-media-driver</span>
-<span class="say">然后重启 Firefox，会议别挂。</span>
-
-<span class="you">&gt; 好了</span>
-
-<span class="cmd">$ cw run kettle perf</span>
-<span class="out"> 6.2  firefox: RDD Process
-Package id 0:  +71.0°C  (high = +100.0°C)</span>
-
-<span class="say">同一个会议，91°C 降到 71°C。已修好，待验证：等明天真正的会议。check.sh 加了一行，更新后驱动丢了会提醒。</span>
-
-<span class="cmd">$ cw save "kettle: intel-media-driver, 91°C to 71°C on calls"</span>
-<span class="out">saved</span></code></pre>
-  </figure>
-</section>
-
-<section class="split container gap-l" id="ask" aria-labelledby="ask-title">
-  <div class="split__text">
-    <h2 id="ask-title">你不点头，它什么都不读。</h2>
-    <p>第一次访问只弄清这是台什么机器。之后每一种新的读取都先问你，每个脚本按哈希批准一次。改一个字节，它就再问一次。</p>
-    <p>它读到的内容会经过你的模型提供方。它会直说。</p>
-  </div>
-  <figure class="entry" aria-label="第一次访问一台 Mac：采集脚本等待批准">
-    <div class="entry__head"><span>第一次访问 studio</span><time class="num" datetime="2026-11-07T10:12">10:12</time></div>
-    <pre class="entry__body" tabindex="0"><code><span class="cmd">$ cw run studio collect</span>
-<span class="out">NOT APPROVED: collect on studio, never approved here (sha256 5c1d…)
-# First-visit collector: what this machine is, nothing more.
-# No logs, ports, processes or sensors: those are probes/,
-# run only when a request needs them.</span>
-
-<span class="say">第一次来 studio。collect 只读它是什么：系统、硬件型号、包管理器。别的不读。可以吗？</span>
-
-<span class="you">&gt; 可以</span>
-
-<span class="cmd">$ cw approve studio collect</span>
-<span class="out">approved: collect on studio</span></code></pre>
-  </figure>
-</section>
-
-<section class="split container gap-s" id="endings" aria-labelledby="endings-title">
-  <div class="split__text">
-    <h2 id="endings-title">长通，绕过，或停下。</h2>
-    <p>问题碰上石头，就像树根碰上石头。CWTFIGO 告诉你是哪一种。</p>
-    <table class="endings">
-      <caption>我们分析过的公开 bug 帖，最后的结局</caption>
-      <tbody>
-        <tr><th scope="row">修好</th><td class="endings__n num">45%</td><td>真实的触发条件走过一遍之后才算。</td></tr>
-        <tr><th scope="row">绕过</th><td class="endings__n num">24%</td><td>危害没了，原因还在，记录里写明。</td></tr>
-        <tr><th scope="row">停下</th><td class="endings__n num">26%</td><td>没用的改动复原；问题记为搁置，写明何时再看。</td></tr>
-      </tbody>
-    </table>
-  </div>
-  <figure class="entry" aria-label="记录里一个搁置的问题">
-    <div class="entry__head"><span>hosts/attic/notes.md</span><span class="chip">搁置</span></div>
-    <pre class="entry__body" tabindex="0"><code><span class="out">## Don't touch
-- /srv/backup/.old: looks like junk, holds the 2024 photos
+## Don't touch
+- /srv/backup/.old：看着像垃圾，
+  其实是 2024 年的照片
 
 ## Parked
-- 2026-11-02 Backup disk wakes every few minutes
-  - stone: the USB enclosure ignores spin-down
-  - tried: hdparm -S 120: no change; hd-idle: sleeps,
-    wakes again within 10 min
-  - ruled out: smartd (stopped for the test),
-    the rsync timer (same)
-  - recheck: the new enclosure arrives</span></code></pre>
-  </figure>
-</section>
-
-<section class="split container gap-l" id="record" aria-labelledby="record-title">
-  <div class="split__text">
-    <h2 id="record-title">每次访问都比上次便宜。</h2>
-    <p>它学到的都写进 <code>~/.cwtfigo</code>，你这边的一个私有 git 仓库：每台机器是什么、哪些不能碰、它的脚本、试过什么。你的几台操作机可以经一个私有远端共用它。删掉这个目录，记录就没了。</p>
-  </div>
-  <table class="machines">
-    <caption>一份记录，管下面这些，本机或经 SSH。被修的机器上什么都不装。</caption>
-    <thead><tr><th scope="col">记录里叫</th><th scope="col">是什么</th><th scope="col">怎么连</th></tr></thead>
-    <tbody>
-      <tr><td class="num">kettle</td><td>Arch Linux 笔记本</td><td>本机</td></tr>
-      <tr><td class="num">studio</td><td>Mac mini，macOS</td><td>SSH</td></tr>
-      <tr><td class="num">den</td><td>Windows 11 台式机</td><td>SSH</td></tr>
-      <tr><td class="num">couch</td><td>Steam Deck</td><td>SSH</td></tr>
-      <tr><td class="num">attic</td><td>Debian 文件服务器</td><td>SSH</td></tr>
-      <tr><td class="num">lighthouse</td><td>OpenWrt 路由器</td><td>SSH</td></tr>
-    </tbody>
-  </table>
-</section>
-
-<section class="split container" id="search" aria-labelledby="search-title">
-  <div class="split__text">
-    <h2 id="search-title">比 Claude 新的事，它现场去查。</h2>
-    <p>训练停在某一天，你的软件包不会。CWTFIGO 带着原样的报错去出问题项目的上游 tracker 现场搜。</p>
-  </div>
-  <figure class="sheet">
-    <div class="figures">
-      <p><span class="figure-big num">52%</span><span>只靠模型</span></p>
-      <p><span class="figure-big num">79%</span><span>加上游现场搜索</span></p>
+- 2026-11-02 备份硬盘老是自己醒来
+  - 试过：hdparm -S 120，没用
+  - 再看：新硬盘盒到货时</code></pre>
+      </figure>
+    </details>
+    <details name="walk">
+      <summary>之后不用 AI</summary>
+      <p>Claude 给每台机器写好它自己的体检和保养脚本。一个小菜单不经过 Claude 也能跑它们，支持 Mac 和 Linux。</p>
+      <figure class="walk__pic"><a href="../tui.png"><img src="../tui.png" width="1400" height="760" loading="lazy" alt="终端里的菜单：左边是机器，中间是这台 Mac 的脚本，右边是它的体检脚本。"></a></figure>
+    </details>
     </div>
-    <figcaption>42 个真实 GitHub bug 报告的诊断正确率，搜索只能看到每个报告开出那天的 GitHub。每个报告中位 $0.13、75 秒。评测只给报告文字，量不出读你真实机器带来的那部分。</figcaption>
-  </figure>
+  </div>
 </section>
 
-<section class="split container gap-l" id="questions" aria-labelledby="questions-title">
-  <div class="split__text">
-    <h2 id="questions-title">常见问题</h2>
-  </div>
+<div class="end container">
+<section class="questions" id="questions" aria-labelledby="questions-title">
+  <h2 id="questions-title">常见问题</h2>
   <div class="faq">
     <details>
-      <summary>我的数据去哪儿？</summary>
-      <p>记录留在你机器上的 <code>~/.cwtfigo</code>，加上你自己配的私有远端（如果有）。访问中读到的内容会经过你的模型提供方，Claude Code 里的一切都是这样。它替你起草给上游的 bug 报告，要你点头才发，名字、IP、路径都会抹掉。</p>
+      <summary>笔记存在哪儿？</summary>
+      <p>存在你电脑上的 <code>~/.cwtfigo</code>，删掉这个文件夹就没了。Claude 读到的内容会经过 Anthropic，Claude Code 里的一切都是这样。</p>
     </details>
     <details>
       <summary>需要装什么？</summary>
-      <p><code>git</code>，搜索还要 <code>python3</code>。Mac 上就是 Command Line Tools：<code>xcode-select --install</code>。Windows 上它跑在 Git Bash 里，反正 Claude Code 在那边也要它。</p>
+      <p>Claude Code、<code>git</code> 和 <code>python3</code>。Mac 上先运行 <code>xcode-select --install</code>。第一次用 Opus 效果最好：<code>/model opus</code>。</p>
     </details>
     <details>
-      <summary>能让它别老问吗？</summary>
-      <p>它本来就越问越少：你同意过一次的读取，之后不再问，只有改动才问。想 12 小时内连剩下的也不问，就让 Claude 打开 YOLO；只有你能打开，说“YOLO off”就提前结束。删数据、动分区、任何可能把 SSH 锁在外面的事，照样要你打 yes。</p>
+      <summary>它会动我没让它动的东西吗？</summary>
+      <p>只有你喊它名字时它才开始，也只碰你指给它的那台电脑。</p>
     </details>
     <details>
-      <summary>不用 AI 能用吗？</summary>
-      <p>Mac 和 Linux 上可以：<code>cwtfigo</code> 是终端里的一个小菜单，跑你已经同意过的脚本，不经过模型。在 Claude Code 里说“CWTFIGO install the TUI”就装好。没有 Windows 版。</p>
-    </details>
-    <details>
-      <summary>修不好怎么办？</summary>
-      <p>它会直说，把没帮上忙的改动复原，把问题搁置，并写下什么情况值得再看：某个包的新版本、上游 issue 关闭、零件到货。</p>
-    </details>
-    <details>
-      <summary>要 sudo 的事呢？</summary>
-      <p>给你一条命令，在你自己的终端里跑，sudo 在那里问你密码。它永远看不到密码。</p>
+      <summary>出问题了怎么办？</summary>
+      <p>告诉它“CWTFIGO，刚才那个没用”。它会起草一份 bug 报告，你点头才发出去。也可以自己<a href="https://github.com/DozenTwelve/CWTFIGO/issues/new/choose">开一个 issue</a>。</p>
     </details>
   </div>
 </section>
 
-<section class="split container gap-l" id="install" aria-labelledby="install-title">
-  <div class="split__text">
-    <h2 id="install-title">把它指向坏掉的那台。</h2>
-    <div class="install">
-      <div class="install__box">
-        <div class="install__head"><span class="install__status" role="status">粘贴到 Claude Code</span><button class="btn btn--primary" type="button" data-copy="install-2">复制安装命令</button></div>
-        <pre id="install-2" tabindex="0"><code><span class="ln">/plugin marketplace add DozenTwelve/<wbr>CWTFIGO</span><span class="ln">/plugin install cwtfigo@cwtfigo</span></code></pre>
-      </div>
-    </div>
-    <p>或者从克隆安装，边用边改：</p>
-    <div class="install">
-      <div class="install__box">
-        <div class="install__head"><span class="install__status" role="status">先在终端，再到 Claude Code</span><button class="btn" type="button" data-copy="install-3">复制</button></div>
-        <pre id="install-3" tabindex="0"><code><span class="ln">git clone https://github.com/<wbr>DozenTwelve/<wbr>CWTFIGO</span><span class="ln">/plugin marketplace add ./CWTFIGO</span><span class="ln">/plugin install cwtfigo@cwtfigo</span></code></pre>
-      </div>
+<section class="clone" id="install" aria-labelledby="install-title">
+  <h2 id="install-title">从克隆安装</h2>
+  <p>想边用边改的话。</p>
+  <div class="install">
+    <div class="install__box">
+      <div class="install__head"><span class="install__status" role="status">先在终端，再到 Claude Code</span><button class="btn" type="button" data-copy="install-2">复制</button></div>
+      <pre id="install-2" tabindex="0"><code><span class="ln">git clone https://github.com/<wbr>DozenTwelve/<wbr>CWTFIGO</span><span class="ln">/plugin marketplace add ./CWTFIGO</span><span class="ln">/plugin install cwtfigo@cwtfigo</span></code></pre>
     </div>
   </div>
-  <figure class="entry" aria-label="记录里这次访问的日志">
-    <div class="entry__head"><span>hosts/kettle/log.md</span><span class="chip chip--green">已修好，待验证</span></div>
-    <pre class="entry__body" tabindex="0"><code><span class="out">## 2026-11-07 hot on video calls
-- perf on a call: 91°C, firefox RDD 38%, throttling
-- vainfo: iHD driver missing
-- owner installed intel-media-driver (sudo)
-- perf, same call: 71°C, firefox RDD 6%
-- check.sh: warn if intel-media-driver is gone
-
-## 2026-11-06 upgrade
-- maintain dry run: 143 updates, 2.1 GB of cache
-- maintain --apply: upgraded, 2.1 GB freed
-- rebooted for the new kernel</span></code></pre>
-  </figure>
 </section>
+</div>
 
 </main>
 
