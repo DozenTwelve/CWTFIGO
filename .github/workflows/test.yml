@@ -28,6 +28,10 @@ jobs:
       SH: ${{ matrix.sh }}
     steps:
       - uses: actions/checkout@v5
+      # The suites' git commits need git to name the account, from its full name as on any desktop. The Ubuntu
+      # runner's account has none, and no git identity is set.
+      - if: runner.os == 'Linux'
+        run: sudo usermod -c "CI runner" "$(id -un)"
       - run: sh tests/cw.sh
       - run: sh tests/approve-gate.sh
       - run: sh tests/host-scripts.sh
