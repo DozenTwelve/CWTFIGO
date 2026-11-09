@@ -35,6 +35,8 @@ git_rec() { git -C "$REC" "$@"; }
 SSHO='-o ServerAliveInterval=15 -o ServerAliveCountMax=4'
 ssh() { command ssh $SSHO "$@"; }
 remote() { [ -n "$(git_rec remote 2>/dev/null)" ]; }
+# What other operators saved since: fast-forward only. A failed one says so and returns 1; the caller goes on or not.
+pull() { git_rec pull -q --ff-only --no-rebase || { echo "cw: pull failed, using local record" >&2; return 1; }; }
 # No git identity on a fresh machine: fall back to one, never over the user's own. Used unquoted: no spaces in it.
 ident() { git_rec config user.email >/dev/null || { git_rec config user.name >/dev/null || printf '%s ' -c user.name=cwtfigo; printf '%s ' -c user.email=cwtfigo@localhost; }; }
 # On Windows python3 is often the Microsoft Store stub: it exists but runs nothing.
@@ -302,7 +304,7 @@ case $1 in
 run)
   # Pull first: resolve may copy a foundation, and a copy made in a stale record sits untracked where the pull would
   # bring the other operator's adapted script. Every pull after that fails and the record forks.
-  remote && { git_rec pull -q --ff-only --no-rebase || echo "cw: pull failed, using local record" >&2; }
+  remote && pull
   host "$2"; resolve "$3"; name=$3; unadapted; shift 3
   # A private copy is what gets hashed, shown and run: sh reads a script as it goes, so the file itself, rewritten
   # while it runs, would run code nobody approved. O stays the file, for git and for the human.
@@ -471,7 +473,7 @@ yolo)
   *) host "$2"; mkh; date +%s > "$H/yolo.on"; echo "YOLO on for $alias for 12 h, or until cw yolo off: unapproved scripts run without asking." ;;
   esac ;;
 status)
-  remote && { git_rec pull -q --ff-only --no-rebase || echo "cw: pull failed, using local record" >&2; }
+  remote && pull
   # One promise, true in every mode: a script runs once approved, and a change (--apply) asks each time. Under YOLO
   # the first half isn't: say so, for which machines, and the hours left of its 12 (fresh leaves the epoch in t).
   yw=; yh=0
