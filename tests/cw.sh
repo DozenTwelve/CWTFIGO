@@ -799,11 +799,13 @@ printf '#!/bin/sh\n# once\necho "x --apply"\n' > "$HB/once.sh"; printf '#!/bin/s
 echo '{ "os": "windows" }' > "$HM/rec/hosts/Far_Box/device.json"; printf '# win\r\n# menu: win !`echo pwn` thing\r\nif ($args -contains '"'"'--apply'"'"') {}\r\n' > "$HM/rec/hosts/Far_Box/fix.ps1"
 CWTFIGO_HOME=$HM/rec sh "$CW" approve me check maintain attic once >/dev/null && CWTFIGO_HOME=$HM/rec sh "$CW" approve Far_Box fix >/dev/null || fail "cw hermes setup"
 echo 'echo changed' >> "$HB/maintain.sh"
-# cw's path as the skills show it: in single quotes if a shell would read it as more than one plain word.
-case $CW in *[!A-Za-z0-9._/+@%,:=-]*) QCW="'$CW'" ;; *) QCW=$CW ;; esac
+# A path as the skills show it: in single quotes if a shell would read it as more than one plain word.
+qp() { case $1 in *[!A-Za-z0-9._/+@%,:=-]*) printf "'%s'" "$1" ;; *) printf %s "$1" ;; esac; }; QCW=$(qp "$CW")
 ht() { find "$HM/rec" -type f -exec cksum {} + | sort; }; ht > "$HM/before"
-# A UTF-8 locale, as on most machines: a Latin-1 byte in a header must not cut the skill short.
-out=$(LC_ALL=en_US.UTF-8 hw 2>&1) || fail "cw hermes: $out"
+# A UTF-8 locale, as on most machines: a Latin-1 byte in a header must not cut the skill short. None here: say so.
+U=; for u in C.UTF-8 en_US.UTF-8; do locale -a 2>/dev/null | tr 'A-Z' 'a-z' | tr -d - | grep -qx "$(echo $u | tr 'A-Z' 'a-z' | tr -d -)" && { U=$u; break; }; done
+[ -n "$U" ] || echo "skip: no C.UTF-8 or en_US.UTF-8 in locale -a: cw hermes runs untested under a UTF-8 locale"
+out=$(LC_ALL=${U:-C} hw 2>&1) || fail "cw hermes: $out"
 HS=$HM/.local/share/cwtfigo/hermes; HC=$HS/cwtfigo
 [ "$(LC_ALL=C ls "$HC" | tr '\n' ' ')" = 'cw-far-box-fix cw-me-attic cw-me-check ' ] || fail "cw hermes: approved menu scripts only, names sanitized: $(ls "$HC") $out"
 echo "$out" | grep -qx 'cw-me-attic: me/attic.sh' && echo "$out" | grep -q 'skills in ~/.local/share/cwtfigo/hermes' && echo "$out" | grep -q 'skills.external_dirs' || fail "cw hermes output: $out"
@@ -870,7 +872,7 @@ grep -rF '!`' "$HM/q" && fail "inline shell from a script name reached a skill"
 grep -rF '`sh ' "$HM/q" && fail "a command in a \`span\`: a backtick in its name would end it"
 # + @ % , : = are plain to every shell: a checkout path holding them stays unquoted.
 mkdir "$HM/v+1@x,y=z"; ln -s "$HM/a b/skill" "$HM/v+1@x,y=z/skill"; (CW="$HM/v+1@x,y=z/skill/scripts/cw"; hw "$HM/p" >/dev/null) || fail "cw hermes from a path with +@,="
-grep -qxF "       sh $HM/v+1@x,y=z/skill/scripts/cw run me check" "$HM/p/cwtfigo/cw-me-check/SKILL.md" || fail "cw hermes: + @ , = need no quotes: $(grep '^       ' "$HM/p/cwtfigo/cw-me-check/SKILL.md")"
+grep -qxF "       sh $(qp "$HM/v+1@x,y=z/skill/scripts/cw") run me check" "$HM/p/cwtfigo/cw-me-check/SKILL.md" || fail "cw hermes: + @ , = need no quotes: $(grep '^       ' "$HM/p/cwtfigo/cw-me-check/SKILL.md")"
 # Two skill names alike in their first 32 characters (Discord's cut): a warning, both written.
 for x in now new; do printf '#!/bin/sh\n# menu: photos %s\necho\n' $x > "$HB/backup-the-photo-library-$x.sh"; done
 CWTFIGO_HOME=$HM/rec sh "$CW" approve me backup-the-photo-library-now backup-the-photo-library-new >/dev/null || fail "cw hermes collision setup"
