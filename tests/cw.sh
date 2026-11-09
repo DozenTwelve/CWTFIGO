@@ -865,10 +865,10 @@ out=$(hw "$HM/pv" 2>&1) && [ -d "$HM/pv/cwtfigo/cw-me-check" ] && grep -q "/cwtf
 printf 'skills:\n  external_dirs:\n    - %s\n' "$HM/lst" > "$HM/hermes-home/config.yaml"
 out=$(hw "$HM/lst" 2>&1) && grep -q "/lst'\]$" "$HK/handler.py" && ! echo "$out" | grep -q 'left as it was' || fail "cw hermes <a dir config.yaml lists> moves the hook there: $out"
 hw >/dev/null 2>&1 && grep -q "/cwtfigo/hermes'\]$" "$HK/handler.py" || fail "cw hermes: the hook back on the default dir"
-# A python that runs '' but not the step writing ARGV and REC (a Python 2 has no -I): no handler.py without them.
-printf '#!/bin/sh\n[ "$1" = -c ] && exit 0; exit 2\n' > "$HM/bin/python3"; chmod +x "$HM/bin/python3"
-out=$(hw 2>&1); rc=$?; rm "$HM/bin/python3"; [ $rc != 0 ] || fail "cw hermes: a failed python step must fail: $out"
-grep -qs '^ARGV = ' "$HK/handler.py" || [ ! -e "$HK/handler.py" ] || fail "cw hermes: a handler.py without ARGV: $out"
+# A python3 that fails the step writing ARGV and REC (as a Python 2 would: no -I): no handler.py without them.
+printf '#!/bin/sh\ncase "$*" in *ARGV*) exit 2 ;; esac\nexec %s "$@"\n' "$PYB/python3" > "$HM/bin/python3"; chmod +x "$HM/bin/python3"
+o=$(hw 2>&1); rc=$?; rm "$HM/bin/python3"; [ $rc != 0 ] || fail "cw hermes: a failed python step must fail: $o"
+grep -qs '^ARGV = ' "$HK/handler.py" || [ ! -e "$HK/handler.py" ] || fail "cw hermes: a handler.py without ARGV: $o"
 hw >/dev/null 2>&1 && grep -q '^ARGV = ' "$HK/handler.py" || fail "cw hermes: the hook after a fixed python"
 A=$HC/cw-me-attic/SKILL.md
 grep -qx 'name: cw-me-attic' "$A" && grep -q "^description: '备份 (attic on me" "$A" && grep -qx '# 备份' "$A" || fail "attic skill: name, label: $(cat "$A")"
@@ -890,6 +890,9 @@ grep -qx '    ```' "$A" && grep -qx '    ## Rules' "$A" && grep -qx '    - run r
 # Hermes runs !`...` in a skill: not in a label (fix), an about line (check), args (attic) or a header (attic).
 grep -rF '!`' "$HC" && fail "inline shell from the owner's text reached a skill"
 grep -qx '## Rules' "$A" || fail "attic skill: cut short: $(cat "$A")"
+# Hermes reads a SKILL.md as strict UTF-8 and skips one that isn't: the Latin-1 byte is replaced, as the TUI shows it.
+for f in "$HC"/*/SKILL.md; do "$PYB/python3" -I -c 'import sys; open(sys.argv[1], encoding="utf-8-sig").read()' "$f" || fail "cw hermes: $f is not UTF-8"; done
+grep -qxF "    caf$(printf '\357\277\275') (Latin-1)" "$A" || fail "attic skill: an invalid byte as U+FFFD: $(cat "$A")"
 F=$HC/cw-far-box-fix/SKILL.md
 grep -qxF "       ${P}sh $QCW run Far_Box fix --apply" "$F" && grep -q 'explicit yes' "$F" && grep -q 'from Far_Box/fix.ps1' "$F" || fail "fix skill: --apply after an explicit yes: $(cat "$F")"
 grep -q 'Never run `cw approve`' "$F" && grep -q 'NOT APPROVED' "$F" || fail "every skill carries the rules: $(cat "$F")"
