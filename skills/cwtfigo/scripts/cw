@@ -681,6 +681,9 @@ hermes)
     [ ! -e "$D" ] && mv "$T.old" "$D" && die "cannot replace $D"
     o=$T.old; rm -rf "$T"; T=; die "cannot replace $D; the skills it had are in $o"
   fi
+  # --sync is done: rebuilt, so Hermes rescans. The hook is the one Hermes runs and loaded at its start: a failure to
+  # rewrite it here would only hide the rebuild (exit 1, and the marker says nothing new from then on).
+  [ -z "$sync" ] || exit 0
   # ~ for $HOME, as written or with its symlinks resolved (D is).
   tl() { for h in "$HOME" "$(CDPATH= cd -- "$HOME" 2>/dev/null && pwd -P)"; do
            [ -n "$h" ] && case $1 in "$h"/*) echo "~${1#"$h"}"; return ;; esac; done; echo "$1"; }

@@ -963,6 +963,11 @@ out=$(sw b hermes --sync 2>&1); [ $? = 0 ] && [ -f "$SD/cwtfigo/cw-a-new/SKILL.m
 # Skills built from an older record (pulled by hand since, or a rebuild that failed after its pull): rebuilt.
 git -C "$S/b" reset -q --hard HEAD~1 && sw b hermes >/dev/null 2>&1 && [ ! -e "$SD/cwtfigo/cw-a-new" ] && git -C "$S/b" pull -q --ff-only || fail "cw hermes --sync setup: an older build"
 out=$(sw b hermes --sync 2>&1); [ $? = 0 ] && [ -f "$SD/cwtfigo/cw-a-new/SKILL.md" ] || fail "cw hermes --sync after a build from an older record: $out"
+# Rebuilt is exit 0 even if the hook couldn't be written (here a hook dir cw didn't make): --sync leaves the hook, the
+# one Hermes is running, so a rebuild never goes unannounced (no rescan, and every later sync "nothing new").
+printf '#!/bin/sh\n# menu: post\necho post\n' > "$S/a/hosts/a/post.sh"; { sw a approve a post && sw a save post; } >/dev/null 2>&1 || fail "cw hermes --sync setup: a post script"
+mkdir -p "$S/hx/hooks/cwtfigo"; echo keep > "$S/hx/hooks/cwtfigo/handler.py"
+out=$(HOME=$S XDG_DATA_HOME=$S/share HERMES_HOME=$S/hx PATH=$PYB:$PATH CWTFIGO_HOME=$S/b sh "$CW" hermes --sync 2>&1); [ $? = 0 ] && [ -f "$SD/cwtfigo/cw-a-post/SKILL.md" ] && [ "$(cat "$S/hx/hooks/cwtfigo/handler.py")" = keep ] || fail "cw hermes --sync: rebuilt is exit 0, the hook left to Hermes: $out"
 # Another sync on it: skipped (2), not queued; no pull, the lock left to its owner.
 printf '#!/bin/sh\n# menu: more\necho more\n' > "$S/a/hosts/a/more.sh"; { sw a approve a more && sw a save three; } >/dev/null 2>&1 || fail "cw hermes --sync setup: another script"
 mkdir "$SD.lock"; out=$(sw b hermes --sync 2>&1); [ $? = 2 ] && [ -d "$SD.lock" ] && [ ! -e "$SD/cwtfigo/cw-a-more" ] || fail "cw hermes --sync under a lock: $out"; rmdir "$SD.lock"
