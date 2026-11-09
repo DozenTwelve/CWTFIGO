@@ -843,6 +843,8 @@ rm "$HM/mv.1" "$HM/mv.2"; out=$(MVMK=1 PATH=$HM/mvbin:$PATH hw 2>&1) && fail "cw
 [ -e "$HM/mv.2" ] && [ -z "$(ls -A "$HS")" ] && [ -z "$(ls -d "$HS".* 2>/dev/null)" ] || fail "cw hermes: a failed swap must not move the old dir into a new one: $(ls -A "$HS") $out"
 # A dir given with a trailing /: the same dir, every run. / itself: never.
 hw "$HM/out/" >/dev/null && hw "$HM/out//" >/dev/null && [ -f "$HM/out/cwtfigo/cw-me-check/SKILL.md" ] && [ "$(LC_ALL=C ls -A "$HM/out" | tr '\n' ' ')" = '.cwtfigo-generated cwtfigo ' ] && [ -z "$(ls -d "$HM"/out.* 2>/dev/null)" ] || fail "cw hermes <dir>/: $(ls -AR "$HM/out")"
+# A relative dir: the same dir, named in full, as Hermes' config needs it.
+out=$(cd "$HM" && hw rel 2>&1) && [ -d "$HM/rel/cwtfigo/cw-me-check" ] && echo "$out" | grep -qx 'skills in ~/rel' || fail "cw hermes rel: $out"
 out=$(hw / 2>&1) && fail "cw hermes / should fail"; echo "$out" | grep -q 'not /' || fail "cw hermes /: $out"
 mkdir "$HM/mine"; echo keep > "$HM/mine/x"; out=$(hw "$HM/mine" 2>&1) && fail "cw hermes into a dir it didn't make should fail"
 [ "$(cat "$HM/mine/x")" = keep ] && [ "$(ls -A "$HM/mine")" = x ] && echo "$out" | grep -q "didn't make" || fail "cw hermes must leave a foreign dir alone: $out"

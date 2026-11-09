@@ -556,6 +556,8 @@ hermes)
   D=${2:-${XDG_DATA_HOME:-$HOME/.local/share}/cwtfigo/hermes}
   # No trailing /: mktemp -d "$D.XXXXXX" would land inside D, and the swap below would fail every run.
   D=${D%"${D##*[!/]}"}; [ -n "$D" ] || die "cw hermes needs a dir of its own, not /"
+  # Absolute: Hermes reads the dir from its config.yaml, not from where cw ran.
+  case $D in /*) ;; *) D=$PWD/$D ;; esac
   [ ! -d "$D" ] || [ -e "$D/.cwtfigo-generated" ] || [ -z "$(ls -A "$D")" ] || die "$D has files cw hermes didn't make: nothing written. Give another dir: cw hermes <dir>"
   mkdir -p "$(dirname "$D")" && T=$(mktemp -d "$D.XXXXXX") && touch "$T/.cwtfigo-generated" || die "cannot write next to $D"
   trap 'rm -rf "$T" "$T.old"' EXIT; trap 'exit 1' INT TERM HUP
