@@ -847,7 +847,12 @@ out=$(PATH=$HM/mvbin:$PATH hw 2>&1) && fail "cw hermes with a failing mv should 
 # One run at a time: another's lock held, this one writes nothing and leaves the lock to its owner.
 mkdir "$HS.lock"; out=$(hw 2>&1) && fail "cw hermes under another's lock should fail"
 echo "$out" | grep -q "another cw hermes is running.*rmdir .*/cwtfigo/hermes.lock)" && [ -d "$HS.lock" ] && [ "$(LC_ALL=C ls "$HC" | tr '\n' ' ')" = 'cw-far-box-fix cw-me-check cw-me-new ' ] || fail "cw hermes under a lock: $out"
-rmdir "$HS.lock"
+# A lock from a run killed long ago (here 2000) is taken over; a lock that can't be made says so.
+touch -t 200001010000 "$HS.lock"; hw >/dev/null && [ ! -e "$HS.lock" ] || { rmdir "$HS.lock"; fail "cw hermes: a stale lock should be taken over"; }
+mkdir "$HM/ro"; chmod 555 "$HM/ro"
+if [ -w "$HM/ro" ]; then echo "skip: root writes into a read-only dir: the lock that can't be made goes untested"
+else out=$(hw "$HM/ro/x" 2>&1) && fail "cw hermes: no lock, no run"; echo "$out" | grep -q "cannot create the lock $HM/ro/x.lock\|cannot create the lock .*/ro/x.lock" || fail "cw hermes: a lock it can't make: $out"; fi
+chmod 755 "$HM/ro"
 # A dir given with a trailing /: the same dir, every run. / itself: never.
 hw "$HM/out/" >/dev/null && hw "$HM/out//" >/dev/null && [ -f "$HM/out/cwtfigo/cw-me-check/SKILL.md" ] && [ "$(LC_ALL=C ls -A "$HM/out" | tr '\n' ' ')" = '.cwtfigo-generated cwtfigo ' ] && [ -z "$(ls -d "$HM"/out.* 2>/dev/null)" ] || fail "cw hermes <dir>/: $(ls -AR "$HM/out")"
 # A relative dir: the same dir, named in full, as Hermes' config needs it.

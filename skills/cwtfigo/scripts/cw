@@ -561,7 +561,12 @@ hermes)
   # Absolute, symlinks resolved: Hermes reads the dir from its config.yaml, not from where cw ran.
   p=$(CDPATH= cd -- "$(dirname "$D")" && pwd -P) || die "cannot write next to $D"; D=${p%/}/${D##*/}
   # One run at a time (cron and a hand-run can overlap): the swap below is then never raced.
-  mkdir "$D.lock" 2>/dev/null || die "another cw hermes is running into $D (or one was killed: rmdir $D.lock)"
+  # A lock older than 10 min is a killed run's (cron's SIGKILL): a run takes seconds.
+  [ -z "$(find "$D.lock" -maxdepth 0 -mmin +10 2>/dev/null)" ] || rmdir "$D.lock" 2>/dev/null
+  if ! mkdir "$D.lock" 2>/dev/null; then
+    [ -d "$D.lock" ] && die "another cw hermes is running into $D (or one was killed in the last 10 min: rmdir $D.lock)"
+    die "cannot create the lock $D.lock"
+  fi
   T=; trap 'rmdir "$D.lock"; [ -z "$T" ] || rm -rf "$T" "$T.old"' EXIT; trap 'exit 1' INT TERM HUP
   [ ! -d "$D" ] || [ -e "$D/.cwtfigo-generated" ] || [ -z "$(ls -A "$D")" ] || die "$D has files cw hermes didn't make: nothing written. Give another dir: cw hermes <dir>"
   T=$(mktemp -d "$D.XXXXXX") && touch "$T/.cwtfigo-generated" || die "cannot write next to $D"
