@@ -558,6 +558,8 @@ hermes)
   D=${D%"${D##*[!/]}"}; [ -n "$D" ] || die "cw hermes needs a dir of its own, not /"
   case ${D##*/} in .|..) die "cw hermes needs a dir by its own name, not ending in . or .." ;; esac
   mkdir -p "$(dirname "$D")" || die "cannot write next to $D"
+  # As the owner gave it, absolute: their config may name it so, not by its resolved path.
+  case $D in /*) G=$D ;; *) G=$PWD/$D ;; esac
   # Absolute, symlinks resolved: Hermes reads the dir from its config.yaml, not from where cw ran.
   p=$(CDPATH= cd -- "$(dirname "$D")" && pwd -P) || die "cannot write next to $D"; D=${p%/}/${D##*/}
   # One run at a time (cron and a hand-run can overlap): the swap below is then never raced.
@@ -664,7 +666,7 @@ hermes)
   r=$(tl "$D"); cf=${HERMES_HOME:-$HOME/.hermes}/config.yaml
   echo "skills in $r"
   # A commented-out line lists nothing.
-  grep -sv '^[[:space:]]*#' "$cf" | grep -qF -e "$D" -e "$r" ||
+  grep -sv '^[[:space:]]*#' "$cf" | grep -qF -e "$D" -e "$r" -e "$G" -e "$(tl "$G")" ||
     echo "Hermes doesn't read them yet: add $r to skills.external_dirs in $(tl "$cf"), then hermes gateway restart"
   echo "In Discord, /reload-skills picks up what changed." ;;
 search)

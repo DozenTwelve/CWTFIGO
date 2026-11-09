@@ -816,6 +816,9 @@ mkdir "$HM/hermes-home"; printf 'skills:\n  external_dirs:\n  #  - ~/.local/shar
 hw 2>&1 | grep -q external_dirs || fail "cw hermes: a commented-out dir is not in the config"
 printf 'skills:\n  external_dirs:\n    - ~/.local/share/cwtfigo/hermes\n' > "$HM/hermes-home/config.yaml"
 hw 2>&1 | grep -q external_dirs && fail "cw hermes: no hint once the config lists the dir"
+# Listed by the path the owner gave it (here through macOS' /var symlink), not the resolved one: no hint either.
+printf 'skills:\n  external_dirs:\n    - %s\n' "$HM/.local/share/cwtfigo/hermes" > "$HM/hermes-home/config.yaml"
+hw 2>&1 | grep -q external_dirs && fail "cw hermes: no hint once the config lists the dir as given"
 A=$HC/cw-me-attic/SKILL.md
 grep -qx 'name: cw-me-attic' "$A" && grep -q "^description: '备份 (attic on me" "$A" && grep -qx '# 备份' "$A" || fail "attic skill: name, label: $(cat "$A")"
 grep -qF "which way, unless they already said: guard | restore | ! \`echo pwn\` | it's | a/b:c | 照片 | 两 个." "$A" && grep -qxF "       sh $QCW run me attic guard" "$A" || fail "attic skill: its args, dry run with cw's absolute path: $(cat "$A")"
