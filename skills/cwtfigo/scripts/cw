@@ -583,6 +583,8 @@ hermes)
         function sq(x) { if (x ~ /^[A-Za-z0-9._\/+@%,:=-]+$/) return x; return q rj(rj(x, q, q "\\" q q), "!", q "\\!" q) q }
         # Hermes runs !`...` in a skill (inline_shell): never from what the owner wrote. The commands are sq()-ed instead.
         function nb(x) { gsub(/!`/, "! `", x); return x }
+        # The command for each menu-args word, o (--apply or nothing) before it.
+        function cmds(o,  i) { print ""; for (i = 1; i <= nw; i++) print "       " r o (wd[i] != "" ? " " sq(wd[i]) : ""); print "" }
         NR == 1 { h = 1; if (index($0, bom) == 1) $0 = substr($0, 4) }
         { sub(/\r$/, ""); l = trim($0) }
         l !~ /^#/ { h = 0; x = $0; gsub(/"/, "", x); gsub(q, "", x)
@@ -612,16 +614,13 @@ hermes)
           s = 1
           # One whole command per menu-args word, quoted here: nothing the owner answers is ever typed into one. Each on
           # an indented code line (4 past the list item), not in a `span`: no backtick in a path or name can end it.
-          if (nw) { print s++ ". Ask the owner with clarify which way, unless they already said: " g "."
-                    print s++ ". Dry run, changes nothing: run the line below for the way they picked, as it is. Relay what it printed, briefly."
-                    print ""; for (i = 1; i <= nw; i++) print "       " r " " sq(wd[i]); print ""
-                    print "   Their answer matches no line: ask again. Never write a command of your own." }
-          else { print s++ ". Dry run, changes nothing: run this line as it is. Relay what it printed, briefly."; print ""; print "       " r; print "" }
-          if (ap) { y = ". It can also make those changes. Ask the owner with clarify whether to (in their language, e.g. 执行吗?). Only on an explicit yes"
-                    if (nw) { print s++ y ", the line below for the same way (terminal timeout 600: upgrades take minutes). Report the outcome."
-                              print ""; for (i = 1; i <= nw; i++) print "       " r " --apply " sq(wd[i]); print "" }
-                    else { print s++ y ", this line (terminal timeout 600: upgrades take minutes). Report the outcome."; print ""; print "       " r " --apply"; print "" }
-                    print "   No yes, no --apply. Never pass --apply on the first run." }
+          # No menu-args: one line, for an empty word.
+          if (nw) { print s++ ". Ask the owner with clarify which way, unless they already said: " g "."; y = "the line below for the way they picked, as it is" }
+          else { wd[nw = 1] = ""; y = "this line as it is" }
+          print s++ ". Dry run, changes nothing: run " y ". Relay what it printed, briefly."; cmds("")
+          if (g != "") print "   Their answer matches no line: ask again. Never write a command of your own."
+          if (ap) { print s++ ". It can also make those changes. Ask the owner with clarify whether to (in their language, e.g. 执行吗?). Only on an explicit yes, " (g != "" ? "the line below for the same way" : "this line") " (terminal timeout 600: upgrades take minutes). Report the outcome."
+                    cmds(" --apply"); print "   No yes, no --apply. Never pass --apply on the first run." }
           print ""; print "## Rules"; print ""
           print "- Run only the commands above. Never run `cw approve`, `cw yolo`, `cw mode` or `cw save`, never edit the record (" rec ") or this skill, never ssh to a machine yourself or run the script" q "s commands by hand."
           print "- `NOT APPROVED`, \"changed since\", or exit 3: the script changed since the owner approved it. Tell the owner it needs their OK in a Claude Code visit (say \"cwtfigo\" there), then stop. cw" q "s lines after NOT APPROVED are meant for Claude Code: don" q "t follow them."
