@@ -558,9 +558,12 @@ hermes)
   D=${D%"${D##*[!/]}"}; [ -n "$D" ] || die "cw hermes needs a dir of its own, not /"
   # Absolute: Hermes reads the dir from its config.yaml, not from where cw ran.
   case $D in /*) ;; *) D=$PWD/$D ;; esac
+  mkdir -p "$(dirname "$D")" || die "cannot write next to $D"
+  # One run at a time (cron and a hand-run can overlap): the swap below is then never raced.
+  mkdir "$D.lock" 2>/dev/null || die "another cw hermes is running into $D (or one was killed: rmdir $D.lock)"
+  T=; trap 'rmdir "$D.lock"; [ -z "$T" ] || rm -rf "$T" "$T.old"' EXIT; trap 'exit 1' INT TERM HUP
   [ ! -d "$D" ] || [ -e "$D/.cwtfigo-generated" ] || [ -z "$(ls -A "$D")" ] || die "$D has files cw hermes didn't make: nothing written. Give another dir: cw hermes <dir>"
-  mkdir -p "$(dirname "$D")" && T=$(mktemp -d "$D.XXXXXX") && touch "$T/.cwtfigo-generated" || die "cannot write next to $D"
-  trap 'rm -rf "$T" "$T.old"' EXIT; trap 'exit 1' INT TERM HUP
+  T=$(mktemp -d "$D.XXXXXX") && touch "$T/.cwtfigo-generated" || die "cannot write next to $D"
   for d in "$REC"/hosts/*/; do
     [ -d "$d" ] || continue
     H=${d%/}; alias=${H##*/}; here=; [ "$alias" = "$SELF" ] && here=1
@@ -641,9 +644,9 @@ hermes)
   ls "$T/cwtfigo" 2>/dev/null | awk '{ k = substr($0, 1, 32)
     if (k in s) printf "cw: %s and %s share their first 32 characters: Discord shows only one\n", s[k], $0; else s[k] = $0 }' >&2
   # Swapped in whole: Hermes never reads a half-written dir. If the new one can't go in, the old one goes back first
-  # (die's trap deletes $T.old), unless something is at $D by then: mv would put it inside that.
+  # (die's trap deletes $T.old); the lock keeps $D empty in between.
   [ ! -d "$D" ] || mv "$D" "$T.old" || die "cannot replace $D"
-  mv "$T" "$D" || { [ -e "$D" ] || [ ! -d "$T.old" ] || mv "$T.old" "$D"; die "cannot replace $D"; }
+  mv "$T" "$D" || { [ ! -d "$T.old" ] || mv "$T.old" "$D"; die "cannot replace $D"; }
   tl() { case $1 in "$HOME"/*) echo "~${1#"$HOME"}" ;; *) echo "$1" ;; esac; }
   r=$(tl "$D"); cf=${HERMES_HOME:-$HOME/.hermes}/config.yaml
   echo "skills in $r"

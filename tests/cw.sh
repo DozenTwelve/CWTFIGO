@@ -839,19 +839,20 @@ grep -q 'Never run `cw approve`' "$F" && grep -q 'NOT APPROVED' "$F" || fail "ev
 rm "$HB/attic.sh"; CWTFIGO_HOME=$HM/rec sh "$CW" approve me new >/dev/null; hw >/dev/null || fail "cw hermes rerun"
 [ "$(LC_ALL=C ls "$HC" | tr '\n' ' ')" = 'cw-far-box-fix cw-me-check cw-me-new ' ] && [ -z "$(ls -d "$HS".* 2>/dev/null)" ] || fail "cw hermes rerun: $(ls "$HC") $(ls -d "$HS".* 2>/dev/null)"
 # The new dir can't go in (a fake mv fails its second call): the old skills stay where Hermes reads them.
-mkdir "$HM/mvbin"; printf '#!/bin/sh\nif [ -e "%s/mv.1" ] && [ ! -e "%s/mv.2" ]; then : > "%s/mv.2"; [ -z "$MVMK" ] || mkdir "$2"; exit 1; fi\n: > "%s/mv.1"; exec %s "$@"\n' "$HM" "$HM" "$HM" "$HM" "$(command -v mv)" > "$HM/mvbin/mv"; chmod +x "$HM/mvbin/mv"
+mkdir "$HM/mvbin"; printf '#!/bin/sh\nif [ -e "%s/mv.1" ] && [ ! -e "%s/mv.2" ]; then : > "%s/mv.2"; exit 1; fi\n: > "%s/mv.1"; exec %s "$@"\n' "$HM" "$HM" "$HM" "$HM" "$(command -v mv)" > "$HM/mvbin/mv"; chmod +x "$HM/mvbin/mv"
 out=$(PATH=$HM/mvbin:$PATH hw 2>&1) && fail "cw hermes with a failing mv should fail"
 [ -e "$HM/mv.2" ] && [ "$(LC_ALL=C ls "$HC" | tr '\n' ' ')" = 'cw-far-box-fix cw-me-check cw-me-new ' ] && [ -z "$(ls -d "$HS".* 2>/dev/null)" ] || fail "cw hermes: a failed swap must keep the old skills: $(ls "$HC") $out"
-# Something at the dir by the time the swap fails (the fake mv makes it): the old skills don't go inside it.
-rm "$HM/mv.1" "$HM/mv.2"; out=$(MVMK=1 PATH=$HM/mvbin:$PATH hw 2>&1) && fail "cw hermes with a failing mv should fail"
-[ -e "$HM/mv.2" ] && [ -z "$(ls -A "$HS")" ] && [ -z "$(ls -d "$HS".* 2>/dev/null)" ] || fail "cw hermes: a failed swap must not move the old dir into a new one: $(ls -A "$HS") $out"
+# One run at a time: another's lock held, this one writes nothing and leaves the lock to its owner.
+mkdir "$HS.lock"; out=$(hw 2>&1) && fail "cw hermes under another's lock should fail"
+echo "$out" | grep -q "another cw hermes is running.*rmdir $HS.lock" && [ -d "$HS.lock" ] && [ "$(LC_ALL=C ls "$HC" | tr '\n' ' ')" = 'cw-far-box-fix cw-me-check cw-me-new ' ] || fail "cw hermes under a lock: $out"
+rmdir "$HS.lock"
 # A dir given with a trailing /: the same dir, every run. / itself: never.
 hw "$HM/out/" >/dev/null && hw "$HM/out//" >/dev/null && [ -f "$HM/out/cwtfigo/cw-me-check/SKILL.md" ] && [ "$(LC_ALL=C ls -A "$HM/out" | tr '\n' ' ')" = '.cwtfigo-generated cwtfigo ' ] && [ -z "$(ls -d "$HM"/out.* 2>/dev/null)" ] || fail "cw hermes <dir>/: $(ls -AR "$HM/out")"
 # A relative dir: the same dir, named in full, as Hermes' config needs it.
 out=$(cd "$HM" && hw rel 2>&1) && [ -d "$HM/rel/cwtfigo/cw-me-check" ] && echo "$out" | grep -qx 'skills in ~/rel' || fail "cw hermes rel: $out"
 out=$(hw / 2>&1) && fail "cw hermes / should fail"; echo "$out" | grep -q 'not /' || fail "cw hermes /: $out"
 mkdir "$HM/mine"; echo keep > "$HM/mine/x"; out=$(hw "$HM/mine" 2>&1) && fail "cw hermes into a dir it didn't make should fail"
-[ "$(cat "$HM/mine/x")" = keep ] && [ "$(ls -A "$HM/mine")" = x ] && echo "$out" | grep -q "didn't make" || fail "cw hermes must leave a foreign dir alone: $out"
+[ "$(cat "$HM/mine/x")" = keep ] && [ "$(ls -A "$HM/mine")" = x ] && [ ! -e "$HM/mine.lock" ] && echo "$out" | grep -q "didn't make" || fail "cw hermes must leave a foreign dir alone: $out"
 # cw's path and a script's name with a space (and a '): quoted in the command shown, which runs as it reads.
 mkdir "$HM/a b"; ln -s "$(cd "$(dirname "$CW")/.." && pwd)" "$HM/a b/skill"
 # A name with !` (Hermes' inline shell) too: it runs as it reads, and no !` is in the skill.
