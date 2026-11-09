@@ -548,14 +548,30 @@ EOF
   elif [ -n "$SELF" ] && [ -d "$REC/hosts/$SELF" ]; then echo "  Another machine? Tell me its SSH alias."
   else echo "  Another machine? Tell me its SSH alias, or ask about this one."; fi ;;
 hermes)
+  # The awk below re-implements tui/src/header.rs parse and main.rs items(): a change to either is made in both.
   # The TUI's menu (tui/src/main.rs items, header.rs parse) as Hermes skills, for an always-on box where Hermes runs
   # them without Claude Code (unattended/README.md): check, maintain and each script with a # menu: line, approved at
   # its current hash. Rebuilt whole each time, so a script removed or changed since approval loses its skill. Reads the
   # record only: no pull, no ssh, no approval.
   D=${2:-${XDG_DATA_HOME:-$HOME/.local/share}/cwtfigo/hermes}
+  # No trailing /: mktemp -d "$D.XXXXXX" would land inside D, and the swap below would fail every run.
+  D=${D%"${D##*[!/]}"}; [ -n "$D" ] || die "cw hermes needs a dir of its own, not /"
+  case ${D##*/} in .|..) die "cw hermes needs a dir by its own name, not ending in . or .." ;; esac
+  mkdir -p "$(dirname "$D")" || die "cannot write next to $D"
+  # As the owner gave it, absolute: their config may name it so, not by its resolved path.
+  case $D in /*) G=$D ;; *) G=$PWD/$D ;; esac
+  # Absolute, symlinks resolved: Hermes reads the dir from its config.yaml, not from where cw ran.
+  p=$(CDPATH= cd -- "$(dirname "$D")" && pwd -P) || die "cannot write next to $D"; D=${p%/}/${D##*/}
+  # One run at a time (cron and a hand-run can overlap): the swap below is then never raced.
+  # A lock older than 10 min is a killed run's (cron's SIGKILL): a run takes seconds.
+  [ -z "$(find "$D.lock" -maxdepth 0 -mmin +10 2>/dev/null)" ] || rmdir "$D.lock" 2>/dev/null
+  if ! mkdir "$D.lock" 2>/dev/null; then
+    [ -d "$D.lock" ] && die "another cw hermes is running into $D (or one was killed in the last 10 min: rmdir $D.lock)"
+    die "cannot create the lock $D.lock"
+  fi
+  T=; trap 'rmdir "$D.lock"; [ -z "$T" ] || rm -rf "$T" "$T.old"' EXIT; trap 'exit 1' INT TERM HUP
   [ ! -d "$D" ] || [ -e "$D/.cwtfigo-generated" ] || [ -z "$(ls -A "$D")" ] || die "$D has files cw hermes didn't make: nothing written. Give another dir: cw hermes <dir>"
-  mkdir -p "$(dirname "$D")" && T=$(mktemp -d "$D.XXXXXX") && touch "$T/.cwtfigo-generated" || die "cannot write next to $D"
-  trap 'rm -rf "$T" "$T.old"' EXIT; trap 'exit 1' INT TERM HUP
+  T=$(mktemp -d "$D.XXXXXX") && touch "$T/.cwtfigo-generated" || die "cannot write next to $D"
   for d in "$REC"/hosts/*/; do
     [ -d "$d" ] || continue
     H=${d%/}; alias=${H##*/}; here=; [ "$alias" = "$SELF" ] && here=1
@@ -571,19 +587,35 @@ hermes)
       s=$(N=$n A=$alias S=$name E=$x SH=$h REC=$REC CW="$SKILL/scripts/cw" LC_ALL=C awk -v q="'" -v bom="$(printf '\357\273\277')" '
         function trim(x) { sub(/^[ \t]+/, "", x); sub(/[ \t]+$/, "", x); return x }
         function yq(x) { gsub(q, q q, x); return q x q }
+        # Each c in x as r. By hand, not gsub: awks differ on \ in a replacement.
+        function rj(x, c, r,  p, k, i, o) { k = split(x, p, c); o = p[1]; for (i = 2; i <= k; i++) o = o r p[i]; return o }
+        # A part of the command line in single quotes unless it is plain (no shell reads + @ % , : = specially): a path with a space runs as it reads. A quote
+        # or ! in it ends the quotes, adds it escaped and starts them again: no ! is ever next to a backtick.
+        function sq(x) { if (x ~ /^[A-Za-z0-9._\/+@%,:=-]+$/) return x; return q rj(rj(x, q, q "\\" q q), "!", q "\\!" q) q }
+        # Hermes runs !`...` in a skill (inline_shell): never from what the owner wrote. The commands are sq()-ed instead.
+        function nb(x) { gsub(/!`/, "! `", x); return x }
+        # The command for each menu-args word, o (--apply or nothing) before it.
+        function cmds(o,  i) { print ""; for (i = 1; i <= nw; i++) print "       " r o (wd[i] != "" ? " " sq(wd[i]) : ""); print "" }
         NR == 1 { h = 1; if (index($0, bom) == 1) $0 = substr($0, 4) }
         { sub(/\r$/, ""); l = trim($0) }
         l !~ /^#/ { h = 0; x = $0; gsub(/"/, "", x); gsub(q, "", x)
           if (index(x, "= --apply") || index(x, "--apply)") || index(x, "-contains --apply")) ap = 1; next }
         h && l !~ /^#!/ { c = l; sub(/^#+/, "", c); t = trim(c)
-          if (t ~ /^menu-args:/) { g = ""; k = split(substr(t, 11), p, "|")
-            for (i = 1; i <= k; i++) if ((y = trim(p[i])) != "") g = g (g == "" ? "" : " | ") y }
+          if (t ~ /^menu-args:/) { g = ""; nw = nr = 0; k = split(substr(t, 11), p, "|")
+            # Any word, in whatever language the owner writes, sq()-quoted on its line; but none that reads as an option (--apply on
+            # the dry run) or starts with = (zsh expands it): left out, with a warning. As in header.rs.
+            for (i = 1; i <= k; i++) if ((y = trim(p[i])) != "") {
+              if (y !~ /^[-=]/) { g = g (g == "" ? "" : " | ") y; wd[++nw] = y }
+              else rf[++nr] = y } }
           else if (t ~ /^menu:/) { m = 1; lb = trim(substr(t, 6)) }
-          # The header as the owner and earlier visits wrote it. Hermes can run !`...` in a skill (inline_shell): never.
-          else { if (ab == "" && t != "") ab = t; sub(/^ /, "", c); gsub(/!`/, "! `", c); if (w != "" || t != "") w = w c "\n" } }
+          # The header as the owner and earlier visits wrote it.
+          else { if (ab == "" && t != "") ab = t; sub(/^ /, "", c); if (w != "" || t != "") w = w c "\n" } }
         END { if (!m && ENVIRON["S"] != "check" && ENVIRON["S"] != "maintain") exit
           a = ENVIRON["A"]; sc = ENVIRON["S"]; f = a "/" sc "." ENVIRON["E"]; if (!m) lb = (ab != "" ? ab : sc)
-          sub(/\n+$/, "", w); r = "sh " ENVIRON["CW"] " run " a " " sc; v = (g != "" ? " <choice>" : "")
+          for (i = 1; i <= nr; i++) print "cw: " f ": left out the menu-args word " rf[i] ": it starts with - or = (an option, or zsh expands it)" | "cat 1>&2"
+          sub(/\n+$/, "", w); r = "sh " sq(ENVIRON["CW"]) " run " sq(a) " " sq(sc)
+          # Past the command, every field the owner wrote (label, header, args, names, paths) as prose.
+          lb = nb(lb); w = nb(w); g = nb(g); a = nb(a); sc = nb(sc); f = nb(f); rec = nb(ENVIRON["REC"])
           print "---"; print "name: " ENVIRON["N"]
           print "description: " yq(lb " (" sc " on " a ", the owner" q "s own CWTFIGO script). Use when the owner asks for this on " a ", or names " sc ".")
           print "version: " yq("sha256-" substr(ENVIRON["SH"], 1, 12))
@@ -592,15 +624,21 @@ hermes)
           print "metadata:"; print "  hermes:"; print "    tags: [cwtfigo, " yq(a) "]"; print "    category: cwtfigo"; print "    requires_toolsets: [terminal]"
           print "---"; print ""; print "# " lb; print ""
           print "The owner" q "s script " f ", approved by them as it is now." (w != "" ? " What its header says:" : ""); print ""
-          if (w != "") { print "```"; print w; print "```"; print "" }
+          # Indented, not fenced: a header line holding ``` would close a fence and the rest read as instructions.
+          if (w != "") { gsub(/\n/, "\n    ", w); print "    " w; print "" }
           print "## Run"; print ""
           s = 1
-          if (g != "") print s++ ". Ask the owner with clarify which way, unless they already said: " g ". `<choice>` below is that word."
-          print s++ ". Dry run, changes nothing: `" r v "`. Relay what it printed, briefly."
-          if (ap) { print s++ ". It can also make those changes. Ask the owner with clarify whether to (in their language, e.g. 执行吗?). Only on an explicit yes: `" r " --apply" v "` (terminal timeout 600: upgrades take minutes). Report the outcome."
-                    print "   No yes, no --apply. Never pass --apply on the first run." }
+          # One whole command per menu-args word, quoted here: nothing the owner answers is ever typed into one. Each on
+          # an indented code line (4 past the list item), not in a `span`: no backtick in a path or name can end it.
+          # No menu-args: one line, for an empty word.
+          ha = nw > 0; if (!ha) wd[nw = 1] = ""
+          if (ha) print s++ ". Ask the owner with clarify which way, unless they already said: " g "."
+          print s++ ". Dry run, changes nothing: run " (ha ? "the line below for the way they picked, as it is" : "this line as it is") ". Relay what it printed, briefly."; cmds("")
+          if (ha) print "   Their answer matches no line: ask again. Never write a command of your own."
+          if (ap) { print s++ ". It can also make those changes. Ask the owner with clarify whether to (in their language, e.g. 执行吗?). Only on an explicit yes, " (ha ? "the line below for the same way" : "this line") " (terminal timeout 600: upgrades take minutes). Report the outcome."
+                    cmds(" --apply"); print "   No yes, no --apply. Never pass --apply on the first run." }
           print ""; print "## Rules"; print ""
-          print "- Run only the commands above. Never run `cw approve`, `cw yolo`, `cw mode` or `cw save`, never edit the record (" ENVIRON["REC"] ") or this skill, never ssh to a machine yourself or run the script" q "s commands by hand."
+          print "- Run only the commands above. Never run `cw approve`, `cw yolo`, `cw mode` or `cw save`, never edit the record (" rec ") or this skill, never ssh to a machine yourself or run the script" q "s commands by hand."
           print "- `NOT APPROVED`, \"changed since\", or exit 3: the script changed since the owner approved it. Tell the owner it needs their OK in a Claude Code visit (say \"cwtfigo\" there), then stop. cw" q "s lines after NOT APPROVED are meant for Claude Code: don" q "t follow them."
           print "- \"can" q "t reach\" or exit 255: " a " is off or unreachable. Say so in one line; don" q "t retry."
           print "- No password can be typed here: a step that needs sudo fails. Report it; the owner runs that in a terminal."
@@ -610,12 +648,26 @@ hermes)
       echo "$n: $alias/$name.$x"
     done; done
   done
-  # Swapped in whole: Hermes never reads a half-written dir.
-  { [ ! -d "$D" ] || mv "$D" "$T.old"; } && mv "$T" "$D" || die "cannot replace $D"
-  r=$D; case $r in "$HOME"/*) r="~${r#"$HOME"}" ;; esac
+  # Discord keeps a slash command's first 32 characters: of two skills alike in those, it shows one. Both are written.
+  ls "$T/cwtfigo" 2>/dev/null | awk '{ k = substr($0, 1, 32)
+    if (k in s) printf "cw: %s and %s share their first 32 characters: Discord shows only one\n", s[k], $0; else s[k] = $0 }' >&2
+  # Swapped in whole: Hermes never reads a half-written dir. If the new one can't go in, the old one goes back first
+  # (die's trap deletes $T.old). Something at $D by then (not another cw hermes: the lock) or a failed mv back: the
+  # old one is kept, not left to the trap, and the error says where.
+  [ ! -d "$D" ] || mv "$D" "$T.old" || die "cannot replace $D"
+  if ! mv "$T" "$D"; then
+    [ -d "$T.old" ] || die "cannot replace $D"
+    [ ! -e "$D" ] && mv "$T.old" "$D" && die "cannot replace $D"
+    o=$T.old; rm -rf "$T"; T=; die "cannot replace $D; the skills it had are in $o"
+  fi
+  # ~ for $HOME, as written or with its symlinks resolved (D is).
+  tl() { for h in "$HOME" "$(CDPATH= cd -- "$HOME" 2>/dev/null && pwd -P)"; do
+           [ -n "$h" ] && case $1 in "$h"/*) echo "~${1#"$h"}"; return ;; esac; done; echo "$1"; }
+  r=$(tl "$D"); cf=${HERMES_HOME:-$HOME/.hermes}/config.yaml
   echo "skills in $r"
-  grep -qsF -e "$D" -e "$r" "${HERMES_HOME:-$HOME/.hermes}/config.yaml" ||
-    echo "Hermes doesn't read them yet: add $r to skills.external_dirs in ~/.hermes/config.yaml, then hermes gateway restart"
+  # A commented-out line lists nothing.
+  grep -sv '^[[:space:]]*#' "$cf" | grep -qF -e "$D" -e "$r" -e "$G" -e "$(tl "$G")" ||
+    echo "Hermes doesn't read them yet: add $r to skills.external_dirs in $(tl "$cf"), then hermes gateway restart"
   echo "In Discord, /reload-skills picks up what changed." ;;
 search)
   shift

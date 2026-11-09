@@ -18,7 +18,9 @@ pub fn parse(text: &str) -> Header {
         }
         let c = line.trim_start_matches('#').trim();
         if let Some(m) = c.strip_prefix("menu-args:") {
-            h.args = m.split('|').map(|a| a.trim().to_string()).filter(|a| !a.is_empty()).collect();
+            // A word starting with - would be an option (--apply on the dry run, no y/N), one with = zsh expands: dropped,
+            // as cw hermes does.
+            h.args = m.split('|').map(|a| a.trim().to_string()).filter(|a| !a.is_empty() && !a.starts_with(['-', '='])).collect();
         } else if let Some(m) = c.strip_prefix("menu:") {
             h.menu = Some(m.trim().to_string());
         } else if h.about.is_none() && !c.is_empty() {
@@ -61,6 +63,11 @@ mod tests {
         assert!(parse("case $1 in --apply) a=1 ;; esac").apply);
         assert!(parse("$APPLY = $args -contains '--apply'").apply);
         assert!(!parse("# --apply = do it").apply);
+    }
+
+    #[test]
+    fn menu_args_no_options() {
+        assert_eq!(parse("# x\n# menu-args: 照片 | --apply | 两 个 | -n | =x | a=b\n").args, ["照片", "两 个", "a=b"]);
     }
 
     #[test]
