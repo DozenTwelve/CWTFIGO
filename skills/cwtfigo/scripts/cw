@@ -619,6 +619,9 @@ hermes)
       echo "$n: $alias/$name.$x"
     done; done
   done
+  # Discord keeps a slash command's first 32 characters: of two skills alike in those, it shows one. Both are written.
+  ls "$T/cwtfigo" 2>/dev/null | awk '{ k = substr($0, 1, 32)
+    if (k in s) printf "cw: %s and %s share their first 32 characters: Discord shows only one\n", s[k], $0; else s[k] = $0 }' >&2
   # Swapped in whole: Hermes never reads a half-written dir. If the new one can't go in, the old one goes back first:
   # die's trap deletes $T.old.
   [ ! -d "$D" ] || mv "$D" "$T.old" || die "cannot replace $D"

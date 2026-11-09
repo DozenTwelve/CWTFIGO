@@ -841,6 +841,11 @@ printf '#!/bin/sh\n# menu: job\necho "job ran: $1"\n' > "$HB/my jo'b.sh"; CWTFIG
 (CW="$HM/a b/skill/scripts/cw"; hw "$HM/q" >/dev/null) || fail "cw hermes from a path with a space"
 c=$(sed -n 's/^1\. Dry run, changes nothing: `\(.*\)`\. Relay.*/\1/p' "$HM/q/cwtfigo/cw-me-my-jo-b/SKILL.md")
 [ "$c" = "sh '$HM/a b/skill/scripts/cw' run me 'my jo'\\''b'" ] && [ "$(CWTFIGO_HOME=$HM/rec eval "$c" 2>&1)" = 'job ran: ' ] || fail "cw hermes: the command shown must run as it reads: $c"
+# Two skill names alike in their first 32 characters (Discord's cut): a warning, both written.
+for x in now new; do printf '#!/bin/sh\n# menu: photos %s\necho\n' $x > "$HB/backup-the-photo-library-$x.sh"; done
+CWTFIGO_HOME=$HM/rec sh "$CW" approve me backup-the-photo-library-now backup-the-photo-library-new >/dev/null || fail "cw hermes collision setup"
+out=$(hw "$HM/long" 2>&1 >/dev/null); [ -d "$HM/long/cwtfigo/cw-me-backup-the-photo-library-now" ] && [ -d "$HM/long/cwtfigo/cw-me-backup-the-photo-library-new" ] &&
+  [ "$out" = 'cw: cw-me-backup-the-photo-library-new and cw-me-backup-the-photo-library-now share their first 32 characters: Discord shows only one' ] || fail "cw hermes: names alike in 32 characters: $out"
 [ -z "$(ls -A "$HM/decoy")" ] || fail "cw hermes tests wrote outside their temp dirs: $(ls -A "$HM/decoy")"
 unset XDG_DATA_HOME HERMES_HOME
 # Unattended: approved scripts only, model and message only when something is found, never under YOLO.
