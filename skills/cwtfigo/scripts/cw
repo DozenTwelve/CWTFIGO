@@ -554,6 +554,8 @@ hermes)
   # its current hash. Rebuilt whole each time, so a script removed or changed since approval loses its skill. Reads the
   # record only: no pull, no ssh, no approval.
   D=${2:-${XDG_DATA_HOME:-$HOME/.local/share}/cwtfigo/hermes}
+  # No trailing /: mktemp -d "$D.XXXXXX" would land inside D, and the swap below would fail every run.
+  D=${D%"${D##*[!/]}"}; [ -n "$D" ] || die "cw hermes needs a dir of its own, not /"
   [ ! -d "$D" ] || [ -e "$D/.cwtfigo-generated" ] || [ -z "$(ls -A "$D")" ] || die "$D has files cw hermes didn't make: nothing written. Give another dir: cw hermes <dir>"
   mkdir -p "$(dirname "$D")" && T=$(mktemp -d "$D.XXXXXX") && touch "$T/.cwtfigo-generated" || die "cannot write next to $D"
   trap 'rm -rf "$T" "$T.old"' EXIT; trap 'exit 1' INT TERM HUP
