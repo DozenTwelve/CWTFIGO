@@ -586,7 +586,7 @@ hermes)
           else { if (ab == "" && t != "") ab = t; sub(/^ /, "", c); if (w != "" || t != "") w = w c "\n" } }
         END { if (!m && ENVIRON["S"] != "check" && ENVIRON["S"] != "maintain") exit
           a = ENVIRON["A"]; sc = ENVIRON["S"]; f = a "/" sc "." ENVIRON["E"]; if (!m) lb = (ab != "" ? ab : sc)
-          sub(/\n+$/, "", w); r = "sh " ENVIRON["CW"] " run " a " " sc; v = (g != "" ? " <choice>" : "")
+          sub(/\n+$/, "", w); r = "sh " ENVIRON["CW"] " run " a " " sc; v = (g != "" ? " " q "<choice>" q : "")
           print "---"; print "name: " ENVIRON["N"]
           print "description: " yq(lb " (" sc " on " a ", the owner" q "s own CWTFIGO script). Use when the owner asks for this on " a ", or names " sc ".")
           print "version: " yq("sha256-" substr(ENVIRON["SH"], 1, 12))
@@ -599,7 +599,7 @@ hermes)
           if (w != "") { gsub(/\n/, "\n    ", w); print "    " w; print "" }
           print "## Run"; print ""
           s = 1
-          if (g != "") print s++ ". Ask the owner with clarify which way, unless they already said: " g ". `<choice>` below is that word."
+          if (g != "") print s++ ". Ask the owner with clarify which way, unless they already said: " g ". `<choice>` below is exactly one of these words, copied as listed. Any other answer: ask again, never pass it."
           print s++ ". Dry run, changes nothing: `" r v "`. Relay what it printed, briefly."
           if (ap) { print s++ ". It can also make those changes. Ask the owner with clarify whether to (in their language, e.g. 执行吗?). Only on an explicit yes: `" r " --apply" v "` (terminal timeout 600: upgrades take minutes). Report the outcome."
                     print "   No yes, no --apply. Never pass --apply on the first run." }

@@ -805,7 +805,9 @@ echo "$out" | grep -qx 'cw-me-attic: me/attic.sh' && echo "$out" | grep -q 'skil
 [ ! -e "$HM/ssh.ran" ] && [ "$(ht)" = "$(cat "$HM/before")" ] || fail "cw hermes must not ssh or write the record"
 A=$HC/cw-me-attic/SKILL.md
 grep -qx 'name: cw-me-attic' "$A" && grep -q "^description: '备份 (attic on me" "$A" && grep -qx '# 备份' "$A" || fail "attic skill: name, label: $(cat "$A")"
-grep -qF 'which way, unless they already said: guard | restore | ! `echo pwn`.' "$A" && grep -qF "\`sh $CW run me attic <choice>\`" "$A" || fail "attic skill: its args, dry run with cw's absolute path: $(cat "$A")"
+grep -qF 'which way, unless they already said: guard | restore | ! `echo pwn`.' "$A" && grep -qF "\`sh $CW run me attic '<choice>'\`" "$A" || fail "attic skill: its args, dry run with cw's absolute path: $(cat "$A")"
+# The owner's reply goes into a shell line: only a listed word, in quotes.
+grep -qF '`<choice>` below is exactly one of these words, copied as listed. Any other answer: ask again, never pass it.' "$A" || fail "attic skill: <choice> only a listed word: $(cat "$A")"
 grep -q -- '--apply' "$A" && fail "attic doesn't take --apply: $(cat "$A")"
 grep -qx '    attic: restic backups.' "$A" && ! grep -q 'menu:' "$A" || fail "attic skill: its header, no menu lines: $(cat "$A")"
 # The header is an indented code block: no line of it (a ``` here) can end it early.
