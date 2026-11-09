@@ -556,9 +556,10 @@ hermes)
   D=${2:-${XDG_DATA_HOME:-$HOME/.local/share}/cwtfigo/hermes}
   # No trailing /: mktemp -d "$D.XXXXXX" would land inside D, and the swap below would fail every run.
   D=${D%"${D##*[!/]}"}; [ -n "$D" ] || die "cw hermes needs a dir of its own, not /"
-  # Absolute: Hermes reads the dir from its config.yaml, not from where cw ran.
-  case $D in /*) ;; *) D=$PWD/$D ;; esac
+  case ${D##*/} in .|..) die "cw hermes needs a dir by its own name, not ending in . or .." ;; esac
   mkdir -p "$(dirname "$D")" || die "cannot write next to $D"
+  # Absolute, symlinks resolved: Hermes reads the dir from its config.yaml, not from where cw ran.
+  p=$(CDPATH= cd -- "$(dirname "$D")" && pwd -P) || die "cannot write next to $D"; D=${p%/}/${D##*/}
   # One run at a time (cron and a hand-run can overlap): the swap below is then never raced.
   mkdir "$D.lock" 2>/dev/null || die "another cw hermes is running into $D (or one was killed: rmdir $D.lock)"
   T=; trap 'rmdir "$D.lock"; [ -z "$T" ] || rm -rf "$T" "$T.old"' EXIT; trap 'exit 1' INT TERM HUP
@@ -647,7 +648,9 @@ hermes)
   # (die's trap deletes $T.old); the lock keeps $D empty in between.
   [ ! -d "$D" ] || mv "$D" "$T.old" || die "cannot replace $D"
   mv "$T" "$D" || { [ ! -d "$T.old" ] || mv "$T.old" "$D"; die "cannot replace $D"; }
-  tl() { case $1 in "$HOME"/*) echo "~${1#"$HOME"}" ;; *) echo "$1" ;; esac; }
+  # ~ for $HOME, as written or with its symlinks resolved (D is).
+  tl() { for h in "$HOME" "$(CDPATH= cd -- "$HOME" 2>/dev/null && pwd -P)"; do
+           [ -n "$h" ] && case $1 in "$h"/*) echo "~${1#"$h"}"; return ;; esac; done; echo "$1"; }
   r=$(tl "$D"); cf=${HERMES_HOME:-$HOME/.hermes}/config.yaml
   echo "skills in $r"
   # A commented-out line lists nothing.

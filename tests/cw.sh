@@ -844,12 +844,15 @@ out=$(PATH=$HM/mvbin:$PATH hw 2>&1) && fail "cw hermes with a failing mv should 
 [ -e "$HM/mv.2" ] && [ "$(LC_ALL=C ls "$HC" | tr '\n' ' ')" = 'cw-far-box-fix cw-me-check cw-me-new ' ] && [ -z "$(ls -d "$HS".* 2>/dev/null)" ] || fail "cw hermes: a failed swap must keep the old skills: $(ls "$HC") $out"
 # One run at a time: another's lock held, this one writes nothing and leaves the lock to its owner.
 mkdir "$HS.lock"; out=$(hw 2>&1) && fail "cw hermes under another's lock should fail"
-echo "$out" | grep -q "another cw hermes is running.*rmdir $HS.lock" && [ -d "$HS.lock" ] && [ "$(LC_ALL=C ls "$HC" | tr '\n' ' ')" = 'cw-far-box-fix cw-me-check cw-me-new ' ] || fail "cw hermes under a lock: $out"
+echo "$out" | grep -q "another cw hermes is running.*rmdir .*/cwtfigo/hermes.lock)" && [ -d "$HS.lock" ] && [ "$(LC_ALL=C ls "$HC" | tr '\n' ' ')" = 'cw-far-box-fix cw-me-check cw-me-new ' ] || fail "cw hermes under a lock: $out"
 rmdir "$HS.lock"
 # A dir given with a trailing /: the same dir, every run. / itself: never.
 hw "$HM/out/" >/dev/null && hw "$HM/out//" >/dev/null && [ -f "$HM/out/cwtfigo/cw-me-check/SKILL.md" ] && [ "$(LC_ALL=C ls -A "$HM/out" | tr '\n' ' ')" = '.cwtfigo-generated cwtfigo ' ] && [ -z "$(ls -d "$HM"/out.* 2>/dev/null)" ] || fail "cw hermes <dir>/: $(ls -AR "$HM/out")"
 # A relative dir: the same dir, named in full, as Hermes' config needs it.
 out=$(cd "$HM" && hw rel 2>&1) && [ -d "$HM/rel/cwtfigo/cw-me-check" ] && echo "$out" | grep -qx 'skills in ~/rel' || fail "cw hermes rel: $out"
+# Named in full by its real path: ../ from another dir resolves; a name . or .. is refused.
+mkdir "$HM/a"; out=$(cd "$HM/a" && hw ../rel2 2>&1) && [ -d "$HM/rel2/cwtfigo/cw-me-check" ] && echo "$out" | grep -qx 'skills in ~/rel2' || fail "cw hermes ../rel2: $out"
+out=$(hw "$HM/rel/.." 2>&1) && fail "cw hermes <dir>/.. should fail"; echo "$out" | grep -q 'not ending in \. or \.\.' || fail "cw hermes <dir>/..: $out"
 out=$(hw / 2>&1) && fail "cw hermes / should fail"; echo "$out" | grep -q 'not /' || fail "cw hermes /: $out"
 mkdir "$HM/mine"; echo keep > "$HM/mine/x"; out=$(hw "$HM/mine" 2>&1) && fail "cw hermes into a dir it didn't make should fail"
 [ "$(cat "$HM/mine/x")" = keep ] && [ "$(ls -A "$HM/mine")" = x ] && [ ! -e "$HM/mine.lock" ] && echo "$out" | grep -q "didn't make" || fail "cw hermes must leave a foreign dir alone: $out"
