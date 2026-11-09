@@ -961,9 +961,10 @@ out=$(sw b hermes --sync 2>&1); [ $? = 0 ] && [ -f "$SD/cwtfigo/cw-a-new/SKILL.m
 # Another sync on it: skipped (2), not queued; no pull, the lock left to its owner.
 printf '#!/bin/sh\n# menu: more\necho more\n' > "$S/a/hosts/a/more.sh"; { sw a approve a more && sw a save three; } >/dev/null 2>&1 || fail "cw hermes --sync setup: another script"
 mkdir "$SD.lock"; out=$(sw b hermes --sync 2>&1); [ $? = 2 ] && [ -d "$SD.lock" ] && [ ! -e "$SD/cwtfigo/cw-a-more" ] || fail "cw hermes --sync under a lock: $out"; rmdir "$SD.lock"
-# A remote that can't be reached: ssh never prompts (BatchMode), exit 1, nothing rebuilt.
-mkdir "$S/bin"; printf '#!/bin/sh\necho "$*" > %s/ssh.args; exit 255\n' "$S" > "$S/bin/ssh"; chmod +x "$S/bin/ssh"
-git -C "$S/b" remote set-url origin fake:r.git; out=$(PATH=$S/bin:$PATH sw b hermes --sync 2>&1); [ $? = 1 ] && grep -q 'BatchMode=yes' "$S/ssh.args" && [ ! -e "$SD/cwtfigo/cw-a-more" ] && [ ! -e "$SD.lock" ] || fail "cw hermes --sync, remote gone: $out"
+# A remote that can't be reached, through the owner's own core.sshCommand (cw sets no ssh of its own): exit 1, nothing
+# rebuilt. No prompt: the hook runs cw in a session of its own (no terminal for ssh to ask on), stdin /dev/null.
+mkdir "$S/bin"; printf '#!/bin/sh\necho "$*" > %s/ssh.args; exit 255\n' "$S" > "$S/bin/myssh"; chmod +x "$S/bin/myssh"
+git -C "$S/b" config core.sshCommand "$S/bin/myssh"; git -C "$S/b" remote set-url origin fake:r.git; out=$(sw b hermes --sync 2>&1); [ $? = 1 ] && grep -q 'fake' "$S/ssh.args" && [ ! -e "$SD/cwtfigo/cw-a-more" ] && [ ! -e "$SD.lock" ] || fail "cw hermes --sync, remote gone: $out"
 # The hook as Hermes runs it, its paths as cw wrote them: the commit the gone remote held back arrives, one reload.
 git -C "$S/b" remote set-url origin "$S/r.git"; mkdir -p "$S/stub/agent"; : > "$S/stub/agent/__init__.py"; printf 'n = []\ndef reload_skills():\n    n.append(1)\n' > "$S/stub/agent/skill_commands.py"
 hk() { HOME=$S HERMES_HOME=$S/hh PATH=$PYB:$PATH "$PYB/python3" -I -c 'import asyncio, importlib.util, sys

@@ -557,7 +557,7 @@ hermes)
   # its current hash. Rebuilt whole each time, so a script removed or changed since approval loses its skill. Reads the
   # record only: no pull (but --sync's), no ssh, no approval.
   # --sync, from the Hermes hook before each message: a pull, and a rebuild only if it brought something. Exit 0 rebuilt,
-  # 2 nothing new; never a prompt (no terminal there), and a dead remote gives up within seconds.
+  # 2 nothing new; never a prompt (no terminal there).
   sync=; [ "$2" = --sync ] && { sync=1; shift; remote || exit 2; }
   E=${XDG_DATA_HOME:-$HOME/.local/share}/cwtfigo/hermes; D=${2:-$E}
   # No trailing /: mktemp -d "$D.XXXXXX" would land inside D, and the swap below would fail every run.
@@ -579,7 +579,9 @@ hermes)
   fi
   T=; trap 'rmdir "$D.lock"; [ -z "$T" ] || rm -rf "$T" "$T.old"' EXIT; trap 'exit 1' INT TERM HUP
   if [ -n "$sync" ]; then
-    export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh} -o BatchMode=yes -o ConnectTimeout=5" GIT_TERMINAL_PROMPT=0
+    # The owner's own ssh (core.sshCommand, GIT_SSH), as for any pull. It can't ask: the hook runs this in a session of
+    # its own (no terminal) with stdin /dev/null, and its timeout ends a hung remote.
+    export GIT_TERMINAL_PROMPT=0
     # Nothing new is the commit the skills were built from (their marker holds it), not HEAD before the pull: a
     # rebuild that failed after its pull is tried again.
     pull </dev/null || die "nothing rebuilt"
