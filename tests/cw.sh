@@ -841,9 +841,13 @@ grep -q 'Never run `cw approve`' "$F" && grep -q 'NOT APPROVED' "$F" || fail "ev
 rm "$HB/attic.sh"; CWTFIGO_HOME=$HM/rec sh "$CW" approve me new >/dev/null; hw >/dev/null || fail "cw hermes rerun"
 [ "$(LC_ALL=C ls "$HC" | tr '\n' ' ')" = 'cw-far-box-fix cw-me-check cw-me-new ' ] && [ -z "$(ls -d "$HS".* 2>/dev/null)" ] || fail "cw hermes rerun: $(ls "$HC") $(ls -d "$HS".* 2>/dev/null)"
 # The new dir can't go in (a fake mv fails its second call): the old skills stay where Hermes reads them.
-mkdir "$HM/mvbin"; printf '#!/bin/sh\nif [ -e "%s/mv.1" ] && [ ! -e "%s/mv.2" ]; then : > "%s/mv.2"; exit 1; fi\n: > "%s/mv.1"; exec %s "$@"\n' "$HM" "$HM" "$HM" "$HM" "$(command -v mv)" > "$HM/mvbin/mv"; chmod +x "$HM/mvbin/mv"
+mkdir "$HM/mvbin"; printf '#!/bin/sh\nif [ -e "%s/mv.1" ] && [ ! -e "%s/mv.2" ]; then : > "%s/mv.2"; [ -z "$MVMK" ] || mkdir "$2"; exit 1; fi\n: > "%s/mv.1"; exec %s "$@"\n' "$HM" "$HM" "$HM" "$HM" "$(command -v mv)" > "$HM/mvbin/mv"; chmod +x "$HM/mvbin/mv"
 out=$(PATH=$HM/mvbin:$PATH hw 2>&1) && fail "cw hermes with a failing mv should fail"
 [ -e "$HM/mv.2" ] && [ "$(LC_ALL=C ls "$HC" | tr '\n' ' ')" = 'cw-far-box-fix cw-me-check cw-me-new ' ] && [ -z "$(ls -d "$HS".* 2>/dev/null)" ] || fail "cw hermes: a failed swap must keep the old skills: $(ls "$HC") $out"
+# Something at the dir by then (the fake mv makes it): the old skills are kept, not moved into it, and named.
+rm "$HM/mv.1" "$HM/mv.2"; out=$(MVMK=1 PATH=$HM/mvbin:$PATH hw 2>&1) && fail "cw hermes with a failing mv should fail"
+o=$(echo "$out" | sed -n 's/.*; the skills it had are in //p'); [ -n "$o" ] && [ -d "$o/cwtfigo/cw-me-check" ] && [ -z "$(ls -A "$HS")" ] || fail "cw hermes: old skills kept and named: $out"
+rmdir "$HS" && mv "$o" "$HS" || fail "cw hermes: put the old skills back"
 # One run at a time: another's lock held, this one writes nothing and leaves the lock to its owner.
 mkdir "$HS.lock"; out=$(hw 2>&1) && fail "cw hermes under another's lock should fail"
 echo "$out" | grep -q "another cw hermes is running.*rmdir .*/cwtfigo/hermes.lock)" && [ -d "$HS.lock" ] && [ "$(LC_ALL=C ls "$HC" | tr '\n' ' ')" = 'cw-far-box-fix cw-me-check cw-me-new ' ] || fail "cw hermes under a lock: $out"

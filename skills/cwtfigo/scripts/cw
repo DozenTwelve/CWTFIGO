@@ -650,9 +650,14 @@ hermes)
   ls "$T/cwtfigo" 2>/dev/null | awk '{ k = substr($0, 1, 32)
     if (k in s) printf "cw: %s and %s share their first 32 characters: Discord shows only one\n", s[k], $0; else s[k] = $0 }' >&2
   # Swapped in whole: Hermes never reads a half-written dir. If the new one can't go in, the old one goes back first
-  # (die's trap deletes $T.old); the lock keeps $D empty in between.
+  # (die's trap deletes $T.old). Something at $D by then (not another cw hermes: the lock) or a failed mv back: the
+  # old one is kept, not left to the trap, and the error says where.
   [ ! -d "$D" ] || mv "$D" "$T.old" || die "cannot replace $D"
-  mv "$T" "$D" || { [ ! -d "$T.old" ] || mv "$T.old" "$D"; die "cannot replace $D"; }
+  if ! mv "$T" "$D"; then
+    [ -d "$T.old" ] || die "cannot replace $D"
+    [ ! -e "$D" ] && mv "$T.old" "$D" && die "cannot replace $D"
+    o=$T.old; rm -rf "$T"; T=; die "cannot replace $D; the skills it had are in $o"
+  fi
   # ~ for $HOME, as written or with its symlinks resolved (D is).
   tl() { for h in "$HOME" "$(CDPATH= cd -- "$HOME" 2>/dev/null && pwd -P)"; do
            [ -n "$h" ] && case $1 in "$h"/*) echo "~${1#"$h"}"; return ;; esac; done; echo "$1"; }
