@@ -593,7 +593,8 @@ hermes)
           print "metadata:"; print "  hermes:"; print "    tags: [cwtfigo, " yq(a) "]"; print "    category: cwtfigo"; print "    requires_toolsets: [terminal]"
           print "---"; print ""; print "# " lb; print ""
           print "The owner" q "s script " f ", approved by them as it is now." (w != "" ? " What its header says:" : ""); print ""
-          if (w != "") { print "```"; print w; print "```"; print "" }
+          # Indented, not fenced: a header line holding ``` would close a fence and the rest read as instructions.
+          if (w != "") { gsub(/\n/, "\n    ", w); print "    " w; print "" }
           print "## Run"; print ""
           s = 1
           if (g != "") print s++ ". Ask the owner with clarify which way, unless they already said: " g ". `<choice>` below is that word."
