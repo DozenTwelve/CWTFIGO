@@ -786,7 +786,9 @@ out=$(CWTFIGO_HOME=$N sh "$CW" status 2>/dev/null)
 echo "$out" | grep -Eq 'cw |ask the human|operator|hint' && fail "status should hold nothing for the model on a fresh record: $out"
 # cw hermes: one Hermes skill per approved menu script (the TUI's selection: check, maintain, # menu: lines), rebuilt
 # whole each run. Unapproved or changed: none. Never ssh, never write the record, never wipe a dir it didn't make.
-HM=$(mktemp -d); hw() { HOME=$HM PATH=$HM/bin:$PATH CWTFIGO_HOME=$HM/rec sh "$CW" hermes "$@"; }
+# Every dir it reads or writes under $HM: an exported XDG_DATA_HOME or HERMES_HOME (the developer's own) is a decoy here.
+HM=$(mktemp -d); hw() { HOME=$HM XDG_DATA_HOME=$HM/.local/share HERMES_HOME=$HM/hermes-home PATH=$HM/bin:$PATH CWTFIGO_HOME=$HM/rec sh "$CW" hermes "$@"; }
+mkdir "$HM/decoy"; export XDG_DATA_HOME=$HM/decoy HERMES_HOME=$HM/decoy
 mkdir "$HM/bin"; printf '#!/bin/sh\ntouch %s/ssh.ran\n' "$HM" > "$HM/bin/ssh"; chmod +x "$HM/bin/ssh"
 CWTFIGO_HOME=$HM/rec sh "$CW" name me >/dev/null; HB=$HM/rec/hosts/me; mkdir -p "$HB" "$HM/rec/hosts/Far_Box"; echo '{ "os": "arch" }' > "$HB/device.json"
 printf '#!/bin/sh\n# check: health.\necho ok\n' > "$HB/check.sh"; printf '#!/bin/sh\n# maintain: upkeep.\n[ "$1" = --apply ] && echo do\n' > "$HB/maintain.sh"
@@ -814,6 +816,8 @@ rm "$HB/attic.sh"; CWTFIGO_HOME=$HM/rec sh "$CW" approve me new >/dev/null; hw >
 [ "$(ls "$HC" | tr '\n' ' ')" = 'cw-far-box-fix cw-me-check cw-me-new ' ] && [ -z "$(ls -d "$HS".* 2>/dev/null)" ] || fail "cw hermes rerun: $(ls "$HC") $(ls -d "$HS".* 2>/dev/null)"
 mkdir "$HM/mine"; echo keep > "$HM/mine/x"; out=$(hw "$HM/mine" 2>&1) && fail "cw hermes into a dir it didn't make should fail"
 [ "$(cat "$HM/mine/x")" = keep ] && [ "$(ls -A "$HM/mine")" = x ] && echo "$out" | grep -q "didn't make" || fail "cw hermes must leave a foreign dir alone: $out"
+[ -z "$(ls -A "$HM/decoy")" ] || fail "cw hermes tests wrote outside their temp dirs: $(ls -A "$HM/decoy")"
+unset XDG_DATA_HOME HERMES_HOME
 # Unattended: approved scripts only, model and message only when something is found, never under YOLO.
 # Git Bash rewrites a <rev>:<path> argument (origin/main:.gitignore becomes origin\main;.gitignore): cw doesn't pass one.
 grep -nE 'git(_rec)? [^#]*[A-Za-z0-9_}"]:[A-Za-z0-9_.$"]' "$CW" "$(dirname "$CW")/unattended.sh" && fail "<rev>:<path> to git breaks on Git Bash: read by object id (ls-tree, cat-file) or checkout"
