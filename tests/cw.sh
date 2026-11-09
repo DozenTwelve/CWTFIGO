@@ -818,6 +818,10 @@ grep -q 'Never run `cw approve`' "$F" && grep -q 'NOT APPROVED' "$F" || fail "ev
 # Rerun: a script gone, a new one approved. The dir is rebuilt; a dir cw hermes didn't make is never wiped.
 rm "$HB/attic.sh"; CWTFIGO_HOME=$HM/rec sh "$CW" approve me new >/dev/null; hw >/dev/null || fail "cw hermes rerun"
 [ "$(ls "$HC" | tr '\n' ' ')" = 'cw-far-box-fix cw-me-check cw-me-new ' ] && [ -z "$(ls -d "$HS".* 2>/dev/null)" ] || fail "cw hermes rerun: $(ls "$HC") $(ls -d "$HS".* 2>/dev/null)"
+# The new dir can't go in (a fake mv fails its second call): the old skills stay where Hermes reads them.
+mkdir "$HM/mvbin"; printf '#!/bin/sh\nif [ -e "%s/mv.1" ] && [ ! -e "%s/mv.2" ]; then : > "%s/mv.2"; exit 1; fi\n: > "%s/mv.1"; exec %s "$@"\n' "$HM" "$HM" "$HM" "$HM" "$(command -v mv)" > "$HM/mvbin/mv"; chmod +x "$HM/mvbin/mv"
+out=$(PATH=$HM/mvbin:$PATH hw 2>&1) && fail "cw hermes with a failing mv should fail"
+[ -e "$HM/mv.2" ] && [ "$(ls "$HC" | tr '\n' ' ')" = 'cw-far-box-fix cw-me-check cw-me-new ' ] && [ -z "$(ls -d "$HS".* 2>/dev/null)" ] || fail "cw hermes: a failed swap must keep the old skills: $(ls "$HC") $out"
 # A dir given with a trailing /: the same dir, every run. / itself: never.
 hw "$HM/out/" >/dev/null && hw "$HM/out//" >/dev/null && [ -f "$HM/out/cwtfigo/cw-me-check/SKILL.md" ] && [ "$(ls -A "$HM/out" | tr '\n' ' ')" = '.cwtfigo-generated cwtfigo ' ] && [ -z "$(ls -d "$HM"/out.* 2>/dev/null)" ] || fail "cw hermes <dir>/: $(ls -AR "$HM/out")"
 out=$(hw / 2>&1) && fail "cw hermes / should fail"; echo "$out" | grep -q 'not /' || fail "cw hermes /: $out"

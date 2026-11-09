@@ -615,8 +615,10 @@ hermes)
       echo "$n: $alias/$name.$x"
     done; done
   done
-  # Swapped in whole: Hermes never reads a half-written dir.
-  { [ ! -d "$D" ] || mv "$D" "$T.old"; } && mv "$T" "$D" || die "cannot replace $D"
+  # Swapped in whole: Hermes never reads a half-written dir. If the new one can't go in, the old one goes back first:
+  # die's trap deletes $T.old.
+  [ ! -d "$D" ] || mv "$D" "$T.old" || die "cannot replace $D"
+  mv "$T" "$D" || { [ ! -d "$T.old" ] || mv "$T.old" "$D"; die "cannot replace $D"; }
   r=$D; case $r in "$HOME"/*) r="~${r#"$HOME"}" ;; esac
   echo "skills in $r"
   grep -qsF -e "$D" -e "$r" "${HERMES_HOME:-$HOME/.hermes}/config.yaml" ||
