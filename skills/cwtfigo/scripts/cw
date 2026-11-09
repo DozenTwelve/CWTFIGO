@@ -551,15 +551,16 @@ EOF
   elif [ -n "$SELF" ] && [ -d "$REC/hosts/$SELF" ]; then echo "  Another machine? Tell me its SSH alias."
   else echo "  Another machine? Tell me its SSH alias, or ask about this one."; fi ;;
 hermes)
-  # The awk below re-implements tui/src/header.rs parse and main.rs items(): a change to either is made in both.
+  # The awk below re-implements tui/src/header.rs parse and main.rs items(): a change to either is made in both, and
+  # tests/menu-headers.txt (read by tests/cw.sh and header.rs' tests) holds the headers both must read alike.
   # The TUI's menu (tui/src/main.rs items, header.rs parse) as Hermes skills, for an always-on box where Hermes runs
   # them without Claude Code (unattended/README.md): check, maintain and each script with a # menu: line, approved at
   # its current hash. Rebuilt whole each time, so a script removed or changed since approval loses its skill. Reads the
   # record only: no pull (but --sync's), no ssh, no approval.
   # --sync, from the Hermes hook before each message: a pull, and a rebuild only if it brought something. Exit 0 rebuilt,
-  # 2 nothing new; never a prompt (no terminal there), and a dead remote gives up within seconds.
+  # 2 nothing new; never a prompt (no terminal there).
   sync=; [ "$2" = --sync ] && { sync=1; shift; remote || exit 2; }
-  D=${2:-${XDG_DATA_HOME:-$HOME/.local/share}/cwtfigo/hermes}
+  E=${XDG_DATA_HOME:-$HOME/.local/share}/cwtfigo/hermes; D=${2:-$E}
   # No trailing /: mktemp -d "$D.XXXXXX" would land inside D, and the swap below would fail every run.
   D=${D%"${D##*[!/]}"}; [ -n "$D" ] || die "cw hermes needs a dir of its own, not /"
   case ${D##*/} in .|..) die "cw hermes needs a dir by its own name, not ending in . or .." ;; esac
@@ -577,16 +578,27 @@ hermes)
     [ -d "$D.lock" ] && die "another cw hermes is running into $D (or one was killed in the last 10 min: rmdir $D.lock)"
     die "cannot create the lock $D.lock"
   fi
-  T=; trap 'rmdir "$D.lock"; [ -z "$T" ] || rm -rf "$T" "$T.old"' EXIT; trap 'exit 1' INT TERM HUP
+  # Killed between the swap's two mv's ($D moved aside, the new one not in): the old one goes back, before the lock goes.
+  # What the skills are built from: the record's commit and this cw (its awk and rules), so a plugin update rebuilds too.
+  mk() { git_rec rev-parse -q --verify HEAD; sha "$SKILL/scripts/cw"; }
+  T=; trap '[ -z "$T" ] || { rm -rf "$T"; { [ -e "$D" ] || mv "$T.old" "$D"; } 2>/dev/null && rm -rf "$T.old"; }; rmdir "$D.lock"' EXIT; trap 'exit 1' INT TERM HUP
   if [ -n "$sync" ]; then
-    export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh} -o BatchMode=yes -o ConnectTimeout=5" GIT_TERMINAL_PROMPT=0
-    # Nothing new is the commit the skills were built from (their marker holds it), not HEAD before the pull: a
+    # The owner's own ssh (core.sshCommand, GIT_SSH), as for any pull. It can't ask: the hook runs this in a session of
+    # its own (no terminal) with stdin /dev/null, and its timeout ends a hung remote.
+    export GIT_TERMINAL_PROMPT=0
+    # Nothing new is what the skills were built from (their marker holds mk), not HEAD before the pull: a
     # rebuild that failed after its pull is tried again.
     pull </dev/null || die "nothing rebuilt"
-    [ "$(git_rec rev-parse -q --verify HEAD)" != "$(cat "$D/.cwtfigo-generated" 2>/dev/null)" ] || exit 2
+    [ "$(mk)" != "$(cat "$D/.cwtfigo-generated" 2>/dev/null)" ] || exit 2
   fi
   [ ! -d "$D" ] || [ -e "$D/.cwtfigo-generated" ] || [ -z "$(ls -A "$D")" ] || die "$D has files cw hermes didn't make: nothing written. Give another dir: cw hermes <dir>"
-  T=$(mktemp -d "$D.XXXXXX") && { git_rec rev-parse -q --verify HEAD; :; } > "$T/.cwtfigo-generated" || die "cannot write next to $D"
+  # The record, absolute: the skills' commands and the hook name it (Hermes' terminal has no CWTFIGO_HOME).
+  R=$(cd "$REC" && pwd -P) || die "cannot find $REC"
+  # Hermes runs a command in a pty nobody types into: a git credential prompt, or an ssh passphrase, host key or sudo
+  # question on the terminal, would hang it until its timeout. setsid -w (util-linux; not on a Mac) takes the terminal.
+  ns=; setsid -w true 2>/dev/null && ns='setsid -w '
+  pyfind || die "cw hermes needs python3 (for the skills' text and the Hermes hook), which this machine doesn't have: nothing written"
+  T=$(mktemp -d "$D.XXXXXX") && { mk; :; } > "$T/.cwtfigo-generated" || die "cannot write next to $D"
   for d in "$REC"/hosts/*/; do
     [ -d "$d" ] || continue
     H=${d%/}; alias=${H##*/}; here=; [ "$alias" = "$SELF" ] && here=1
@@ -599,7 +611,7 @@ hermes)
       n=$(printf 'cw-%s-%s' "$alias" "$name" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' - | tr -s - | cut -c1-64 | sed 's/-$//')
       [ ! -e "$T/cwtfigo/$n" ] || { echo "cw: skipped $alias/$name.$x: its skill name $n is taken" >&2; continue; }
       # Bytes, not characters: the BOM is three of them, and a label in any language passes through as it is.
-      s=$(N=$n A=$alias S=$name E=$x SH=$h REC=$REC CW="$SKILL/scripts/cw" LC_ALL=C awk -v q="'" -v bom="$(printf '\357\273\277')" '
+      s=$(N=$n A=$alias S=$name E=$x SH=$h REC=$R NS=$ns CW="$SKILL/scripts/cw" LC_ALL=C awk -v q="'" -v bom="$(printf '\357\273\277')" '
         function trim(x) { sub(/^[ \t]+/, "", x); sub(/[ \t]+$/, "", x); return x }
         function yq(x) { gsub(q, q q, x); return q x q }
         # Each c in x as r. By hand, not gsub: awks differ on \ in a replacement.
@@ -628,7 +640,7 @@ hermes)
         END { if (!m && ENVIRON["S"] != "check" && ENVIRON["S"] != "maintain") exit
           a = ENVIRON["A"]; sc = ENVIRON["S"]; f = a "/" sc "." ENVIRON["E"]; if (!m) lb = (ab != "" ? ab : sc)
           for (i = 1; i <= nr; i++) print "cw: " f ": left out the menu-args word " rf[i] ": it starts with - or = (an option, or zsh expands it)" | "cat 1>&2"
-          sub(/\n+$/, "", w); r = "sh " sq(ENVIRON["CW"]) " run " sq(a) " " sq(sc)
+          sub(/\n+$/, "", w); r = "GIT_TERMINAL_PROMPT=0 CWTFIGO_HOME=" sq(ENVIRON["REC"]) " " ENVIRON["NS"] "sh " sq(ENVIRON["CW"]) " run " sq(a) " " sq(sc)
           # Past the command, every field the owner wrote (label, header, args, names, paths) as prose.
           lb = nb(lb); w = nb(w); g = nb(g); a = nb(a); sc = nb(sc); f = nb(f); rec = nb(ENVIRON["REC"])
           print "---"; print "name: " ENVIRON["N"]
@@ -659,7 +671,8 @@ hermes)
           print "- No password can be typed here: a step that needs sudo fails. Report it; the owner runs that in a terminal."
           print "- Any other failure: report cw" q "s last lines as they are." }' "$F")
       [ -n "$s" ] || continue
-      mkdir -p "$T/cwtfigo/$n" && printf '%s\n' "$s" > "$T/cwtfigo/$n/SKILL.md" || die "cannot write $T/cwtfigo/$n"
+      # Hermes reads a SKILL.md as strict UTF-8 and skips one that isn't: an invalid byte becomes U+FFFD, as in the TUI.
+      mkdir -p "$T/cwtfigo/$n" && printf '%s\n' "$s" | "$py" -I -c 'import sys; sys.stdout.buffer.write(sys.stdin.buffer.read().decode("utf-8", "replace").encode())' > "$T/cwtfigo/$n/SKILL.md" || die "cannot write $T/cwtfigo/$n"
       echo "$n: $alias/$name.$x"
     done; done
   done
@@ -675,24 +688,36 @@ hermes)
     [ ! -e "$D" ] && mv "$T.old" "$D" && die "cannot replace $D"
     o=$T.old; rm -rf "$T"; T=; die "cannot replace $D; the skills it had are in $o"
   fi
+  # --sync is done: rebuilt, so Hermes rescans. The hook is the one Hermes runs and loaded at its start: a failure to
+  # rewrite it here would only hide the rebuild (exit 1, and the marker says nothing new from then on).
+  [ -z "$sync" ] || exit 0
+  # ~ for $HOME, as written or with its symlinks resolved (D is).
+  tl() { for h in "$HOME" "$(CDPATH= cd -- "$HOME" 2>/dev/null && pwd -P)"; do
+           [ -n "$h" ] && case $1 in "$h"/*) echo "~${1#"$h"}"; return ;; esac; done; echo "$1"; }
+  r=$(tl "$D"); cf=${HERMES_HOME:-$HOME/.hermes}/config.yaml; K=${HERMES_HOME:-$HOME/.hermes}/hooks/cwtfigo
+  echo "skills in $r"
+  # A commented-out line lists nothing.
+  ls=; grep -sv '^[[:space:]]*#' "$cf" | grep -qF -e "$D" -e "$r" -e "$G" -e "$(tl "$G")" && ls=1
+  [ -n "$ls" ] || echo "Hermes doesn't read them yet: add $r to skills.external_dirs in $(tl "$cf"), then hermes gateway restart"
+  echo "In Discord, /reload-skills updates the /skill list."
   # The Hermes hook (unattended/README.md): before each message, cw hermes --sync into this same dir, and Hermes rescans
   # its skills if that rebuilt them. Its own dir, rebuilt whole. Paths go in as Python literals (ascii()), never raw.
-  K=${HERMES_HOME:-$HOME/.hermes}/hooks/cwtfigo
+  # One hook, for the dir Hermes reads: the default one or one config.yaml lists. A build elsewhere (a preview) leaves it.
+  [ -n "$ls" ] || [ "$G" = "$E" ] || { echo "Hermes' hook in $(tl "$K") left as it was: it keeps $(tl "$E") or a dir config.yaml lists in step, not this one"; exit 0; }
   [ ! -d "$K" ] || [ -e "$K/.cwtfigo-generated" ] || die "$K has files cw hermes didn't make: the skills are written, the hook isn't"
-  pyfind || die "the Hermes hook needs python3, which this machine doesn't have: the skills are written, the hook isn't"
-  R=$(cd "$REC" && pwd -P) || die "cannot find $REC"
   nk=; [ -d "$K" ] || nk=1
   rm -rf "$K" && mkdir -p "$K" && touch "$K/.cwtfigo-generated" &&
     printf '%s\n' 'name: cwtfigo' 'description: keeps the cwtfigo skills in step with the record (generated by cw hermes)' 'events: [agent:start]' > "$K/HOOK.yaml" ||
     die "cannot write $K"
-  { cat <<'EOF'
+  # Each step checked: a python that fails here (no -I in a Python 2) would leave a handler without ARGV.
+  { cat <<'EOF' &&
 # Generated by cw hermes, overwritten on its next run. Before Hermes answers a message: cw pulls the record and, if a
 # visit changed it, rebuilds the cwtfigo skills; then Hermes rescans its skills, so this message already sees them.
 # Never raises: a failure is logged and the message goes on. A failed sync waits BACKOFF before the next try.
 import asyncio, contextlib, logging, os, signal, subprocess, time
 
 EOF
-    "$py" -I -c 'import sys; a = sys.argv[1:]; print("ARGV = " + ascii(a[:-1])); print("REC = " + ascii(a[-1]))' /bin/sh "$SKILL/scripts/cw" hermes --sync "$D" "$R"
+    "$py" -I -c 'import sys; a = sys.argv[1:]; print("ARGV = " + ascii(a[:-1])); print("REC = " + ascii(a[-1]))' /bin/sh "$SKILL/scripts/cw" hermes --sync "$D" "$R" &&
     cat <<'EOF'
 REBUILT, NOCHANGE = 0, 2
 TIMEOUT, BACKOFF = 8, 300
@@ -737,22 +762,14 @@ def _sync():
 
 async def handle(event_type, context):
     try:
-        await asyncio.get_running_loop().run_in_executor(None, _sync)
+        # Not run_in_executor: to_thread copies the ContextVars Hermes keeps the message's profile in.
+        await asyncio.to_thread(_sync)
     except Exception:
         log.exception("cwtfigo: the skills sync failed")
 EOF
-  } > "$K/handler.py" || die "cannot write $K/handler.py"
-  # ~ for $HOME, as written or with its symlinks resolved (D is).
-  tl() { for h in "$HOME" "$(CDPATH= cd -- "$HOME" 2>/dev/null && pwd -P)"; do
-           [ -n "$h" ] && case $1 in "$h"/*) echo "~${1#"$h"}"; return ;; esac; done; echo "$1"; }
-  r=$(tl "$D"); cf=${HERMES_HOME:-$HOME/.hermes}/config.yaml
-  echo "skills in $r"
-  # A commented-out line lists nothing.
-  grep -sv '^[[:space:]]*#' "$cf" | grep -qF -e "$D" -e "$r" -e "$G" -e "$(tl "$G")" ||
-    echo "Hermes doesn't read them yet: add $r to skills.external_dirs in $(tl "$cf"), then hermes gateway restart"
+  } > "$K/handler.py" || { rm -rf "$K"; die "cannot write $K/handler.py ($py failed?): the skills are written, the hook isn't"; }
   # Hermes finds its hooks only when it starts.
-  [ -z "$nk" ] || echo "Hermes picks up the hook in $(tl "$K") at its next start: hermes gateway restart, once. From then on each message syncs the skills first."
-  echo "In Discord, /reload-skills updates the /skill list." ;;
+  [ -z "$nk" ] || echo "Hermes picks up the hook in $(tl "$K") at its next start: hermes gateway restart, once. From then on each message syncs the skills first." ;;
 search)
   shift
   pyfind || die "search needs python3 on this machine"

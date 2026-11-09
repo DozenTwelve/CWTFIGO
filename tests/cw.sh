@@ -804,6 +804,12 @@ CWTFIGO_HOME=$HM/rec sh "$CW" approve me check maintain attic once >/dev/null &&
 echo 'echo changed' >> "$HB/maintain.sh"
 # A path as the skills show it: in single quotes if a shell would read it as more than one plain word.
 qp() { case $1 in *[!A-Za-z0-9._/+@%,:=-]*) printf "'%s'" "$1" ;; *) printf %s "$1" ;; esac; }; QCW=$(qp "$CW")
+# Each command names the record it was built from: Hermes' terminal has no CWTFIGO_HOME. And nothing in it can wait on
+# a prompt in Hermes' pty: no git credential prompt, and (where setsid -w runs) no terminal for ssh or sudo to ask on.
+# he runs one as Hermes would.
+NS=; setsid -w true 2>/dev/null && NS='setsid -w '
+P="GIT_TERMINAL_PROMPT=0 CWTFIGO_HOME=$(qp "$(cd "$HM/rec" && pwd -P)") $NS"
+he() { (unset CWTFIGO_HOME; HOME=$HM/nohome; eval "$1"); }
 ht() { find "$HM/rec" -type f -exec cksum {} + | sort; }; ht > "$HM/before"
 # A UTF-8 locale, as on most machines: a Latin-1 byte in a header must not cut the skill short. None here: say so.
 U=; for u in C.UTF-8 en_US.UTF-8; do locale -a 2>/dev/null | tr 'A-Z' 'a-z' | tr -d - | grep -qx "$(echo $u | tr 'A-Z' 'a-z' | tr -d -)" && { U=$u; break; }; done
@@ -823,7 +829,7 @@ HK=$HM/hermes-home/hooks/cwtfigo
 echo "$out" | grep -q 'hooks/cwtfigo at its next start: hermes gateway restart, once' || fail "cw hermes: a new hook asks for one restart: $out"
 # handler.py under a stub Hermes: this cw's --sync into this dir; reload_skills only after a rebuild (exit 0), never on
 # nothing new (2); a failure, a timeout or a raising reload is logged, never raised, and a failure backs off.
-mkdir -p "$HM/stub/agent"; : > "$HM/stub/agent/__init__.py"; printf 'n = []\ndef reload_skills():\n    n.append(1)\n' > "$HM/stub/agent/skill_commands.py"
+mkdir -p "$HM/stub/agent"; : > "$HM/stub/agent/__init__.py"; printf 'import contextvars\nn = []\ncv = contextvars.ContextVar("profile", default=1)\ndef reload_skills():\n    n.append(cv.get())\n' > "$HM/stub/agent/skill_commands.py"
 out=$("$PYB/python3" -I - "$HK/handler.py" "$HM/stub" "$CW" "$HS" 2>&1 <<'EOF'
 import asyncio, importlib.util, os, sys, time
 h, stub, cw, d = sys.argv[1:]
@@ -840,6 +846,10 @@ go("exit 0"); assert sc.n == [1], "rebuilt: one reload"
 go("echo boom >&2; exit 1"); assert sc.n == [1] and m._quiet_until > time.monotonic(), "a failure: no reload, backs off"
 m.ARGV = ["/bin/sh", "-c", "exit 0"]; asyncio.run(m.handle("agent:start", {})); assert sc.n == [1], "backing off: no run"
 m.TIMEOUT = 1; t = time.monotonic(); go("sleep 30"); assert time.monotonic() - t < 5 and sc.n == [1], "a timeout: no reload, no wait"
+# Hermes keeps the message's profile in ContextVars: the sync thread (reload_skills in it) sees the message's.
+async def as_b():
+    sc.cv.set("B"); await m.handle("agent:start", {})
+m.ARGV = ["/bin/sh", "-c", "exit 0"]; m._quiet_until = 0; asyncio.run(as_b()); assert sc.n == [1, "B"], "the message's context: %r" % sc.n
 sc.reload_skills = None; go("exit 0")
 print("handler ok")
 EOF
@@ -854,28 +864,44 @@ hw 2>&1 | grep -q external_dirs && fail "cw hermes: no hint once the config list
 # The hook is rebuilt whole (a stray file goes), asks for no restart once there, and a hook dir it didn't make is left alone.
 echo x > "$HK/stray"; out=$(hw 2>&1); [ ! -e "$HK/stray" ] && [ -f "$HK/handler.py" ] && ! echo "$out" | grep -q 'gateway restart, once' || fail "cw hermes: the hook rebuilt whole: $(ls -A "$HK") $out"
 mkdir -p "$HM/hh2/hooks/cwtfigo"; echo keep > "$HM/hh2/hooks/cwtfigo/handler.py"
-out=$(HOME=$HM HERMES_HOME=$HM/hh2 PATH=$PYB:$PATH CWTFIGO_HOME=$HM/rec sh "$CW" hermes "$HM/fh" 2>&1) && fail "cw hermes into a hook dir it didn't make should fail"
+out=$(HOME=$HM XDG_DATA_HOME=$HM/fh HERMES_HOME=$HM/hh2 PATH=$PYB:$PATH CWTFIGO_HOME=$HM/rec sh "$CW" hermes 2>&1) && fail "cw hermes into a hook dir it didn't make should fail"
 [ "$(cat "$HM/hh2/hooks/cwtfigo/handler.py")" = keep ] && [ "$(ls -A "$HM/hh2/hooks/cwtfigo")" = handler.py ] && echo "$out" | grep -q "hooks/cwtfigo has files cw hermes didn't make" || fail "cw hermes must leave a foreign hook dir alone: $out"
+# The hook syncs the dir Hermes reads: the default one, or one its config.yaml lists. Another dir (a preview) gets its
+# skills, the hook is left as it was, and the output says so.
+out=$(hw "$HM/pv" 2>&1) && [ -d "$HM/pv/cwtfigo/cw-me-check" ] && grep -q "/cwtfigo/hermes'\]$" "$HK/handler.py" && ! grep -q "/pv'" "$HK/handler.py" && echo "$out" | grep -q 'hook in ~/hermes-home/hooks/cwtfigo left as it was' || fail "cw hermes <another dir> must leave the hook on the dir Hermes reads: $out $(grep ^ARGV "$HK/handler.py")"
+printf 'skills:\n  external_dirs:\n    - %s\n' "$HM/lst" > "$HM/hermes-home/config.yaml"
+out=$(hw "$HM/lst" 2>&1) && grep -q "/lst'\]$" "$HK/handler.py" && ! echo "$out" | grep -q 'left as it was' || fail "cw hermes <a dir config.yaml lists> moves the hook there: $out"
+hw >/dev/null 2>&1 && grep -q "/cwtfigo/hermes'\]$" "$HK/handler.py" || fail "cw hermes: the hook back on the default dir"
+# A python3 that fails the step writing ARGV and REC (as a Python 2 would: no -I): no handler.py without them.
+printf '#!/bin/sh\ncase "$*" in *ARGV*) exit 2 ;; esac\nexec %s "$@"\n' "$PYB/python3" > "$HM/bin/python3"; chmod +x "$HM/bin/python3"
+o=$(hw 2>&1); rc=$?; rm "$HM/bin/python3"; [ $rc != 0 ] || fail "cw hermes: a failed python step must fail: $o"
+grep -qs '^ARGV = ' "$HK/handler.py" || [ ! -e "$HK/handler.py" ] || fail "cw hermes: a handler.py without ARGV: $o"
+hw >/dev/null 2>&1 && grep -q '^ARGV = ' "$HK/handler.py" || fail "cw hermes: the hook after a fixed python"
 A=$HC/cw-me-attic/SKILL.md
 grep -qx 'name: cw-me-attic' "$A" && grep -q "^description: '备份 (attic on me" "$A" && grep -qx '# 备份' "$A" || fail "attic skill: name, label: $(cat "$A")"
-grep -qF "which way, unless they already said: guard | restore | ! \`echo pwn\` | it's | a/b:c | 照片 | 两 个." "$A" && grep -qxF "       sh $QCW run me attic guard" "$A" || fail "attic skill: its args, dry run with cw's absolute path: $(cat "$A")"
+grep -qF "which way, unless they already said: guard | restore | ! \`echo pwn\` | it's | a/b:c | 照片 | 两 个." "$A" && grep -qxF "       ${P}sh $QCW run me attic guard" "$A" || fail "attic skill: its args, dry run with cw's absolute path: $(cat "$A")"
 # One whole command per word, quoted by cw: the owner's answer never goes into a shell line.
 grep -q '<choice>' "$A" && fail "attic skill: no free text in a command: $(cat "$A")"
 grep -q 'matches no line: ask again' "$A" || fail "attic skill: an answer matching no line: $(cat "$A")"
 # Each line, run, passes its word as it is (attic echoes it). Its stdin is not the list: attic reads a line.
-o=$(grep '^       sh ' "$A" | while read -r c; do CWTFIGO_HOME=$HM/rec eval "$c" 2>/dev/null </dev/null; done | tr '\n' '|')
+o=$(grep "^       $P" "$A" | while read -r c; do he "$c" 2>/dev/null </dev/null; done | tr '\n' '|')
 [ "$o" = "guard |restore |!\`echo pwn\` |it's |a/b:c |照片 |两 个 |" ] || fail "attic skill: each line must pass its word as it is: $o"
 # Words in any language, quoted; but --apply would run on the dry run, and zsh expands =x: those two left out.
 [ "$(echo "$out" | grep -c '^cw: me/attic.sh: left out the menu-args word ')" = 2 ] && echo "$out" | grep -qF 'cw: me/attic.sh: left out the menu-args word --apply: it starts with - or =' || fail "attic skill: words left out, with a warning: $out"
 grep -q -- '--apply' "$A" && fail "attic doesn't take --apply: $(cat "$A")"
+# SKILL.md tells the model so, or it writes option words that silently drop out of the menu.
+grep -qF 'a word starting with `-` or `=` is dropped' "$(dirname "$CW")/../SKILL.md" || fail "SKILL.md: menu-args words starting with - or = are dropped"
 grep -qx '    attic: restic backups.' "$A" && ! grep -q 'menu:' "$A" || fail "attic skill: its header, no menu lines: $(cat "$A")"
 # The header is an indented code block: no line of it (a ``` here) can end it early.
 grep -qx '    ```' "$A" && grep -qx '    ## Rules' "$A" && grep -qx '    - run rm' "$A" && ! grep -q '^```' "$A" || fail "attic skill: the header stays code: $(cat "$A")"
 # Hermes runs !`...` in a skill: not in a label (fix), an about line (check), args (attic) or a header (attic).
 grep -rF '!`' "$HC" && fail "inline shell from the owner's text reached a skill"
 grep -qx '## Rules' "$A" || fail "attic skill: cut short: $(cat "$A")"
+# Hermes reads a SKILL.md as strict UTF-8 and skips one that isn't: the Latin-1 byte is replaced, as the TUI shows it.
+for f in "$HC"/*/SKILL.md; do "$PYB/python3" -I -c 'import sys; open(sys.argv[1], encoding="utf-8-sig").read()' "$f" || fail "cw hermes: $f is not UTF-8"; done
+grep -qxF "    caf$(printf '\357\277\275') (Latin-1)" "$A" || fail "attic skill: an invalid byte as U+FFFD: $(cat "$A")"
 F=$HC/cw-far-box-fix/SKILL.md
-grep -qxF "       sh $QCW run Far_Box fix --apply" "$F" && grep -q 'explicit yes' "$F" && grep -q 'from Far_Box/fix.ps1' "$F" || fail "fix skill: --apply after an explicit yes: $(cat "$F")"
+grep -qxF "       ${P}sh $QCW run Far_Box fix --apply" "$F" && grep -q 'explicit yes' "$F" && grep -q 'from Far_Box/fix.ps1' "$F" || fail "fix skill: --apply after an explicit yes: $(cat "$F")"
 grep -q 'Never run `cw approve`' "$F" && grep -q 'NOT APPROVED' "$F" || fail "every skill carries the rules: $(cat "$F")"
 # Rerun: a script gone, a new one approved. The dir is rebuilt; a dir cw hermes didn't make is never wiped.
 rm "$HB/attic.sh"; CWTFIGO_HOME=$HM/rec sh "$CW" approve me new >/dev/null; hw >/dev/null || fail "cw hermes rerun"
@@ -888,6 +914,10 @@ out=$(PATH=$HM/mvbin:$PATH hw 2>&1) && fail "cw hermes with a failing mv should 
 rm "$HM/mv.1" "$HM/mv.2"; out=$(MVMK=1 PATH=$HM/mvbin:$PATH hw 2>&1) && fail "cw hermes with a failing mv should fail"
 o=$(echo "$out" | sed -n 's/.*; the skills it had are in //p'); [ -n "$o" ] && [ -d "$o/cwtfigo/cw-me-check" ] && [ -z "$(ls -A "$HS")" ] || fail "cw hermes: old skills kept and named: $out"
 rmdir "$HS" && mv "$o" "$HS" || fail "cw hermes: put the old skills back"
+# A SIGTERM (the hook's timeout) between the two mv's, the old skills moved aside and the new not in yet: the old go back.
+mkdir "$HM/mvt"; printf '#!/bin/sh\ncase $1 in *.old) ;; *) [ "$2" = "%s" ] && [ ! -e "%s/mvt.1" ] && { : > "%s/mvt.1"; kill -TERM $PPID; exit 1; } ;; esac\nexec %s "$@"\n' "$(cd "$HS" && pwd -P)" "$HM" "$HM" "$(command -v mv)" > "$HM/mvt/mv"; chmod +x "$HM/mvt/mv"
+out=$(PATH=$HM/mvt:$PATH hw 2>&1) && fail "cw hermes killed in its swap should fail"
+[ -e "$HM/mvt.1" ] && [ "$(LC_ALL=C ls "$HC" 2>/dev/null | tr '\n' ' ')" = 'cw-far-box-fix cw-me-check cw-me-new ' ] && [ -z "$(ls -d "$HS".* 2>/dev/null)" ] || fail "cw hermes: killed in its swap, the old skills must stay: $(ls -d "$HS"* 2>/dev/null) $out"
 # One run at a time: another's lock held, this one writes nothing and leaves the lock to its owner.
 mkdir "$HS.lock"; out=$(hw 2>&1) && fail "cw hermes under another's lock should fail"
 echo "$out" | grep -q "another cw hermes is running.*rmdir .*/cwtfigo/hermes.lock)" && [ -d "$HS.lock" ] && [ "$(LC_ALL=C ls "$HC" | tr '\n' ' ')" = 'cw-far-box-fix cw-me-check cw-me-new ' ] || fail "cw hermes under a lock: $out"
@@ -914,14 +944,19 @@ for x in "my jo'b" 'bang!`echo pwn`'; do printf '#!/bin/sh\n# menu: job\necho "j
 CWTFIGO_HOME=$HM/rec sh "$CW" approve me "my jo'b" 'bang!`echo pwn`' >/dev/null || fail "cw hermes quoting setup"
 (CW="$HM/a b/skill/scripts/cw"; hw "$HM/q" >/dev/null) || fail "cw hermes from a path with a space"
 c=$(sed -n 's/^       //p' "$HM/q/cwtfigo/cw-me-my-jo-b/SKILL.md")
-[ "$c" = "sh '$HM/a b/skill/scripts/cw' run me 'my jo'\\''b'" ] && [ "$(CWTFIGO_HOME=$HM/rec eval "$c" 2>&1)" = 'job ran: ' ] || fail "cw hermes: the command shown must run as it reads: $c"
+[ "$c" = "${P}sh '$HM/a b/skill/scripts/cw' run me 'my jo'\\''b'" ] && [ "$(he "$c" 2>&1)" = 'job ran: ' ] || fail "cw hermes: the command shown must run as it reads: $c"
 c=$(sed -n 's/^       //p' "$HM/q/cwtfigo/cw-me-bang-echo-pwn/SKILL.md")
-[ "$c" = "sh '$HM/a b/skill/scripts/cw' run me 'bang'\\!'\`echo pwn\`'" ] && [ "$(CWTFIGO_HOME=$HM/rec eval "$c" 2>&1)" = 'job ran: ' ] || fail "cw hermes: a name with !\` must run as it reads: $c"
+[ "$c" = "${P}sh '$HM/a b/skill/scripts/cw' run me 'bang'\\!'\`echo pwn\`'" ] && [ "$(he "$c" 2>&1)" = 'job ran: ' ] || fail "cw hermes: a name with !\` must run as it reads: $c"
 grep -rF '!`' "$HM/q" && fail "inline shell from a script name reached a skill"
+[ ! -e "$HM/nohome" ] || fail "a skill command fell back to ~/.cwtfigo: $(ls -A "$HM/nohome")"
 grep -rF '`sh ' "$HM/q" && fail "a command in a \`span\`: a backtick in its name would end it"
+# setsid -w where it runs (a fake one here): in every command, which still runs as it reads.
+mkdir "$HM/fs"; printf '#!/bin/sh\n[ "$1" = -w ] && shift; exec "$@"\n' > "$HM/fs/setsid"; chmod +x "$HM/fs/setsid"
+(PATH=$HM/fs:$PATH; hw "$HM/ns" >/dev/null 2>&1) && c=$(sed -n 's/^       //p' "$HM/ns/cwtfigo/cw-me-check/SKILL.md") &&
+  [ "$c" = "GIT_TERMINAL_PROMPT=0 CWTFIGO_HOME=$(qp "$(cd "$HM/rec" && pwd -P)") setsid -w sh $QCW run me check" ] && (PATH=$HM/fs:$PATH; he "$c" >/dev/null 2>&1) || fail "cw hermes: setsid -w where it runs: $c"
 # + @ % , : = are plain to every shell: a checkout path holding them stays unquoted.
 mkdir "$HM/v+1@x,y=z"; ln -s "$HM/a b/skill" "$HM/v+1@x,y=z/skill"; (CW="$HM/v+1@x,y=z/skill/scripts/cw"; hw "$HM/p" >/dev/null) || fail "cw hermes from a path with +@,="
-grep -qxF "       sh $(qp "$HM/v+1@x,y=z/skill/scripts/cw") run me check" "$HM/p/cwtfigo/cw-me-check/SKILL.md" || fail "cw hermes: + @ , = need no quotes: $(grep '^       ' "$HM/p/cwtfigo/cw-me-check/SKILL.md")"
+grep -qxF "       ${P}sh $(qp "$HM/v+1@x,y=z/skill/scripts/cw") run me check" "$HM/p/cwtfigo/cw-me-check/SKILL.md" || fail "cw hermes: + @ , = need no quotes: $(grep '^       ' "$HM/p/cwtfigo/cw-me-check/SKILL.md")"
 # A later # menu-args line replaces an earlier one, and so do the earlier one's left-out words.
 printf '#!/bin/sh\n# menu: twice\n# menu-args: --x | a\n# menu-args: b\necho\n' > "$HB/twice.sh"; CWTFIGO_HOME=$HM/rec sh "$CW" approve me twice >/dev/null || fail "cw hermes twice setup"
 out=$(hw "$HM/t" 2>&1 >/dev/null); grep -q 'unless they already said: b\.$' "$HM/t/cwtfigo/cw-me-twice/SKILL.md" && ! echo "$out" | grep -q 'twice.sh: left out' || fail "cw hermes: the last menu-args line only: $out"
@@ -930,6 +965,21 @@ for x in now new; do printf '#!/bin/sh\n# menu: photos %s\necho\n' $x > "$HB/bac
 CWTFIGO_HOME=$HM/rec sh "$CW" approve me backup-the-photo-library-now backup-the-photo-library-new >/dev/null || fail "cw hermes collision setup"
 out=$(hw "$HM/long" 2>&1 >/dev/null); [ -d "$HM/long/cwtfigo/cw-me-backup-the-photo-library-now" ] && [ -d "$HM/long/cwtfigo/cw-me-backup-the-photo-library-new" ] &&
   [ "$out" = 'cw: cw-me-backup-the-photo-library-new and cw-me-backup-the-photo-library-now share their first 32 characters: Discord shows only one' ] || fail "cw hermes: names alike in 32 characters: $out"
+# The headers in tests/menu-headers.txt, each a check.sh on a host of its own, read as header.rs' shared_fixture reads
+# them: the same label, menu-args words and --apply for the TUI and for Hermes.
+FX=$(mktemp -d); CWTFIGO_HOME=$FX/rec sh "$CW" name me >/dev/null 2>&1
+awk -v d="$FX" '/^@@ /{ n++; print substr($0, 4) > (d "/exp" n); next } n { print > (d "/f" n) }' "$(dirname "$CW")/../../../tests/menu-headers.txt"
+i=1; while [ -f "$FX/exp$i" ]; do
+  mkdir -p "$FX/rec/hosts/f$i"; echo '{ "os": "arch" }' > "$FX/rec/hosts/f$i/device.json"; mv "$FX/f$i" "$FX/rec/hosts/f$i/check.sh"
+  CWTFIGO_HOME=$FX/rec sh "$CW" approve "f$i" check >/dev/null || fail "menu-headers setup: case $i"; i=$((i + 1))
+done
+[ $i -gt 5 ] || fail "menu-headers.txt: too few cases read ($((i - 1)))"
+HOME=$FX XDG_DATA_HOME=$FX/share HERMES_HOME=$FX/hh PATH=$PYB:$PATH CWTFIGO_HOME=$FX/rec sh "$CW" hermes "$FX/out" >/dev/null 2>&1 || fail "menu-headers: cw hermes"
+i=1; while [ -f "$FX/exp$i" ]; do
+  f=$FX/out/cwtfigo/cw-f$i-check/SKILL.md; grep -q -- " run f$i check --apply" "$f" && y=yes || y=no
+  g="$(sed -n 's/^# //p' "$f" | head -1) @@ $(sed -n 's/.*which way, unless they already said: \(.*\)\.$/\1/p' "$f") @@ $y"
+  [ "$g" = "$(cat "$FX/exp$i")" ] || fail "menu-headers.txt case $i: cw hermes reads '$g', the fixture (and header.rs) '$(cat "$FX/exp$i")'"; i=$((i + 1))
+done
 # cw hermes --sync, the Hermes hook's: a pull, and a rebuild only if it brought something. Exit 0 rebuilt, 2 nothing new.
 S=$(mktemp -d); sw() { r=$1; shift; HOME=$S XDG_DATA_HOME=$S/share HERMES_HOME=$S/hh PATH=$PYB:$PATH CWTFIGO_HOME=$S/$r sh "$CW" "$@"; }
 SD=$S/share/cwtfigo/hermes; git init -q --bare "$S/r.git"
@@ -937,18 +987,29 @@ SD=$S/share/cwtfigo/hermes; git init -q --bare "$S/r.git"
 { sw a approve a check && sw a save one && sw b join "$S/r.git" && sw b hermes; } >/dev/null 2>&1 || fail "cw hermes --sync setup"
 # Nothing new: exit 2, the skills untouched.
 touch "$S/stamp"; out=$(sw b hermes --sync 2>&1); [ $? = 2 ] && [ -z "$out" ] && [ -z "$(find "$SD" -newer "$S/stamp")" ] && [ ! -e "$SD.lock" ] || fail "cw hermes --sync, nothing new: $out $(find "$SD" -newer "$S/stamp")"
+# A plugin update (its cw changed), nothing new in the record: rebuilt all the same, the skills are cw's text.
+mkdir -p "$S/plug/scripts"; cp "$CW" "$S/plug/scripts/cw"
+(CW=$S/plug/scripts/cw; sw b hermes >/dev/null 2>&1 || exit 1; sw b hermes --sync >/dev/null 2>&1; [ $? = 2 ] || exit 1
+ echo '# a plugin update' >> "$CW"; sw b hermes --sync >/dev/null 2>&1) || fail "cw hermes --sync after a plugin update must rebuild"
+sw b hermes >/dev/null 2>&1 || fail "cw hermes: back to this plugin's cw"
 # A visit approved a new script and saved: pulled, rebuilt, exit 0.
 printf '#!/bin/sh\n# menu: new one\necho new\n' > "$S/a/hosts/a/new.sh"; { sw a approve a new && sw a save two; } >/dev/null 2>&1 || fail "cw hermes --sync setup: a new script"
 out=$(sw b hermes --sync 2>&1); [ $? = 0 ] && [ -f "$SD/cwtfigo/cw-a-new/SKILL.md" ] && [ "$(git -C "$S/b" rev-parse HEAD)" = "$(git -C "$S/a" rev-parse HEAD)" ] || fail "cw hermes --sync after a new commit: $out"
 # Skills built from an older record (pulled by hand since, or a rebuild that failed after its pull): rebuilt.
 git -C "$S/b" reset -q --hard HEAD~1 && sw b hermes >/dev/null 2>&1 && [ ! -e "$SD/cwtfigo/cw-a-new" ] && git -C "$S/b" pull -q --ff-only || fail "cw hermes --sync setup: an older build"
 out=$(sw b hermes --sync 2>&1); [ $? = 0 ] && [ -f "$SD/cwtfigo/cw-a-new/SKILL.md" ] || fail "cw hermes --sync after a build from an older record: $out"
+# Rebuilt is exit 0 even if the hook couldn't be written (here a hook dir cw didn't make): --sync leaves the hook, the
+# one Hermes is running, so a rebuild never goes unannounced (no rescan, and every later sync "nothing new").
+printf '#!/bin/sh\n# menu: post\necho post\n' > "$S/a/hosts/a/post.sh"; { sw a approve a post && sw a save post; } >/dev/null 2>&1 || fail "cw hermes --sync setup: a post script"
+mkdir -p "$S/hx/hooks/cwtfigo"; echo keep > "$S/hx/hooks/cwtfigo/handler.py"
+out=$(HOME=$S XDG_DATA_HOME=$S/share HERMES_HOME=$S/hx PATH=$PYB:$PATH CWTFIGO_HOME=$S/b sh "$CW" hermes --sync 2>&1); [ $? = 0 ] && [ -f "$SD/cwtfigo/cw-a-post/SKILL.md" ] && [ "$(cat "$S/hx/hooks/cwtfigo/handler.py")" = keep ] || fail "cw hermes --sync: rebuilt is exit 0, the hook left to Hermes: $out"
 # Another sync on it: skipped (2), not queued; no pull, the lock left to its owner.
 printf '#!/bin/sh\n# menu: more\necho more\n' > "$S/a/hosts/a/more.sh"; { sw a approve a more && sw a save three; } >/dev/null 2>&1 || fail "cw hermes --sync setup: another script"
 mkdir "$SD.lock"; out=$(sw b hermes --sync 2>&1); [ $? = 2 ] && [ -d "$SD.lock" ] && [ ! -e "$SD/cwtfigo/cw-a-more" ] || fail "cw hermes --sync under a lock: $out"; rmdir "$SD.lock"
-# A remote that can't be reached: ssh never prompts (BatchMode), exit 1, nothing rebuilt.
-mkdir "$S/bin"; printf '#!/bin/sh\necho "$*" > %s/ssh.args; exit 255\n' "$S" > "$S/bin/ssh"; chmod +x "$S/bin/ssh"
-git -C "$S/b" remote set-url origin fake:r.git; out=$(PATH=$S/bin:$PATH sw b hermes --sync 2>&1); [ $? = 1 ] && grep -q 'BatchMode=yes' "$S/ssh.args" && [ ! -e "$SD/cwtfigo/cw-a-more" ] && [ ! -e "$SD.lock" ] || fail "cw hermes --sync, remote gone: $out"
+# A remote that can't be reached, through the owner's own core.sshCommand (cw sets no ssh of its own): exit 1, nothing
+# rebuilt. No prompt: the hook runs cw in a session of its own (no terminal for ssh to ask on), stdin /dev/null.
+mkdir "$S/bin"; printf '#!/bin/sh\necho "$*" > %s/ssh.args; exit 255\n' "$S" > "$S/bin/myssh"; chmod +x "$S/bin/myssh"
+git -C "$S/b" config core.sshCommand "$S/bin/myssh"; git -C "$S/b" remote set-url origin fake:r.git; out=$(sw b hermes --sync 2>&1); [ $? = 1 ] && grep -q 'fake' "$S/ssh.args" && [ ! -e "$SD/cwtfigo/cw-a-more" ] && [ ! -e "$SD.lock" ] || fail "cw hermes --sync, remote gone: $out"
 # The hook as Hermes runs it, its paths as cw wrote them: the commit the gone remote held back arrives, one reload.
 git -C "$S/b" remote set-url origin "$S/r.git"; mkdir -p "$S/stub/agent"; : > "$S/stub/agent/__init__.py"; printf 'n = []\ndef reload_skills():\n    n.append(1)\n' > "$S/stub/agent/skill_commands.py"
 hk() { HOME=$S HERMES_HOME=$S/hh PATH=$PYB:$PATH "$PYB/python3" -I -c 'import asyncio, importlib.util, sys

@@ -1,0 +1,42 @@
+Script headers both menus must read alike: the TUI (tui/src/header.rs, its shared_fixture test) and cw hermes (tests/cw.sh).
+Each case is a check.sh: a line "@@ <label> @@ <menu-args words, joined by " | "> @@ <takes --apply: yes|no>", then the script.
+A change to how either reads a header gets a case here.
+@@ 更新和清理 @@ guard | restore @@ yes
+#!/bin/sh
+# attic: routine upkeep.
+# menu: 更新和清理
+# menu-args: guard | restore
+# more
+APPLY=; [ "$1" = --apply ] && APPLY=1
+# menu: not header
+@@ check.sh (macOS): READ-ONLY. @@  @@ no
+#!/bin/sh
+#
+# check.sh (macOS): READ-ONLY.
+exec 2>/dev/null
+echo "re-run x.sh --apply"
+@@ check @@  @@ yes
+case $1 in --apply) a=1 ;; esac
+@@ 照片 @@ 照片 | 两 个 | a=b @@ no
+# photos
+# menu:   照片
+# menu-args: 照片 | --apply |  | 两 个 | -n | =x | a=b
+@@ twice @@ b @@ no
+## menu: twice
+  # menu-args: --x | a
+# menu-args: b
+@@ win thing @@  @@ yes
+# win
+# menu: win thing
+# --apply = do it
+if ($args -contains '--apply') {}
+@@ first @@  @@ no
+# first
+# x = --apply
+
+# menu: after a blank line
+echo "run it with --apply"
+@@ upkeep @@  @@ yes
+#!/bin/sh
+# upkeep
+[ "$2" = "--apply" ] || exit 0
