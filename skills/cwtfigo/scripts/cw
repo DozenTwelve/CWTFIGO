@@ -11,6 +11,7 @@
 #   cw join <ssh-alias>:<path>       share the record other operator machines keep there (any git URL or path)
 #   cw status                        welcome panel: what this is, which machines the record knows
 #   cw hermes [<dir>]                one Hermes skill per approved menu script (the TUI's), into <dir> (~/.local/share/cwtfigo/hermes)
+#   cw hermes --sync [<dir>]         pull the record; only if it changed, rebuild: exit 0 rebuilt, 2 nothing new (no remote, or another run busy)
 #   cw search [-n N] <words...>      what the record's own past cases (and a locally built archive of public bug threads, if any) say about these symptoms or error strings
 #   cw miss [--host <alias>] [--upstream <owner/repo|url>] <words...>   log a search whose hits didn't fit; where the answer was
 #   cw tui                           install or update the TUI (~/.local/bin/cwtfigo) to this plugin's version, Mac and Linux
@@ -554,7 +555,10 @@ hermes)
   # The TUI's menu (tui/src/main.rs items, header.rs parse) as Hermes skills, for an always-on box where Hermes runs
   # them without Claude Code (unattended/README.md): check, maintain and each script with a # menu: line, approved at
   # its current hash. Rebuilt whole each time, so a script removed or changed since approval loses its skill. Reads the
-  # record only: no pull, no ssh, no approval.
+  # record only: no pull (but --sync's), no ssh, no approval.
+  # --sync, from the Hermes hook before each message: a pull, and a rebuild only if it brought something. Exit 0 rebuilt,
+  # 2 nothing new; never a prompt (no terminal there), and a dead remote gives up within seconds.
+  sync=; [ "$2" = --sync ] && { sync=1; shift; remote || exit 2; }
   D=${2:-${XDG_DATA_HOME:-$HOME/.local/share}/cwtfigo/hermes}
   # No trailing /: mktemp -d "$D.XXXXXX" would land inside D, and the swap below would fail every run.
   D=${D%"${D##*[!/]}"}; [ -n "$D" ] || die "cw hermes needs a dir of its own, not /"
@@ -564,14 +568,21 @@ hermes)
   case $D in /*) G=$D ;; *) G=$PWD/$D ;; esac
   # Absolute, symlinks resolved: Hermes reads the dir from its config.yaml, not from where cw ran.
   p=$(CDPATH= cd -- "$(dirname "$D")" && pwd -P) || die "cannot write next to $D"; D=${p%/}/${D##*/}
-  # One run at a time (cron and a hand-run can overlap): the swap below is then never raced.
-  # A lock older than 10 min is a killed run's (cron's SIGKILL): a run takes seconds.
+  # One run at a time (two messages' syncs and a hand-run can overlap): the swap below is then never raced.
+  # A lock older than 10 min is a killed run's (a SIGKILL): a run takes seconds.
   [ -z "$(find "$D.lock" -maxdepth 0 -mmin +10 2>/dev/null)" ] || rmdir "$D.lock" 2>/dev/null
   if ! mkdir "$D.lock" 2>/dev/null; then
+    # Another message's sync is on it: skipped, not queued.
+    [ -n "$sync" ] && [ -d "$D.lock" ] && exit 2
     [ -d "$D.lock" ] && die "another cw hermes is running into $D (or one was killed in the last 10 min: rmdir $D.lock)"
     die "cannot create the lock $D.lock"
   fi
   T=; trap 'rmdir "$D.lock"; [ -z "$T" ] || rm -rf "$T" "$T.old"' EXIT; trap 'exit 1' INT TERM HUP
+  if [ -n "$sync" ]; then
+    export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh} -o BatchMode=yes -o ConnectTimeout=5" GIT_TERMINAL_PROMPT=0
+    h=$(git_rec rev-parse -q --verify HEAD); pull </dev/null || die "nothing rebuilt"
+    [ "$(git_rec rev-parse -q --verify HEAD)" != "$h" ] || exit 2
+  fi
   [ ! -d "$D" ] || [ -e "$D/.cwtfigo-generated" ] || [ -z "$(ls -A "$D")" ] || die "$D has files cw hermes didn't make: nothing written. Give another dir: cw hermes <dir>"
   T=$(mktemp -d "$D.XXXXXX") && touch "$T/.cwtfigo-generated" || die "cannot write next to $D"
   for d in "$REC"/hosts/*/; do

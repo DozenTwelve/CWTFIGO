@@ -893,6 +893,24 @@ for x in now new; do printf '#!/bin/sh\n# menu: photos %s\necho\n' $x > "$HB/bac
 CWTFIGO_HOME=$HM/rec sh "$CW" approve me backup-the-photo-library-now backup-the-photo-library-new >/dev/null || fail "cw hermes collision setup"
 out=$(hw "$HM/long" 2>&1 >/dev/null); [ -d "$HM/long/cwtfigo/cw-me-backup-the-photo-library-now" ] && [ -d "$HM/long/cwtfigo/cw-me-backup-the-photo-library-new" ] &&
   [ "$out" = 'cw: cw-me-backup-the-photo-library-new and cw-me-backup-the-photo-library-now share their first 32 characters: Discord shows only one' ] || fail "cw hermes: names alike in 32 characters: $out"
+# cw hermes --sync, the Hermes hook's: a pull, and a rebuild only if it brought something. Exit 0 rebuilt, 2 nothing new.
+S=$(mktemp -d); sw() { r=$1; shift; HOME=$S XDG_DATA_HOME=$S/share HERMES_HOME=$S/hh CWTFIGO_HOME=$S/$r sh "$CW" "$@"; }
+SD=$S/share/cwtfigo/hermes; git init -q --bare "$S/r.git"
+{ sw a join "$S/r.git" && sw a name a; } >/dev/null 2>&1; mkdir -p "$S/a/hosts/a"; echo '{ "os": "arch" }' > "$S/a/hosts/a/device.json"; printf '#!/bin/sh\n# check: health.\necho ok\n' > "$S/a/hosts/a/check.sh"
+{ sw a approve a check && sw a save one && sw b join "$S/r.git" && sw b hermes; } >/dev/null 2>&1 || fail "cw hermes --sync setup"
+# Nothing new: exit 2, the skills untouched.
+touch "$S/stamp"; out=$(sw b hermes --sync 2>&1); [ $? = 2 ] && [ -z "$out" ] && [ -z "$(find "$SD" -newer "$S/stamp")" ] && [ ! -e "$SD.lock" ] || fail "cw hermes --sync, nothing new: $out $(find "$SD" -newer "$S/stamp")"
+# A visit approved a new script and saved: pulled, rebuilt, exit 0.
+printf '#!/bin/sh\n# menu: new one\necho new\n' > "$S/a/hosts/a/new.sh"; { sw a approve a new && sw a save two; } >/dev/null 2>&1 || fail "cw hermes --sync setup: a new script"
+out=$(sw b hermes --sync 2>&1); [ $? = 0 ] && [ -f "$SD/cwtfigo/cw-a-new/SKILL.md" ] && [ "$(git -C "$S/b" rev-parse HEAD)" = "$(git -C "$S/a" rev-parse HEAD)" ] || fail "cw hermes --sync after a new commit: $out"
+# Another sync on it: skipped (2), not queued; no pull, the lock left to its owner.
+printf '#!/bin/sh\n# menu: more\necho more\n' > "$S/a/hosts/a/more.sh"; { sw a approve a more && sw a save three; } >/dev/null 2>&1 || fail "cw hermes --sync setup: another script"
+mkdir "$SD.lock"; out=$(sw b hermes --sync 2>&1); [ $? = 2 ] && [ -d "$SD.lock" ] && [ ! -e "$SD/cwtfigo/cw-a-more" ] || fail "cw hermes --sync under a lock: $out"; rmdir "$SD.lock"
+# A remote that can't be reached: ssh never prompts (BatchMode), exit 1, nothing rebuilt.
+mkdir "$S/bin"; printf '#!/bin/sh\necho "$*" > %s/ssh.args; exit 255\n' "$S" > "$S/bin/ssh"; chmod +x "$S/bin/ssh"
+git -C "$S/b" remote set-url origin fake:r.git; out=$(PATH=$S/bin:$PATH sw b hermes --sync 2>&1); [ $? = 1 ] && grep -q 'BatchMode=yes' "$S/ssh.args" && [ ! -e "$SD/cwtfigo/cw-a-more" ] && [ ! -e "$SD.lock" ] || fail "cw hermes --sync, remote gone: $out"
+# No remote: nothing to sync, nothing written.
+out=$(sw n hermes --sync "$S/nr" 2>&1); [ $? = 2 ] && [ ! -e "$S/nr" ] && [ ! -e "$S/hh" ] || fail "cw hermes --sync with no remote: $out"
 [ -z "$(ls -A "$HM/decoy")" ] || fail "cw hermes tests wrote outside their temp dirs: $(ls -A "$HM/decoy")"
 unset XDG_DATA_HOME HERMES_HOME; [ -z "$OXS" ] || export XDG_DATA_HOME="$OXV"; [ -z "$OHS" ] || export HERMES_HOME="$OHV"
 [ "${XDG_DATA_HOME+1}${XDG_DATA_HOME-} ${HERMES_HOME+1}${HERMES_HOME-}" = "$OXS$OXV $OHS$OHV" ] || fail "cw hermes tests must give back XDG_DATA_HOME and HERMES_HOME as they were"
