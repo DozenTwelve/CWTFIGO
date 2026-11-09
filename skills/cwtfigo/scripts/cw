@@ -591,12 +591,17 @@ hermes)
           if (index(x, "= --apply") || index(x, "--apply)") || index(x, "-contains --apply")) ap = 1; next }
         h && l !~ /^#!/ { c = l; sub(/^#+/, "", c); t = trim(c)
           if (t ~ /^menu-args:/) { g = ""; nw = 0; k = split(substr(t, 11), p, "|")
-            for (i = 1; i <= k; i++) if ((y = trim(p[i])) != "") { g = g (g == "" ? "" : " | ") y; wd[++nw] = y } }
+            # Plain words only, as an arg: none that is an option (--apply on the dry run), starts with = (zsh expands
+            # it) or holds a backtick. Any other is left out, with a warning.
+            for (i = 1; i <= k; i++) if ((y = trim(p[i])) != "") {
+              if (y ~ /^[A-Za-z0-9._+@%,:\/=-]+$/ && y !~ /^[-=]/) { g = g (g == "" ? "" : " | ") y; wd[++nw] = y }
+              else rf[++nr] = y } }
           else if (t ~ /^menu:/) { m = 1; lb = trim(substr(t, 6)) }
           # The header as the owner and earlier visits wrote it.
           else { if (ab == "" && t != "") ab = t; sub(/^ /, "", c); if (w != "" || t != "") w = w c "\n" } }
         END { if (!m && ENVIRON["S"] != "check" && ENVIRON["S"] != "maintain") exit
           a = ENVIRON["A"]; sc = ENVIRON["S"]; f = a "/" sc "." ENVIRON["E"]; if (!m) lb = (ab != "" ? ab : sc)
+          for (i = 1; i <= nr; i++) print "cw: " f ": left out the menu-args word " rf[i] ": plain words only (letters, digits, . _ + @ % , : / = -), not starting with - or =" | "cat 1>&2"
           sub(/\n+$/, "", w); r = "sh " sq(ENVIRON["CW"]) " run " sq(a) " " sq(sc)
           # Past the command, every field the owner wrote (label, header, args, names, paths) as prose.
           lb = nb(lb); w = nb(w); g = nb(g); a = nb(a); sc = nb(sc); f = nb(f); rec = nb(ENVIRON["REC"])
