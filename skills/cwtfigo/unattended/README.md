@@ -33,3 +33,22 @@ systemctl --user list-timers cwtfigo-unattended.timer
 ```
 
 Run by hand from a terminal, a local script's sudo can still prompt on that terminal; under systemd there is none.
+
+## Hermes on the always-on box
+
+[Hermes](https://github.com/NousResearch/hermes-agent) on the same box can run the owner's approved menu scripts from chat (Discord), without Claude Code. `cw hermes` writes one Hermes skill per script the TUI would show (check, maintain, `# menu:` scripts) that is approved as it is now, into `~/.local/share/cwtfigo/hermes/cwtfigo/`, and rebuilds that dir whole each time: a script approved in a later visit gets a skill, one removed or changed since loses it.
+
+Record, plugin link and SSH as above (on the box: `sh ~/.local/share/cwtfigo/plugin/skills/cwtfigo/scripts/cw join <ssh-alias>:<path>`, then `cw name <the box's own alias>`), then:
+
+```sh
+CW=~/.local/share/cwtfigo/plugin/skills/cwtfigo/scripts/cw
+sh $CW hermes                                   # first build; says what to add if Hermes doesn't read the dir yet
+# ~/.hermes/config.yaml:  skills:  external_dirs: [~/.local/share/cwtfigo/hermes]
+hermes gateway restart                          # once
+crontab -e                                      # rebuild from the latest record every 30 min:
+*/30 * * * * GIT_SSH_COMMAND='ssh -o BatchMode=yes' git -C ~/.cwtfigo pull -q --ff-only; sh ~/.local/share/cwtfigo/plugin/skills/cwtfigo/scripts/cw hermes >/dev/null
+```
+
+In Discord, `/reload-skills` picks up a rebuild at once; each skill is `/skill cw-<machine>-<script>`.
+
+Trust: `cw approve` is gated only by Claude Code's hook, so here the boundary is who may talk to Hermes plus the rules in each generated skill (never approve, never `--apply` without an explicit yes, never run anything else). The hash gate still holds: Hermes can run only scripts the owner approved, as they were approved.

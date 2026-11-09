@@ -76,6 +76,8 @@ echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
 
 When the plugin updates, the menu offers `u` to follow it. More in [`tui/README.md`](tui/README.md).
 
+The same approved scripts can also run from a chat app: on a computer that's always on and runs the Hermes chat bot, `cw hermes` turns each one into a command you can send it from Discord. Setup in [`skills/cwtfigo/unattended/README.md`](skills/cwtfigo/unattended/README.md#hermes-on-the-always-on-box).
+
 ## Privacy
 
 - The notes live in `~/.cwtfigo`, a git folder on your computer. Delete it and they're gone. Several computers can share them through a private git remote you own; never a public one.
