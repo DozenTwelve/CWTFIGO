@@ -789,6 +789,7 @@ echo "$out" | grep -Eq 'cw |ask the human|operator|hint' && fail "status should 
 # whole each run. Unapproved or changed: none. Never ssh, never write the record, never wipe a dir it didn't make.
 # Every dir it reads or writes under $HM: an exported XDG_DATA_HOME or HERMES_HOME (the developer's own) is a decoy here.
 HM=$(mktemp -d); hw() { HOME=$HM XDG_DATA_HOME=$HM/.local/share HERMES_HOME=$HM/hermes-home PATH=$HM/bin:$PATH CWTFIGO_HOME=$HM/rec sh "$CW" hermes "$@"; }
+OXS=${XDG_DATA_HOME+1} OXV=${XDG_DATA_HOME-} OHS=${HERMES_HOME+1} OHV=${HERMES_HOME-}  # the developer's, back after
 mkdir "$HM/decoy"; export XDG_DATA_HOME=$HM/decoy HERMES_HOME=$HM/decoy
 mkdir "$HM/bin"; printf '#!/bin/sh\ntouch %s/ssh.ran\n' "$HM" > "$HM/bin/ssh"; chmod +x "$HM/bin/ssh"
 CWTFIGO_HOME=$HM/rec sh "$CW" name me >/dev/null; HB=$HM/rec/hosts/me; mkdir -p "$HB" "$HM/rec/hosts/Far_Box"; echo '{ "os": "arch" }' > "$HB/device.json"
@@ -868,7 +869,8 @@ CWTFIGO_HOME=$HM/rec sh "$CW" approve me backup-the-photo-library-now backup-the
 out=$(hw "$HM/long" 2>&1 >/dev/null); [ -d "$HM/long/cwtfigo/cw-me-backup-the-photo-library-now" ] && [ -d "$HM/long/cwtfigo/cw-me-backup-the-photo-library-new" ] &&
   [ "$out" = 'cw: cw-me-backup-the-photo-library-new and cw-me-backup-the-photo-library-now share their first 32 characters: Discord shows only one' ] || fail "cw hermes: names alike in 32 characters: $out"
 [ -z "$(ls -A "$HM/decoy")" ] || fail "cw hermes tests wrote outside their temp dirs: $(ls -A "$HM/decoy")"
-unset XDG_DATA_HOME HERMES_HOME
+unset XDG_DATA_HOME HERMES_HOME; [ -z "$OXS" ] || export XDG_DATA_HOME="$OXV"; [ -z "$OHS" ] || export HERMES_HOME="$OHV"
+[ "${XDG_DATA_HOME+1}${XDG_DATA_HOME-} ${HERMES_HOME+1}${HERMES_HOME-}" = "$OXS$OXV $OHS$OHV" ] || fail "cw hermes tests must give back XDG_DATA_HOME and HERMES_HOME as they were"
 # Unattended: approved scripts only, model and message only when something is found, never under YOLO.
 # Git Bash rewrites a <rev>:<path> argument (origin/main:.gitignore becomes origin\main;.gitignore): cw doesn't pass one.
 grep -nE 'git(_rec)? [^#]*[A-Za-z0-9_}"]:[A-Za-z0-9_.$"]' "$CW" "$(dirname "$CW")/unattended.sh" && fail "<rev>:<path> to git breaks on Git Bash: read by object id (ls-tree, cat-file) or checkout"
