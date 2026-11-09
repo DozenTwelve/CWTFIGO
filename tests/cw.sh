@@ -784,6 +784,36 @@ done
 # The panel is the human's: what the model should do goes to stderr as hint: lines.
 out=$(CWTFIGO_HOME=$N sh "$CW" status 2>/dev/null)
 echo "$out" | grep -Eq 'cw |ask the human|operator|hint' && fail "status should hold nothing for the model on a fresh record: $out"
+# cw hermes: one Hermes skill per approved menu script (the TUI's selection: check, maintain, # menu: lines), rebuilt
+# whole each run. Unapproved or changed: none. Never ssh, never write the record, never wipe a dir it didn't make.
+HM=$(mktemp -d); hw() { HOME=$HM PATH=$HM/bin:$PATH CWTFIGO_HOME=$HM/rec sh "$CW" hermes "$@"; }
+mkdir "$HM/bin"; printf '#!/bin/sh\ntouch %s/ssh.ran\n' "$HM" > "$HM/bin/ssh"; chmod +x "$HM/bin/ssh"
+CWTFIGO_HOME=$HM/rec sh "$CW" name me >/dev/null; HB=$HM/rec/hosts/me; mkdir -p "$HB" "$HM/rec/hosts/Far_Box"; echo '{ "os": "arch" }' > "$HB/device.json"
+printf '#!/bin/sh\n# check: health.\necho ok\n' > "$HB/check.sh"; printf '#!/bin/sh\n# maintain: upkeep.\n[ "$1" = --apply ] && echo do\n' > "$HB/maintain.sh"
+printf '\357\273\277#!/bin/sh\n# attic: restic backups.\n# menu: 备份 \n# menu-args: guard |  | restore\n# !`echo pwn`\n\necho "$1 $2"\n' > "$HB/attic.sh"
+printf '#!/bin/sh\n# once\necho "x --apply"\n' > "$HB/once.sh"; printf '#!/bin/sh\n# new\n# menu: new one\necho new\n' > "$HB/new.sh"
+echo '{ "os": "windows" }' > "$HM/rec/hosts/Far_Box/device.json"; printf '# win\r\n# menu: win thing\r\nif ($args -contains '"'"'--apply'"'"') {}\r\n' > "$HM/rec/hosts/Far_Box/fix.ps1"
+CWTFIGO_HOME=$HM/rec sh "$CW" approve me check maintain attic once >/dev/null && CWTFIGO_HOME=$HM/rec sh "$CW" approve Far_Box fix >/dev/null || fail "cw hermes setup"
+echo 'echo changed' >> "$HB/maintain.sh"
+ht() { find "$HM/rec" -type f -exec cksum {} + | sort; }; ht > "$HM/before"
+out=$(hw 2>&1) || fail "cw hermes: $out"
+HS=$HM/.local/share/cwtfigo/hermes; HC=$HS/cwtfigo
+[ "$(ls "$HC" | tr '\n' ' ')" = 'cw-far-box-fix cw-me-attic cw-me-check ' ] || fail "cw hermes: approved menu scripts only, names sanitized: $(ls "$HC") $out"
+echo "$out" | grep -qx 'cw-me-attic: me/attic.sh' && echo "$out" | grep -q 'skills in ~/.local/share/cwtfigo/hermes' && echo "$out" | grep -q 'skills.external_dirs' || fail "cw hermes output: $out"
+[ ! -e "$HM/ssh.ran" ] && [ "$(ht)" = "$(cat "$HM/before")" ] || fail "cw hermes must not ssh or write the record"
+A=$HC/cw-me-attic/SKILL.md
+grep -qx 'name: cw-me-attic' "$A" && grep -q "^description: '备份 (attic on me" "$A" && grep -qx '# 备份' "$A" || fail "attic skill: name, label: $(cat "$A")"
+grep -q 'which way.*: guard | restore\.' "$A" && grep -qF "\`sh $CW run me attic <choice>\`" "$A" || fail "attic skill: its args, dry run with cw's absolute path: $(cat "$A")"
+grep -q -- '--apply' "$A" && fail "attic doesn't take --apply: $(cat "$A")"
+grep -qx 'attic: restic backups.' "$A" && ! grep -q 'menu:' "$A" && ! grep -qF '!`' "$A" || fail "attic skill: its header, no menu lines, no inline shell: $(cat "$A")"
+F=$HC/cw-far-box-fix/SKILL.md
+grep -qF "\`sh $CW run Far_Box fix --apply\`" "$F" && grep -q 'explicit yes' "$F" && grep -q 'from Far_Box/fix.ps1' "$F" || fail "fix skill: --apply after an explicit yes: $(cat "$F")"
+grep -q 'Never run `cw approve`' "$F" && grep -q 'NOT APPROVED' "$F" || fail "every skill carries the rules: $(cat "$F")"
+# Rerun: a script gone, a new one approved. The dir is rebuilt; a dir cw hermes didn't make is never wiped.
+rm "$HB/attic.sh"; CWTFIGO_HOME=$HM/rec sh "$CW" approve me new >/dev/null; hw >/dev/null || fail "cw hermes rerun"
+[ "$(ls "$HC" | tr '\n' ' ')" = 'cw-far-box-fix cw-me-check cw-me-new ' ] && [ -z "$(ls -d "$HS".* 2>/dev/null)" ] || fail "cw hermes rerun: $(ls "$HC") $(ls -d "$HS".* 2>/dev/null)"
+mkdir "$HM/mine"; echo keep > "$HM/mine/x"; out=$(hw "$HM/mine" 2>&1) && fail "cw hermes into a dir it didn't make should fail"
+[ "$(cat "$HM/mine/x")" = keep ] && [ "$(ls -A "$HM/mine")" = x ] && echo "$out" | grep -q "didn't make" || fail "cw hermes must leave a foreign dir alone: $out"
 # Unattended: approved scripts only, model and message only when something is found, never under YOLO.
 # Git Bash rewrites a <rev>:<path> argument (origin/main:.gitignore becomes origin\main;.gitignore): cw doesn't pass one.
 grep -nE 'git(_rec)? [^#]*[A-Za-z0-9_}"]:[A-Za-z0-9_.$"]' "$CW" "$(dirname "$CW")/unattended.sh" && fail "<rev>:<path> to git breaks on Git Bash: read by object id (ls-tree, cat-file) or checkout"
