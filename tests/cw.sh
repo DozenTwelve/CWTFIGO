@@ -784,6 +784,7 @@ done
 # The panel is the human's: what the model should do goes to stderr as hint: lines.
 out=$(CWTFIGO_HOME=$N sh "$CW" status 2>/dev/null)
 echo "$out" | grep -Eq 'cw |ask the human|operator|hint' && fail "status should hold nothing for the model on a fresh record: $out"
+# ls in a comparison: LC_ALL=C, bytes order. en_US.UTF-8 ignores dots and hyphens (cwtfigo before .cwtfigo-generated).
 # cw hermes: one Hermes skill per approved menu script (the TUI's selection: check, maintain, # menu: lines), rebuilt
 # whole each run. Unapproved or changed: none. Never ssh, never write the record, never wipe a dir it didn't make.
 # Every dir it reads or writes under $HM: an exported XDG_DATA_HOME or HERMES_HOME (the developer's own) is a decoy here.
@@ -800,7 +801,7 @@ echo 'echo changed' >> "$HB/maintain.sh"
 ht() { find "$HM/rec" -type f -exec cksum {} + | sort; }; ht > "$HM/before"
 out=$(hw 2>&1) || fail "cw hermes: $out"
 HS=$HM/.local/share/cwtfigo/hermes; HC=$HS/cwtfigo
-[ "$(ls "$HC" | tr '\n' ' ')" = 'cw-far-box-fix cw-me-attic cw-me-check ' ] || fail "cw hermes: approved menu scripts only, names sanitized: $(ls "$HC") $out"
+[ "$(LC_ALL=C ls "$HC" | tr '\n' ' ')" = 'cw-far-box-fix cw-me-attic cw-me-check ' ] || fail "cw hermes: approved menu scripts only, names sanitized: $(ls "$HC") $out"
 echo "$out" | grep -qx 'cw-me-attic: me/attic.sh' && echo "$out" | grep -q 'skills in ~/.local/share/cwtfigo/hermes' && echo "$out" | grep -q 'skills.external_dirs' || fail "cw hermes output: $out"
 [ ! -e "$HM/ssh.ran" ] && [ "$(ht)" = "$(cat "$HM/before")" ] || fail "cw hermes must not ssh or write the record"
 # The hint names the config.yaml it read (HERMES_HOME's); a commented-out line lists nothing.
@@ -825,13 +826,13 @@ grep -qF "\`sh $CW run Far_Box fix --apply\`" "$F" && grep -q 'explicit yes' "$F
 grep -q 'Never run `cw approve`' "$F" && grep -q 'NOT APPROVED' "$F" || fail "every skill carries the rules: $(cat "$F")"
 # Rerun: a script gone, a new one approved. The dir is rebuilt; a dir cw hermes didn't make is never wiped.
 rm "$HB/attic.sh"; CWTFIGO_HOME=$HM/rec sh "$CW" approve me new >/dev/null; hw >/dev/null || fail "cw hermes rerun"
-[ "$(ls "$HC" | tr '\n' ' ')" = 'cw-far-box-fix cw-me-check cw-me-new ' ] && [ -z "$(ls -d "$HS".* 2>/dev/null)" ] || fail "cw hermes rerun: $(ls "$HC") $(ls -d "$HS".* 2>/dev/null)"
+[ "$(LC_ALL=C ls "$HC" | tr '\n' ' ')" = 'cw-far-box-fix cw-me-check cw-me-new ' ] && [ -z "$(ls -d "$HS".* 2>/dev/null)" ] || fail "cw hermes rerun: $(ls "$HC") $(ls -d "$HS".* 2>/dev/null)"
 # The new dir can't go in (a fake mv fails its second call): the old skills stay where Hermes reads them.
 mkdir "$HM/mvbin"; printf '#!/bin/sh\nif [ -e "%s/mv.1" ] && [ ! -e "%s/mv.2" ]; then : > "%s/mv.2"; exit 1; fi\n: > "%s/mv.1"; exec %s "$@"\n' "$HM" "$HM" "$HM" "$HM" "$(command -v mv)" > "$HM/mvbin/mv"; chmod +x "$HM/mvbin/mv"
 out=$(PATH=$HM/mvbin:$PATH hw 2>&1) && fail "cw hermes with a failing mv should fail"
-[ -e "$HM/mv.2" ] && [ "$(ls "$HC" | tr '\n' ' ')" = 'cw-far-box-fix cw-me-check cw-me-new ' ] && [ -z "$(ls -d "$HS".* 2>/dev/null)" ] || fail "cw hermes: a failed swap must keep the old skills: $(ls "$HC") $out"
+[ -e "$HM/mv.2" ] && [ "$(LC_ALL=C ls "$HC" | tr '\n' ' ')" = 'cw-far-box-fix cw-me-check cw-me-new ' ] && [ -z "$(ls -d "$HS".* 2>/dev/null)" ] || fail "cw hermes: a failed swap must keep the old skills: $(ls "$HC") $out"
 # A dir given with a trailing /: the same dir, every run. / itself: never.
-hw "$HM/out/" >/dev/null && hw "$HM/out//" >/dev/null && [ -f "$HM/out/cwtfigo/cw-me-check/SKILL.md" ] && [ "$(ls -A "$HM/out" | tr '\n' ' ')" = '.cwtfigo-generated cwtfigo ' ] && [ -z "$(ls -d "$HM"/out.* 2>/dev/null)" ] || fail "cw hermes <dir>/: $(ls -AR "$HM/out")"
+hw "$HM/out/" >/dev/null && hw "$HM/out//" >/dev/null && [ -f "$HM/out/cwtfigo/cw-me-check/SKILL.md" ] && [ "$(LC_ALL=C ls -A "$HM/out" | tr '\n' ' ')" = '.cwtfigo-generated cwtfigo ' ] && [ -z "$(ls -d "$HM"/out.* 2>/dev/null)" ] || fail "cw hermes <dir>/: $(ls -AR "$HM/out")"
 out=$(hw / 2>&1) && fail "cw hermes / should fail"; echo "$out" | grep -q 'not /' || fail "cw hermes /: $out"
 mkdir "$HM/mine"; echo keep > "$HM/mine/x"; out=$(hw "$HM/mine" 2>&1) && fail "cw hermes into a dir it didn't make should fail"
 [ "$(cat "$HM/mine/x")" = keep ] && [ "$(ls -A "$HM/mine")" = x ] && echo "$out" | grep -q "didn't make" || fail "cw hermes must leave a foreign dir alone: $out"
