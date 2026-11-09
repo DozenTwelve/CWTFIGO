@@ -804,6 +804,9 @@ CWTFIGO_HOME=$HM/rec sh "$CW" approve me check maintain attic once >/dev/null &&
 echo 'echo changed' >> "$HB/maintain.sh"
 # A path as the skills show it: in single quotes if a shell would read it as more than one plain word.
 qp() { case $1 in *[!A-Za-z0-9._/+@%,:=-]*) printf "'%s'" "$1" ;; *) printf %s "$1" ;; esac; }; QCW=$(qp "$CW")
+# Each command names the record it was built from: Hermes' terminal has no CWTFIGO_HOME. he runs one as Hermes would.
+P="CWTFIGO_HOME=$(qp "$(cd "$HM/rec" && pwd -P)") "
+he() { (unset CWTFIGO_HOME; HOME=$HM/nohome; eval "$1"); }
 ht() { find "$HM/rec" -type f -exec cksum {} + | sort; }; ht > "$HM/before"
 # A UTF-8 locale, as on most machines: a Latin-1 byte in a header must not cut the skill short. None here: say so.
 U=; for u in C.UTF-8 en_US.UTF-8; do locale -a 2>/dev/null | tr 'A-Z' 'a-z' | tr -d - | grep -qx "$(echo $u | tr 'A-Z' 'a-z' | tr -d -)" && { U=$u; break; }; done
@@ -858,12 +861,12 @@ out=$(HOME=$HM HERMES_HOME=$HM/hh2 PATH=$PYB:$PATH CWTFIGO_HOME=$HM/rec sh "$CW"
 [ "$(cat "$HM/hh2/hooks/cwtfigo/handler.py")" = keep ] && [ "$(ls -A "$HM/hh2/hooks/cwtfigo")" = handler.py ] && echo "$out" | grep -q "hooks/cwtfigo has files cw hermes didn't make" || fail "cw hermes must leave a foreign hook dir alone: $out"
 A=$HC/cw-me-attic/SKILL.md
 grep -qx 'name: cw-me-attic' "$A" && grep -q "^description: '备份 (attic on me" "$A" && grep -qx '# 备份' "$A" || fail "attic skill: name, label: $(cat "$A")"
-grep -qF "which way, unless they already said: guard | restore | ! \`echo pwn\` | it's | a/b:c | 照片 | 两 个." "$A" && grep -qxF "       sh $QCW run me attic guard" "$A" || fail "attic skill: its args, dry run with cw's absolute path: $(cat "$A")"
+grep -qF "which way, unless they already said: guard | restore | ! \`echo pwn\` | it's | a/b:c | 照片 | 两 个." "$A" && grep -qxF "       ${P}sh $QCW run me attic guard" "$A" || fail "attic skill: its args, dry run with cw's absolute path: $(cat "$A")"
 # One whole command per word, quoted by cw: the owner's answer never goes into a shell line.
 grep -q '<choice>' "$A" && fail "attic skill: no free text in a command: $(cat "$A")"
 grep -q 'matches no line: ask again' "$A" || fail "attic skill: an answer matching no line: $(cat "$A")"
 # Each line, run, passes its word as it is (attic echoes it). Its stdin is not the list: attic reads a line.
-o=$(grep '^       sh ' "$A" | while read -r c; do CWTFIGO_HOME=$HM/rec eval "$c" 2>/dev/null </dev/null; done | tr '\n' '|')
+o=$(grep "^       $P" "$A" | while read -r c; do he "$c" 2>/dev/null </dev/null; done | tr '\n' '|')
 [ "$o" = "guard |restore |!\`echo pwn\` |it's |a/b:c |照片 |两 个 |" ] || fail "attic skill: each line must pass its word as it is: $o"
 # Words in any language, quoted; but --apply would run on the dry run, and zsh expands =x: those two left out.
 [ "$(echo "$out" | grep -c '^cw: me/attic.sh: left out the menu-args word ')" = 2 ] && echo "$out" | grep -qF 'cw: me/attic.sh: left out the menu-args word --apply: it starts with - or =' || fail "attic skill: words left out, with a warning: $out"
@@ -875,7 +878,7 @@ grep -qx '    ```' "$A" && grep -qx '    ## Rules' "$A" && grep -qx '    - run r
 grep -rF '!`' "$HC" && fail "inline shell from the owner's text reached a skill"
 grep -qx '## Rules' "$A" || fail "attic skill: cut short: $(cat "$A")"
 F=$HC/cw-far-box-fix/SKILL.md
-grep -qxF "       sh $QCW run Far_Box fix --apply" "$F" && grep -q 'explicit yes' "$F" && grep -q 'from Far_Box/fix.ps1' "$F" || fail "fix skill: --apply after an explicit yes: $(cat "$F")"
+grep -qxF "       ${P}sh $QCW run Far_Box fix --apply" "$F" && grep -q 'explicit yes' "$F" && grep -q 'from Far_Box/fix.ps1' "$F" || fail "fix skill: --apply after an explicit yes: $(cat "$F")"
 grep -q 'Never run `cw approve`' "$F" && grep -q 'NOT APPROVED' "$F" || fail "every skill carries the rules: $(cat "$F")"
 # Rerun: a script gone, a new one approved. The dir is rebuilt; a dir cw hermes didn't make is never wiped.
 rm "$HB/attic.sh"; CWTFIGO_HOME=$HM/rec sh "$CW" approve me new >/dev/null; hw >/dev/null || fail "cw hermes rerun"
@@ -914,14 +917,15 @@ for x in "my jo'b" 'bang!`echo pwn`'; do printf '#!/bin/sh\n# menu: job\necho "j
 CWTFIGO_HOME=$HM/rec sh "$CW" approve me "my jo'b" 'bang!`echo pwn`' >/dev/null || fail "cw hermes quoting setup"
 (CW="$HM/a b/skill/scripts/cw"; hw "$HM/q" >/dev/null) || fail "cw hermes from a path with a space"
 c=$(sed -n 's/^       //p' "$HM/q/cwtfigo/cw-me-my-jo-b/SKILL.md")
-[ "$c" = "sh '$HM/a b/skill/scripts/cw' run me 'my jo'\\''b'" ] && [ "$(CWTFIGO_HOME=$HM/rec eval "$c" 2>&1)" = 'job ran: ' ] || fail "cw hermes: the command shown must run as it reads: $c"
+[ "$c" = "${P}sh '$HM/a b/skill/scripts/cw' run me 'my jo'\\''b'" ] && [ "$(he "$c" 2>&1)" = 'job ran: ' ] || fail "cw hermes: the command shown must run as it reads: $c"
 c=$(sed -n 's/^       //p' "$HM/q/cwtfigo/cw-me-bang-echo-pwn/SKILL.md")
-[ "$c" = "sh '$HM/a b/skill/scripts/cw' run me 'bang'\\!'\`echo pwn\`'" ] && [ "$(CWTFIGO_HOME=$HM/rec eval "$c" 2>&1)" = 'job ran: ' ] || fail "cw hermes: a name with !\` must run as it reads: $c"
+[ "$c" = "${P}sh '$HM/a b/skill/scripts/cw' run me 'bang'\\!'\`echo pwn\`'" ] && [ "$(he "$c" 2>&1)" = 'job ran: ' ] || fail "cw hermes: a name with !\` must run as it reads: $c"
 grep -rF '!`' "$HM/q" && fail "inline shell from a script name reached a skill"
+[ ! -e "$HM/nohome" ] || fail "a skill command fell back to ~/.cwtfigo: $(ls -A "$HM/nohome")"
 grep -rF '`sh ' "$HM/q" && fail "a command in a \`span\`: a backtick in its name would end it"
 # + @ % , : = are plain to every shell: a checkout path holding them stays unquoted.
 mkdir "$HM/v+1@x,y=z"; ln -s "$HM/a b/skill" "$HM/v+1@x,y=z/skill"; (CW="$HM/v+1@x,y=z/skill/scripts/cw"; hw "$HM/p" >/dev/null) || fail "cw hermes from a path with +@,="
-grep -qxF "       sh $(qp "$HM/v+1@x,y=z/skill/scripts/cw") run me check" "$HM/p/cwtfigo/cw-me-check/SKILL.md" || fail "cw hermes: + @ , = need no quotes: $(grep '^       ' "$HM/p/cwtfigo/cw-me-check/SKILL.md")"
+grep -qxF "       ${P}sh $(qp "$HM/v+1@x,y=z/skill/scripts/cw") run me check" "$HM/p/cwtfigo/cw-me-check/SKILL.md" || fail "cw hermes: + @ , = need no quotes: $(grep '^       ' "$HM/p/cwtfigo/cw-me-check/SKILL.md")"
 # A later # menu-args line replaces an earlier one, and so do the earlier one's left-out words.
 printf '#!/bin/sh\n# menu: twice\n# menu-args: --x | a\n# menu-args: b\necho\n' > "$HB/twice.sh"; CWTFIGO_HOME=$HM/rec sh "$CW" approve me twice >/dev/null || fail "cw hermes twice setup"
 out=$(hw "$HM/t" 2>&1 >/dev/null); grep -q 'unless they already said: b\.$' "$HM/t/cwtfigo/cw-me-twice/SKILL.md" && ! echo "$out" | grep -q 'twice.sh: left out' || fail "cw hermes: the last menu-args line only: $out"
