@@ -576,9 +576,9 @@ hermes)
         function yq(x) { gsub(q, q q, x); return q x q }
         # Each c in x as r. By hand, not gsub: awks differ on \ in a replacement.
         function rj(x, c, r,  p, k, i, o) { k = split(x, p, c); o = p[1]; for (i = 2; i <= k; i++) o = o r p[i]; return o }
-        # A part of the command line in single quotes unless it is plain: a path with a space runs as it reads. A quote
+        # A part of the command line in single quotes unless it is plain (no shell reads + @ % , : = specially): a path with a space runs as it reads. A quote
         # or ! in it ends the quotes, adds it escaped and starts them again: no ! is ever next to a backtick.
-        function sq(x) { if (x ~ /^[A-Za-z0-9._\/-]+$/) return x; return q rj(rj(x, q, q "\\" q q), "!", q "\\!" q) q }
+        function sq(x) { if (x ~ /^[A-Za-z0-9._\/+@%,:=-]+$/) return x; return q rj(rj(x, q, q "\\" q q), "!", q "\\!" q) q }
         # Hermes runs !`...` in a skill (inline_shell): never from what the owner wrote. The commands are sq()-ed instead.
         function nb(x) { gsub(/!`/, "! `", x); return x }
         NR == 1 { h = 1; if (index($0, bom) == 1) $0 = substr($0, 4) }

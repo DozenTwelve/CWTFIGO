@@ -798,6 +798,8 @@ printf '#!/bin/sh\n# once\necho "x --apply"\n' > "$HB/once.sh"; printf '#!/bin/s
 echo '{ "os": "windows" }' > "$HM/rec/hosts/Far_Box/device.json"; printf '# win\r\n# menu: win !`echo pwn` thing\r\nif ($args -contains '"'"'--apply'"'"') {}\r\n' > "$HM/rec/hosts/Far_Box/fix.ps1"
 CWTFIGO_HOME=$HM/rec sh "$CW" approve me check maintain attic once >/dev/null && CWTFIGO_HOME=$HM/rec sh "$CW" approve Far_Box fix >/dev/null || fail "cw hermes setup"
 echo 'echo changed' >> "$HB/maintain.sh"
+# cw's path as the skills show it: in single quotes if a shell would read it as more than one plain word.
+case $CW in *[!A-Za-z0-9._/+@%,:=-]*) QCW="'$CW'" ;; *) QCW=$CW ;; esac
 ht() { find "$HM/rec" -type f -exec cksum {} + | sort; }; ht > "$HM/before"
 # A UTF-8 locale, as on most machines: a Latin-1 byte in a header must not cut the skill short.
 out=$(LC_ALL=en_US.UTF-8 hw 2>&1) || fail "cw hermes: $out"
@@ -813,7 +815,7 @@ printf 'skills:\n  external_dirs:\n    - ~/.local/share/cwtfigo/hermes\n' > "$HM
 hw 2>&1 | grep -q external_dirs && fail "cw hermes: no hint once the config lists the dir"
 A=$HC/cw-me-attic/SKILL.md
 grep -qx 'name: cw-me-attic' "$A" && grep -q "^description: '备份 (attic on me" "$A" && grep -qx '# 备份' "$A" || fail "attic skill: name, label: $(cat "$A")"
-grep -qF 'which way, unless they already said: guard | restore | ! `echo pwn`.' "$A" && grep -qF "\`sh $CW run me attic '<choice>'\`" "$A" || fail "attic skill: its args, dry run with cw's absolute path: $(cat "$A")"
+grep -qF 'which way, unless they already said: guard | restore | ! `echo pwn`.' "$A" && grep -qF "\`sh $QCW run me attic '<choice>'\`" "$A" || fail "attic skill: its args, dry run with cw's absolute path: $(cat "$A")"
 # The owner's reply goes into a shell line: only a listed word, in quotes.
 grep -qF '`<choice>` below is exactly one of these words, copied as listed. Any other answer: ask again, never pass it.' "$A" || fail "attic skill: <choice> only a listed word: $(cat "$A")"
 grep -q -- '--apply' "$A" && fail "attic doesn't take --apply: $(cat "$A")"
@@ -824,7 +826,7 @@ grep -qx '    ```' "$A" && grep -qx '    ## Rules' "$A" && grep -qx '    - run r
 grep -rF '!`' "$HC" && fail "inline shell from the owner's text reached a skill"
 grep -qx '## Rules' "$A" || fail "attic skill: cut short: $(cat "$A")"
 F=$HC/cw-far-box-fix/SKILL.md
-grep -qF "\`sh $CW run Far_Box fix --apply\`" "$F" && grep -q 'explicit yes' "$F" && grep -q 'from Far_Box/fix.ps1' "$F" || fail "fix skill: --apply after an explicit yes: $(cat "$F")"
+grep -qF "\`sh $QCW run Far_Box fix --apply\`" "$F" && grep -q 'explicit yes' "$F" && grep -q 'from Far_Box/fix.ps1' "$F" || fail "fix skill: --apply after an explicit yes: $(cat "$F")"
 grep -q 'Never run `cw approve`' "$F" && grep -q 'NOT APPROVED' "$F" || fail "every skill carries the rules: $(cat "$F")"
 # Rerun: a script gone, a new one approved. The dir is rebuilt; a dir cw hermes didn't make is never wiped.
 rm "$HB/attic.sh"; CWTFIGO_HOME=$HM/rec sh "$CW" approve me new >/dev/null; hw >/dev/null || fail "cw hermes rerun"
@@ -849,6 +851,9 @@ c=$(sed -n 's/^1\. Dry run, changes nothing: `\(.*\)`\. Relay.*/\1/p' "$HM/q/cwt
 c=$(sed -n 's/^1\. Dry run, changes nothing: `\(.*\)`\. Relay.*/\1/p' "$HM/q/cwtfigo/cw-me-bang-echo-pwn/SKILL.md")
 [ "$c" = "sh '$HM/a b/skill/scripts/cw' run me 'bang'\\!'\`echo pwn\`'" ] && [ "$(CWTFIGO_HOME=$HM/rec eval "$c" 2>&1)" = 'job ran: ' ] || fail "cw hermes: a name with !\` must run as it reads: $c"
 grep -rF '!`' "$HM/q" && fail "inline shell from a script name reached a skill"
+# + @ % , : = are plain to every shell: a checkout path holding them stays unquoted.
+mkdir "$HM/v+1@x,y=z"; ln -s "$HM/a b/skill" "$HM/v+1@x,y=z/skill"; (CW="$HM/v+1@x,y=z/skill/scripts/cw"; hw "$HM/p" >/dev/null) || fail "cw hermes from a path with +@,="
+grep -qF "\`sh $HM/v+1@x,y=z/skill/scripts/cw run me check\`" "$HM/p/cwtfigo/cw-me-check/SKILL.md" || fail "cw hermes: + @ , = need no quotes: $(grep 'Dry run' "$HM/p/cwtfigo/cw-me-check/SKILL.md")"
 # Two skill names alike in their first 32 characters (Discord's cut): a warning, both written.
 for x in now new; do printf '#!/bin/sh\n# menu: photos %s\necho\n' $x > "$HB/backup-the-photo-library-$x.sh"; done
 CWTFIGO_HOME=$HM/rec sh "$CW" approve me backup-the-photo-library-now backup-the-photo-library-new >/dev/null || fail "cw hermes collision setup"
