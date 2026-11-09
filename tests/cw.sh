@@ -873,6 +873,9 @@ grep -rF '`sh ' "$HM/q" && fail "a command in a \`span\`: a backtick in its name
 # + @ % , : = are plain to every shell: a checkout path holding them stays unquoted.
 mkdir "$HM/v+1@x,y=z"; ln -s "$HM/a b/skill" "$HM/v+1@x,y=z/skill"; (CW="$HM/v+1@x,y=z/skill/scripts/cw"; hw "$HM/p" >/dev/null) || fail "cw hermes from a path with +@,="
 grep -qxF "       sh $(qp "$HM/v+1@x,y=z/skill/scripts/cw") run me check" "$HM/p/cwtfigo/cw-me-check/SKILL.md" || fail "cw hermes: + @ , = need no quotes: $(grep '^       ' "$HM/p/cwtfigo/cw-me-check/SKILL.md")"
+# A later # menu-args line replaces an earlier one, and so do the earlier one's left-out words.
+printf '#!/bin/sh\n# menu: twice\n# menu-args: --x | a\n# menu-args: b\necho\n' > "$HB/twice.sh"; CWTFIGO_HOME=$HM/rec sh "$CW" approve me twice >/dev/null || fail "cw hermes twice setup"
+out=$(hw "$HM/t" 2>&1 >/dev/null); grep -q 'unless they already said: b\.$' "$HM/t/cwtfigo/cw-me-twice/SKILL.md" && ! echo "$out" | grep -q 'twice.sh: left out' || fail "cw hermes: the last menu-args line only: $out"
 # Two skill names alike in their first 32 characters (Discord's cut): a warning, both written.
 for x in now new; do printf '#!/bin/sh\n# menu: photos %s\necho\n' $x > "$HB/backup-the-photo-library-$x.sh"; done
 CWTFIGO_HOME=$HM/rec sh "$CW" approve me backup-the-photo-library-now backup-the-photo-library-new >/dev/null || fail "cw hermes collision setup"
