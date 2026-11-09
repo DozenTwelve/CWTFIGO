@@ -803,6 +803,12 @@ HS=$HM/.local/share/cwtfigo/hermes; HC=$HS/cwtfigo
 [ "$(ls "$HC" | tr '\n' ' ')" = 'cw-far-box-fix cw-me-attic cw-me-check ' ] || fail "cw hermes: approved menu scripts only, names sanitized: $(ls "$HC") $out"
 echo "$out" | grep -qx 'cw-me-attic: me/attic.sh' && echo "$out" | grep -q 'skills in ~/.local/share/cwtfigo/hermes' && echo "$out" | grep -q 'skills.external_dirs' || fail "cw hermes output: $out"
 [ ! -e "$HM/ssh.ran" ] && [ "$(ht)" = "$(cat "$HM/before")" ] || fail "cw hermes must not ssh or write the record"
+# The hint names the config.yaml it read (HERMES_HOME's); a commented-out line lists nothing.
+echo "$out" | grep -q 'skills.external_dirs in ~/hermes-home/config.yaml,' || fail "cw hermes: the config it read: $out"
+mkdir "$HM/hermes-home"; printf 'skills:\n  external_dirs:\n  #  - ~/.local/share/cwtfigo/hermes\n' > "$HM/hermes-home/config.yaml"
+hw 2>&1 | grep -q external_dirs || fail "cw hermes: a commented-out dir is not in the config"
+printf 'skills:\n  external_dirs:\n    - ~/.local/share/cwtfigo/hermes\n' > "$HM/hermes-home/config.yaml"
+hw 2>&1 | grep -q external_dirs && fail "cw hermes: no hint once the config lists the dir"
 A=$HC/cw-me-attic/SKILL.md
 grep -qx 'name: cw-me-attic' "$A" && grep -q "^description: '备份 (attic on me" "$A" && grep -qx '# 备份' "$A" || fail "attic skill: name, label: $(cat "$A")"
 grep -qF 'which way, unless they already said: guard | restore | ! `echo pwn`.' "$A" && grep -qF "\`sh $CW run me attic '<choice>'\`" "$A" || fail "attic skill: its args, dry run with cw's absolute path: $(cat "$A")"

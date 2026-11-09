@@ -623,10 +623,12 @@ hermes)
   # die's trap deletes $T.old.
   [ ! -d "$D" ] || mv "$D" "$T.old" || die "cannot replace $D"
   mv "$T" "$D" || { [ ! -d "$T.old" ] || mv "$T.old" "$D"; die "cannot replace $D"; }
-  r=$D; case $r in "$HOME"/*) r="~${r#"$HOME"}" ;; esac
+  tl() { case $1 in "$HOME"/*) echo "~${1#"$HOME"}" ;; *) echo "$1" ;; esac; }
+  r=$(tl "$D"); cf=${HERMES_HOME:-$HOME/.hermes}/config.yaml
   echo "skills in $r"
-  grep -qsF -e "$D" -e "$r" "${HERMES_HOME:-$HOME/.hermes}/config.yaml" ||
-    echo "Hermes doesn't read them yet: add $r to skills.external_dirs in ~/.hermes/config.yaml, then hermes gateway restart"
+  # A commented-out line lists nothing.
+  grep -sv '^[[:space:]]*#' "$cf" | grep -qF -e "$D" -e "$r" ||
+    echo "Hermes doesn't read them yet: add $r to skills.external_dirs in $(tl "$cf"), then hermes gateway restart"
   echo "In Discord, /reload-skills picks up what changed." ;;
 search)
   shift
