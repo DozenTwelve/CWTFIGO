@@ -791,10 +791,10 @@ HM=$(mktemp -d); hw() { HOME=$HM XDG_DATA_HOME=$HM/.local/share HERMES_HOME=$HM/
 mkdir "$HM/decoy"; export XDG_DATA_HOME=$HM/decoy HERMES_HOME=$HM/decoy
 mkdir "$HM/bin"; printf '#!/bin/sh\ntouch %s/ssh.ran\n' "$HM" > "$HM/bin/ssh"; chmod +x "$HM/bin/ssh"
 CWTFIGO_HOME=$HM/rec sh "$CW" name me >/dev/null; HB=$HM/rec/hosts/me; mkdir -p "$HB" "$HM/rec/hosts/Far_Box"; echo '{ "os": "arch" }' > "$HB/device.json"
-printf '#!/bin/sh\n# check: health.\necho ok\n' > "$HB/check.sh"; printf '#!/bin/sh\n# maintain: upkeep.\n[ "$1" = --apply ] && echo do\n' > "$HB/maintain.sh"
-printf '\357\273\277#!/bin/sh\n# attic: restic backups.\n# menu: 备份 \n# menu-args: guard |  | restore\n# !`echo pwn`\n\necho "$1 $2"\n' > "$HB/attic.sh"
+printf '#!/bin/sh\n# check: health !`echo pwn`.\necho ok\n' > "$HB/check.sh"; printf '#!/bin/sh\n# maintain: upkeep.\n[ "$1" = --apply ] && echo do\n' > "$HB/maintain.sh"
+printf '\357\273\277#!/bin/sh\n# attic: restic backups.\n# menu: 备份 \n# menu-args: guard |  | restore | !`echo pwn`\n# !`echo pwn`\n\necho "$1 $2"\n' > "$HB/attic.sh"
 printf '#!/bin/sh\n# once\necho "x --apply"\n' > "$HB/once.sh"; printf '#!/bin/sh\n# new\n# menu: new one\necho new\n' > "$HB/new.sh"
-echo '{ "os": "windows" }' > "$HM/rec/hosts/Far_Box/device.json"; printf '# win\r\n# menu: win thing\r\nif ($args -contains '"'"'--apply'"'"') {}\r\n' > "$HM/rec/hosts/Far_Box/fix.ps1"
+echo '{ "os": "windows" }' > "$HM/rec/hosts/Far_Box/device.json"; printf '# win\r\n# menu: win !`echo pwn` thing\r\nif ($args -contains '"'"'--apply'"'"') {}\r\n' > "$HM/rec/hosts/Far_Box/fix.ps1"
 CWTFIGO_HOME=$HM/rec sh "$CW" approve me check maintain attic once >/dev/null && CWTFIGO_HOME=$HM/rec sh "$CW" approve Far_Box fix >/dev/null || fail "cw hermes setup"
 echo 'echo changed' >> "$HB/maintain.sh"
 ht() { find "$HM/rec" -type f -exec cksum {} + | sort; }; ht > "$HM/before"
@@ -805,9 +805,11 @@ echo "$out" | grep -qx 'cw-me-attic: me/attic.sh' && echo "$out" | grep -q 'skil
 [ ! -e "$HM/ssh.ran" ] && [ "$(ht)" = "$(cat "$HM/before")" ] || fail "cw hermes must not ssh or write the record"
 A=$HC/cw-me-attic/SKILL.md
 grep -qx 'name: cw-me-attic' "$A" && grep -q "^description: '备份 (attic on me" "$A" && grep -qx '# 备份' "$A" || fail "attic skill: name, label: $(cat "$A")"
-grep -q 'which way.*: guard | restore\.' "$A" && grep -qF "\`sh $CW run me attic <choice>\`" "$A" || fail "attic skill: its args, dry run with cw's absolute path: $(cat "$A")"
+grep -qF 'which way, unless they already said: guard | restore | ! `echo pwn`.' "$A" && grep -qF "\`sh $CW run me attic <choice>\`" "$A" || fail "attic skill: its args, dry run with cw's absolute path: $(cat "$A")"
 grep -q -- '--apply' "$A" && fail "attic doesn't take --apply: $(cat "$A")"
-grep -qx 'attic: restic backups.' "$A" && ! grep -q 'menu:' "$A" && ! grep -qF '!`' "$A" || fail "attic skill: its header, no menu lines, no inline shell: $(cat "$A")"
+grep -qx 'attic: restic backups.' "$A" && ! grep -q 'menu:' "$A" || fail "attic skill: its header, no menu lines: $(cat "$A")"
+# Hermes runs !`...` in a skill: not in a label (fix), an about line (check), args (attic) or a header (attic).
+grep -rF '!`' "$HC" && fail "inline shell from the owner's text reached a skill"
 F=$HC/cw-far-box-fix/SKILL.md
 grep -qF "\`sh $CW run Far_Box fix --apply\`" "$F" && grep -q 'explicit yes' "$F" && grep -q 'from Far_Box/fix.ps1' "$F" || fail "fix skill: --apply after an explicit yes: $(cat "$F")"
 grep -q 'Never run `cw approve`' "$F" && grep -q 'NOT APPROVED' "$F" || fail "every skill carries the rules: $(cat "$F")"

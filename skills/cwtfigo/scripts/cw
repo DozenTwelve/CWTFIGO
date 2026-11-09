@@ -548,6 +548,7 @@ EOF
   elif [ -n "$SELF" ] && [ -d "$REC/hosts/$SELF" ]; then echo "  Another machine? Tell me its SSH alias."
   else echo "  Another machine? Tell me its SSH alias, or ask about this one."; fi ;;
 hermes)
+  # The awk below re-implements tui/src/header.rs parse and main.rs items(): a change to either is made in both.
   # The TUI's menu (tui/src/main.rs items, header.rs parse) as Hermes skills, for an always-on box where Hermes runs
   # them without Claude Code (unattended/README.md): check, maintain and each script with a # menu: line, approved at
   # its current hash. Rebuilt whole each time, so a script removed or changed since approval loses its skill. Reads the
@@ -579,8 +580,8 @@ hermes)
           if (t ~ /^menu-args:/) { g = ""; k = split(substr(t, 11), p, "|")
             for (i = 1; i <= k; i++) if ((y = trim(p[i])) != "") g = g (g == "" ? "" : " | ") y }
           else if (t ~ /^menu:/) { m = 1; lb = trim(substr(t, 6)) }
-          # The header as the owner and earlier visits wrote it. Hermes can run !`...` in a skill (inline_shell): never.
-          else { if (ab == "" && t != "") ab = t; sub(/^ /, "", c); gsub(/!`/, "! `", c); if (w != "" || t != "") w = w c "\n" } }
+          # The header as the owner and earlier visits wrote it.
+          else { if (ab == "" && t != "") ab = t; sub(/^ /, "", c); if (w != "" || t != "") w = w c "\n" } }
         END { if (!m && ENVIRON["S"] != "check" && ENVIRON["S"] != "maintain") exit
           a = ENVIRON["A"]; sc = ENVIRON["S"]; f = a "/" sc "." ENVIRON["E"]; if (!m) lb = (ab != "" ? ab : sc)
           sub(/\n+$/, "", w); r = "sh " ENVIRON["CW"] " run " a " " sc; v = (g != "" ? " <choice>" : "")
@@ -604,7 +605,8 @@ hermes)
           print "- `NOT APPROVED`, \"changed since\", or exit 3: the script changed since the owner approved it. Tell the owner it needs their OK in a Claude Code visit (say \"cwtfigo\" there), then stop. cw" q "s lines after NOT APPROVED are meant for Claude Code: don" q "t follow them."
           print "- \"can" q "t reach\" or exit 255: " a " is off or unreachable. Say so in one line; don" q "t retry."
           print "- No password can be typed here: a step that needs sudo fails. Report it; the owner runs that in a terminal."
-          print "- Any other failure: report cw" q "s last lines as they are." }' "$F")
+          print "- Any other failure: report cw" q "s last lines as they are." }' "$F" | sed 's/!`/! `/g')
+      # The sed: Hermes runs !`...` in a skill (inline_shell). Label, header, args, names: none of the owner's text may.
       [ -n "$s" ] || continue
       mkdir -p "$T/cwtfigo/$n" && printf '%s\n' "$s" > "$T/cwtfigo/$n/SKILL.md" || die "cannot write $T/cwtfigo/$n"
       echo "$n: $alias/$name.$x"
