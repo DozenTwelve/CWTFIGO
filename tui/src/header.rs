@@ -71,6 +71,18 @@ mod tests {
     }
 
     #[test]
+    fn shared_fixture() {
+        // The headers tests/cw.sh gives cw hermes: the TUI and Hermes must offer the same menu. As items() reads a check.sh.
+        for case in include_str!("../../tests/menu-headers.txt").split("\n@@ ").skip(1) {
+            let (want, text) = case.split_once('\n').unwrap_or((case, ""));
+            let h = parse(&text.replace('\t', "    "));
+            let label = h.menu.or(h.about).unwrap_or_else(|| "check".into());
+            let got = format!("{label} @@ {} @@ {}", h.args.join(" | "), if h.apply { "yes" } else { "no" });
+            assert_eq!(got, want);
+        }
+    }
+
+    #[test]
     fn bom() {
         assert_eq!(parse("\u{feff}# menu: upkeep\n").menu.as_deref(), Some("upkeep"));
     }

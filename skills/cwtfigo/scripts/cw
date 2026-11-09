@@ -551,7 +551,8 @@ EOF
   elif [ -n "$SELF" ] && [ -d "$REC/hosts/$SELF" ]; then echo "  Another machine? Tell me its SSH alias."
   else echo "  Another machine? Tell me its SSH alias, or ask about this one."; fi ;;
 hermes)
-  # The awk below re-implements tui/src/header.rs parse and main.rs items(): a change to either is made in both.
+  # The awk below re-implements tui/src/header.rs parse and main.rs items(): a change to either is made in both, and
+  # tests/menu-headers.txt (read by tests/cw.sh and header.rs' tests) holds the headers both must read alike.
   # The TUI's menu (tui/src/main.rs items, header.rs parse) as Hermes skills, for an always-on box where Hermes runs
   # them without Claude Code (unattended/README.md): check, maintain and each script with a # menu: line, approved at
   # its current hash. Rebuilt whole each time, so a script removed or changed since approval loses its skill. Reads the

@@ -965,6 +965,21 @@ for x in now new; do printf '#!/bin/sh\n# menu: photos %s\necho\n' $x > "$HB/bac
 CWTFIGO_HOME=$HM/rec sh "$CW" approve me backup-the-photo-library-now backup-the-photo-library-new >/dev/null || fail "cw hermes collision setup"
 out=$(hw "$HM/long" 2>&1 >/dev/null); [ -d "$HM/long/cwtfigo/cw-me-backup-the-photo-library-now" ] && [ -d "$HM/long/cwtfigo/cw-me-backup-the-photo-library-new" ] &&
   [ "$out" = 'cw: cw-me-backup-the-photo-library-new and cw-me-backup-the-photo-library-now share their first 32 characters: Discord shows only one' ] || fail "cw hermes: names alike in 32 characters: $out"
+# The headers in tests/menu-headers.txt, each a check.sh on a host of its own, read as header.rs' shared_fixture reads
+# them: the same label, menu-args words and --apply for the TUI and for Hermes.
+FX=$(mktemp -d); CWTFIGO_HOME=$FX/rec sh "$CW" name me >/dev/null 2>&1
+awk -v d="$FX" '/^@@ /{ n++; print substr($0, 4) > (d "/exp" n); next } n { print > (d "/f" n) }' "$(dirname "$CW")/../../../tests/menu-headers.txt"
+i=1; while [ -f "$FX/exp$i" ]; do
+  mkdir -p "$FX/rec/hosts/f$i"; echo '{ "os": "arch" }' > "$FX/rec/hosts/f$i/device.json"; mv "$FX/f$i" "$FX/rec/hosts/f$i/check.sh"
+  CWTFIGO_HOME=$FX/rec sh "$CW" approve "f$i" check >/dev/null || fail "menu-headers setup: case $i"; i=$((i + 1))
+done
+[ $i -gt 5 ] || fail "menu-headers.txt: too few cases read ($((i - 1)))"
+HOME=$FX XDG_DATA_HOME=$FX/share HERMES_HOME=$FX/hh PATH=$PYB:$PATH CWTFIGO_HOME=$FX/rec sh "$CW" hermes "$FX/out" >/dev/null 2>&1 || fail "menu-headers: cw hermes"
+i=1; while [ -f "$FX/exp$i" ]; do
+  f=$FX/out/cwtfigo/cw-f$i-check/SKILL.md; grep -q -- " run f$i check --apply" "$f" && y=yes || y=no
+  g="$(sed -n 's/^# //p' "$f" | head -1) @@ $(sed -n 's/.*which way, unless they already said: \(.*\)\.$/\1/p' "$f") @@ $y"
+  [ "$g" = "$(cat "$FX/exp$i")" ] || fail "menu-headers.txt case $i: cw hermes reads '$g', the fixture (and header.rs) '$(cat "$FX/exp$i")'"; i=$((i + 1))
+done
 # cw hermes --sync, the Hermes hook's: a pull, and a rebuild only if it brought something. Exit 0 rebuilt, 2 nothing new.
 S=$(mktemp -d); sw() { r=$1; shift; HOME=$S XDG_DATA_HOME=$S/share HERMES_HOME=$S/hh PATH=$PYB:$PATH CWTFIGO_HOME=$S/$r sh "$CW" "$@"; }
 SD=$S/share/cwtfigo/hermes; git init -q --bare "$S/r.git"
