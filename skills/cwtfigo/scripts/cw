@@ -577,7 +577,8 @@ hermes)
     [ -d "$D.lock" ] && die "another cw hermes is running into $D (or one was killed in the last 10 min: rmdir $D.lock)"
     die "cannot create the lock $D.lock"
   fi
-  T=; trap 'rmdir "$D.lock"; [ -z "$T" ] || rm -rf "$T" "$T.old"' EXIT; trap 'exit 1' INT TERM HUP
+  # Killed between the swap's two mv's ($D moved aside, the new one not in): the old one goes back, before the lock goes.
+  T=; trap '[ -z "$T" ] || { rm -rf "$T"; { [ -e "$D" ] || mv "$T.old" "$D"; } 2>/dev/null && rm -rf "$T.old"; }; rmdir "$D.lock"' EXIT; trap 'exit 1' INT TERM HUP
   if [ -n "$sync" ]; then
     # The owner's own ssh (core.sshCommand, GIT_SSH), as for any pull. It can't ask: the hook runs this in a session of
     # its own (no terminal) with stdin /dev/null, and its timeout ends a hung remote.

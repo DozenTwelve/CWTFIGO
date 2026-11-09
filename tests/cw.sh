@@ -907,6 +907,10 @@ out=$(PATH=$HM/mvbin:$PATH hw 2>&1) && fail "cw hermes with a failing mv should 
 rm "$HM/mv.1" "$HM/mv.2"; out=$(MVMK=1 PATH=$HM/mvbin:$PATH hw 2>&1) && fail "cw hermes with a failing mv should fail"
 o=$(echo "$out" | sed -n 's/.*; the skills it had are in //p'); [ -n "$o" ] && [ -d "$o/cwtfigo/cw-me-check" ] && [ -z "$(ls -A "$HS")" ] || fail "cw hermes: old skills kept and named: $out"
 rmdir "$HS" && mv "$o" "$HS" || fail "cw hermes: put the old skills back"
+# A SIGTERM (the hook's timeout) between the two mv's, the old skills moved aside and the new not in yet: the old go back.
+mkdir "$HM/mvt"; printf '#!/bin/sh\ncase $1 in *.old) ;; *) [ "$2" = "%s" ] && [ ! -e "%s/mvt.1" ] && { : > "%s/mvt.1"; kill -TERM $PPID; exit 1; } ;; esac\nexec %s "$@"\n' "$(cd "$HS" && pwd -P)" "$HM" "$HM" "$(command -v mv)" > "$HM/mvt/mv"; chmod +x "$HM/mvt/mv"
+out=$(PATH=$HM/mvt:$PATH hw 2>&1) && fail "cw hermes killed in its swap should fail"
+[ -e "$HM/mvt.1" ] && [ "$(LC_ALL=C ls "$HC" 2>/dev/null | tr '\n' ' ')" = 'cw-far-box-fix cw-me-check cw-me-new ' ] && [ -z "$(ls -d "$HS".* 2>/dev/null)" ] || fail "cw hermes: killed in its swap, the old skills must stay: $(ls -d "$HS"* 2>/dev/null) $out"
 # One run at a time: another's lock held, this one writes nothing and leaves the lock to its owner.
 mkdir "$HS.lock"; out=$(hw 2>&1) && fail "cw hermes under another's lock should fail"
 echo "$out" | grep -q "another cw hermes is running.*rmdir .*/cwtfigo/hermes.lock)" && [ -d "$HS.lock" ] && [ "$(LC_ALL=C ls "$HC" | tr '\n' ' ')" = 'cw-far-box-fix cw-me-check cw-me-new ' ] || fail "cw hermes under a lock: $out"
