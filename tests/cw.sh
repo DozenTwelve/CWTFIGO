@@ -940,6 +940,9 @@ touch "$S/stamp"; out=$(sw b hermes --sync 2>&1); [ $? = 2 ] && [ -z "$out" ] &&
 # A visit approved a new script and saved: pulled, rebuilt, exit 0.
 printf '#!/bin/sh\n# menu: new one\necho new\n' > "$S/a/hosts/a/new.sh"; { sw a approve a new && sw a save two; } >/dev/null 2>&1 || fail "cw hermes --sync setup: a new script"
 out=$(sw b hermes --sync 2>&1); [ $? = 0 ] && [ -f "$SD/cwtfigo/cw-a-new/SKILL.md" ] && [ "$(git -C "$S/b" rev-parse HEAD)" = "$(git -C "$S/a" rev-parse HEAD)" ] || fail "cw hermes --sync after a new commit: $out"
+# Skills built from an older record (pulled by hand since, or a rebuild that failed after its pull): rebuilt.
+git -C "$S/b" reset -q --hard HEAD~1 && sw b hermes >/dev/null 2>&1 && [ ! -e "$SD/cwtfigo/cw-a-new" ] && git -C "$S/b" pull -q --ff-only || fail "cw hermes --sync setup: an older build"
+out=$(sw b hermes --sync 2>&1); [ $? = 0 ] && [ -f "$SD/cwtfigo/cw-a-new/SKILL.md" ] || fail "cw hermes --sync after a build from an older record: $out"
 # Another sync on it: skipped (2), not queued; no pull, the lock left to its owner.
 printf '#!/bin/sh\n# menu: more\necho more\n' > "$S/a/hosts/a/more.sh"; { sw a approve a more && sw a save three; } >/dev/null 2>&1 || fail "cw hermes --sync setup: another script"
 mkdir "$SD.lock"; out=$(sw b hermes --sync 2>&1); [ $? = 2 ] && [ -d "$SD.lock" ] && [ ! -e "$SD/cwtfigo/cw-a-more" ] || fail "cw hermes --sync under a lock: $out"; rmdir "$SD.lock"

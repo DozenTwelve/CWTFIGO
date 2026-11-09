@@ -580,11 +580,13 @@ hermes)
   T=; trap 'rmdir "$D.lock"; [ -z "$T" ] || rm -rf "$T" "$T.old"' EXIT; trap 'exit 1' INT TERM HUP
   if [ -n "$sync" ]; then
     export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh} -o BatchMode=yes -o ConnectTimeout=5" GIT_TERMINAL_PROMPT=0
-    h=$(git_rec rev-parse -q --verify HEAD); pull </dev/null || die "nothing rebuilt"
-    [ "$(git_rec rev-parse -q --verify HEAD)" != "$h" ] || exit 2
+    # Nothing new is the commit the skills were built from (their marker holds it), not HEAD before the pull: a
+    # rebuild that failed after its pull is tried again.
+    pull </dev/null || die "nothing rebuilt"
+    [ "$(git_rec rev-parse -q --verify HEAD)" != "$(cat "$D/.cwtfigo-generated" 2>/dev/null)" ] || exit 2
   fi
   [ ! -d "$D" ] || [ -e "$D/.cwtfigo-generated" ] || [ -z "$(ls -A "$D")" ] || die "$D has files cw hermes didn't make: nothing written. Give another dir: cw hermes <dir>"
-  T=$(mktemp -d "$D.XXXXXX") && touch "$T/.cwtfigo-generated" || die "cannot write next to $D"
+  T=$(mktemp -d "$D.XXXXXX") && { git_rec rev-parse -q --verify HEAD; :; } > "$T/.cwtfigo-generated" || die "cannot write next to $D"
   for d in "$REC"/hosts/*/; do
     [ -d "$d" ] || continue
     H=${d%/}; alias=${H##*/}; here=; [ "$alias" = "$SELF" ] && here=1
