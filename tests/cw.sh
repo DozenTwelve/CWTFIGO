@@ -826,7 +826,7 @@ HK=$HM/hermes-home/hooks/cwtfigo
 echo "$out" | grep -q 'hooks/cwtfigo at its next start: hermes gateway restart, once' || fail "cw hermes: a new hook asks for one restart: $out"
 # handler.py under a stub Hermes: this cw's --sync into this dir; reload_skills only after a rebuild (exit 0), never on
 # nothing new (2); a failure, a timeout or a raising reload is logged, never raised, and a failure backs off.
-mkdir -p "$HM/stub/agent"; : > "$HM/stub/agent/__init__.py"; printf 'n = []\ndef reload_skills():\n    n.append(1)\n' > "$HM/stub/agent/skill_commands.py"
+mkdir -p "$HM/stub/agent"; : > "$HM/stub/agent/__init__.py"; printf 'import contextvars\nn = []\ncv = contextvars.ContextVar("profile", default=1)\ndef reload_skills():\n    n.append(cv.get())\n' > "$HM/stub/agent/skill_commands.py"
 out=$("$PYB/python3" -I - "$HK/handler.py" "$HM/stub" "$CW" "$HS" 2>&1 <<'EOF'
 import asyncio, importlib.util, os, sys, time
 h, stub, cw, d = sys.argv[1:]
@@ -843,6 +843,10 @@ go("exit 0"); assert sc.n == [1], "rebuilt: one reload"
 go("echo boom >&2; exit 1"); assert sc.n == [1] and m._quiet_until > time.monotonic(), "a failure: no reload, backs off"
 m.ARGV = ["/bin/sh", "-c", "exit 0"]; asyncio.run(m.handle("agent:start", {})); assert sc.n == [1], "backing off: no run"
 m.TIMEOUT = 1; t = time.monotonic(); go("sleep 30"); assert time.monotonic() - t < 5 and sc.n == [1], "a timeout: no reload, no wait"
+# Hermes keeps the message's profile in ContextVars: the sync thread (reload_skills in it) sees the message's.
+async def as_b():
+    sc.cv.set("B"); await m.handle("agent:start", {})
+m.ARGV = ["/bin/sh", "-c", "exit 0"]; m._quiet_until = 0; asyncio.run(as_b()); assert sc.n == [1, "B"], "the message's context: %r" % sc.n
 sc.reload_skills = None; go("exit 0")
 print("handler ok")
 EOF

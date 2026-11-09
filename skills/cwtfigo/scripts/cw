@@ -758,7 +758,8 @@ def _sync():
 
 async def handle(event_type, context):
     try:
-        await asyncio.get_running_loop().run_in_executor(None, _sync)
+        # Not run_in_executor: to_thread copies the ContextVars Hermes keeps the message's profile in.
+        await asyncio.to_thread(_sync)
     except Exception:
         log.exception("cwtfigo: the skills sync failed")
 EOF
