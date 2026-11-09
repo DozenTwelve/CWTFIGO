@@ -788,7 +788,10 @@ echo "$out" | grep -Eq 'cw |ask the human|operator|hint' && fail "status should 
 # cw hermes: one Hermes skill per approved menu script (the TUI's selection: check, maintain, # menu: lines), rebuilt
 # whole each run. Unapproved or changed: none. Never ssh, never write the record, never wipe a dir it didn't make.
 # Every dir it reads or writes under $HM: an exported XDG_DATA_HOME or HERMES_HOME (the developer's own) is a decoy here.
-HM=$(mktemp -d); hw() { HOME=$HM XDG_DATA_HOME=$HM/.local/share HERMES_HOME=$HM/hermes-home PATH=$HM/bin:$PATH CWTFIGO_HOME=$HM/rec sh "$CW" hermes "$@"; }
+# The hook is Python: python3 by its real path. A version manager's shim (mise, pyenv) breaks under a temp HOME,
+# and under the decoy XDG_DATA_HOME below installs a Python into it.
+PYB=$(mktemp -d); ln -s "$(python3 -c 'import sys; print(sys.executable)')" "$PYB/python3" || fail "cw hermes tests need python3"
+HM=$(mktemp -d); hw() { HOME=$HM XDG_DATA_HOME=$HM/.local/share HERMES_HOME=$HM/hermes-home PATH=$HM/bin:$PYB:$PATH CWTFIGO_HOME=$HM/rec sh "$CW" hermes "$@"; }
 OXS=${XDG_DATA_HOME+1} OXV=${XDG_DATA_HOME-} OHS=${HERMES_HOME+1} OHV=${HERMES_HOME-}  # the developer's, back after
 mkdir "$HM/decoy"; export XDG_DATA_HOME=$HM/decoy HERMES_HOME=$HM/decoy
 mkdir "$HM/bin"; printf '#!/bin/sh\ntouch %s/ssh.ran\n' "$HM" > "$HM/bin/ssh"; chmod +x "$HM/bin/ssh"
@@ -812,13 +815,47 @@ echo "$out" | grep -qx 'cw-me-attic: me/attic.sh' && echo "$out" | grep -q 'skil
 [ ! -e "$HM/ssh.ran" ] && [ "$(ht)" = "$(cat "$HM/before")" ] || fail "cw hermes must not ssh or write the record"
 # The hint names the config.yaml it read (HERMES_HOME's); a commented-out line lists nothing.
 echo "$out" | grep -q 'skills.external_dirs in ~/hermes-home/config.yaml,' || fail "cw hermes: the config it read: $out"
-mkdir "$HM/hermes-home"; printf 'skills:\n  external_dirs:\n  #  - ~/.local/share/cwtfigo/hermes\n' > "$HM/hermes-home/config.yaml"
+# The Hermes hook: a dir of its own, marked, with handler.py (valid Python) and HOOK.yaml for agent:start. Hermes
+# finds hooks only when it starts: the first run says to restart it.
+HK=$HM/hermes-home/hooks/cwtfigo
+[ "$(LC_ALL=C ls -A "$HK" | tr '\n' ' ')" = '.cwtfigo-generated HOOK.yaml handler.py ' ] && grep -qx 'events: \[agent:start\]' "$HK/HOOK.yaml" || fail "cw hermes: the hook dir: $(ls -A "$HK")"
+"$PYB/python3" -c 'import sys; compile(open(sys.argv[1]).read(), sys.argv[1], "exec")' "$HK/handler.py" || fail "cw hermes: handler.py must compile"
+echo "$out" | grep -q 'hooks/cwtfigo at its next start: hermes gateway restart, once' || fail "cw hermes: a new hook asks for one restart: $out"
+# handler.py under a stub Hermes: this cw's --sync into this dir; reload_skills only after a rebuild (exit 0), never on
+# nothing new (2); a failure, a timeout or a raising reload is logged, never raised, and a failure backs off.
+mkdir -p "$HM/stub/agent"; : > "$HM/stub/agent/__init__.py"; printf 'n = []\ndef reload_skills():\n    n.append(1)\n' > "$HM/stub/agent/skill_commands.py"
+out=$("$PYB/python3" -I - "$HK/handler.py" "$HM/stub" "$CW" "$HS" 2>&1 <<'EOF'
+import asyncio, importlib.util, os, sys, time
+h, stub, cw, d = sys.argv[1:]
+sys.path.insert(0, stub)
+import agent.skill_commands as sc
+spec = importlib.util.spec_from_file_location("hermes_hook_cwtfigo", h)
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+assert m.ARGV == ["/bin/sh", cw, "hermes", "--sync", os.path.realpath(d)], m.ARGV
+def go(code):
+    m.ARGV = ["/bin/sh", "-c", code]; m._quiet_until = 0
+    asyncio.run(m.handle("agent:start", {}))
+go("exit 2"); assert sc.n == [], "no change: no reload"
+go("exit 0"); assert sc.n == [1], "rebuilt: one reload"
+go("echo boom >&2; exit 1"); assert sc.n == [1] and m._quiet_until > time.monotonic(), "a failure: no reload, backs off"
+m.ARGV = ["/bin/sh", "-c", "exit 0"]; asyncio.run(m.handle("agent:start", {})); assert sc.n == [1], "backing off: no run"
+m.TIMEOUT = 1; t = time.monotonic(); go("sleep 30"); assert time.monotonic() - t < 5 and sc.n == [1], "a timeout: no reload, no wait"
+sc.reload_skills = None; go("exit 0")
+print("handler ok")
+EOF
+); [ "$(echo "$out" | tail -1)" = 'handler ok' ] && echo "$out" | grep -q 'failed (exit 1).*boom' || fail "handler.py under a stub Hermes: $out"
+mkdir -p "$HM/hermes-home"; printf 'skills:\n  external_dirs:\n  #  - ~/.local/share/cwtfigo/hermes\n' > "$HM/hermes-home/config.yaml"
 hw 2>&1 | grep -q external_dirs || fail "cw hermes: a commented-out dir is not in the config"
 printf 'skills:\n  external_dirs:\n    - ~/.local/share/cwtfigo/hermes\n' > "$HM/hermes-home/config.yaml"
 hw 2>&1 | grep -q external_dirs && fail "cw hermes: no hint once the config lists the dir"
 # Listed by the path the owner gave it (here through macOS' /var symlink), not the resolved one: no hint either.
 printf 'skills:\n  external_dirs:\n    - %s\n' "$HM/.local/share/cwtfigo/hermes" > "$HM/hermes-home/config.yaml"
 hw 2>&1 | grep -q external_dirs && fail "cw hermes: no hint once the config lists the dir as given"
+# The hook is rebuilt whole (a stray file goes), asks for no restart once there, and a hook dir it didn't make is left alone.
+echo x > "$HK/stray"; out=$(hw 2>&1); [ ! -e "$HK/stray" ] && [ -f "$HK/handler.py" ] && ! echo "$out" | grep -q 'gateway restart, once' || fail "cw hermes: the hook rebuilt whole: $(ls -A "$HK") $out"
+mkdir -p "$HM/hh2/hooks/cwtfigo"; echo keep > "$HM/hh2/hooks/cwtfigo/handler.py"
+out=$(HOME=$HM HERMES_HOME=$HM/hh2 PATH=$PYB:$PATH CWTFIGO_HOME=$HM/rec sh "$CW" hermes "$HM/fh" 2>&1) && fail "cw hermes into a hook dir it didn't make should fail"
+[ "$(cat "$HM/hh2/hooks/cwtfigo/handler.py")" = keep ] && [ "$(ls -A "$HM/hh2/hooks/cwtfigo")" = handler.py ] && echo "$out" | grep -q "hooks/cwtfigo has files cw hermes didn't make" || fail "cw hermes must leave a foreign hook dir alone: $out"
 A=$HC/cw-me-attic/SKILL.md
 grep -qx 'name: cw-me-attic' "$A" && grep -q "^description: '备份 (attic on me" "$A" && grep -qx '# 备份' "$A" || fail "attic skill: name, label: $(cat "$A")"
 grep -qF "which way, unless they already said: guard | restore | ! \`echo pwn\` | it's | a/b:c | 照片 | 两 个." "$A" && grep -qxF "       sh $QCW run me attic guard" "$A" || fail "attic skill: its args, dry run with cw's absolute path: $(cat "$A")"
@@ -893,6 +930,34 @@ for x in now new; do printf '#!/bin/sh\n# menu: photos %s\necho\n' $x > "$HB/bac
 CWTFIGO_HOME=$HM/rec sh "$CW" approve me backup-the-photo-library-now backup-the-photo-library-new >/dev/null || fail "cw hermes collision setup"
 out=$(hw "$HM/long" 2>&1 >/dev/null); [ -d "$HM/long/cwtfigo/cw-me-backup-the-photo-library-now" ] && [ -d "$HM/long/cwtfigo/cw-me-backup-the-photo-library-new" ] &&
   [ "$out" = 'cw: cw-me-backup-the-photo-library-new and cw-me-backup-the-photo-library-now share their first 32 characters: Discord shows only one' ] || fail "cw hermes: names alike in 32 characters: $out"
+# cw hermes --sync, the Hermes hook's: a pull, and a rebuild only if it brought something. Exit 0 rebuilt, 2 nothing new.
+S=$(mktemp -d); sw() { r=$1; shift; HOME=$S XDG_DATA_HOME=$S/share HERMES_HOME=$S/hh PATH=$PYB:$PATH CWTFIGO_HOME=$S/$r sh "$CW" "$@"; }
+SD=$S/share/cwtfigo/hermes; git init -q --bare "$S/r.git"
+{ sw a join "$S/r.git" && sw a name a; } >/dev/null 2>&1; mkdir -p "$S/a/hosts/a"; echo '{ "os": "arch" }' > "$S/a/hosts/a/device.json"; printf '#!/bin/sh\n# check: health.\necho ok\n' > "$S/a/hosts/a/check.sh"
+{ sw a approve a check && sw a save one && sw b join "$S/r.git" && sw b hermes; } >/dev/null 2>&1 || fail "cw hermes --sync setup"
+# Nothing new: exit 2, the skills untouched.
+touch "$S/stamp"; out=$(sw b hermes --sync 2>&1); [ $? = 2 ] && [ -z "$out" ] && [ -z "$(find "$SD" -newer "$S/stamp")" ] && [ ! -e "$SD.lock" ] || fail "cw hermes --sync, nothing new: $out $(find "$SD" -newer "$S/stamp")"
+# A visit approved a new script and saved: pulled, rebuilt, exit 0.
+printf '#!/bin/sh\n# menu: new one\necho new\n' > "$S/a/hosts/a/new.sh"; { sw a approve a new && sw a save two; } >/dev/null 2>&1 || fail "cw hermes --sync setup: a new script"
+out=$(sw b hermes --sync 2>&1); [ $? = 0 ] && [ -f "$SD/cwtfigo/cw-a-new/SKILL.md" ] && [ "$(git -C "$S/b" rev-parse HEAD)" = "$(git -C "$S/a" rev-parse HEAD)" ] || fail "cw hermes --sync after a new commit: $out"
+# Skills built from an older record (pulled by hand since, or a rebuild that failed after its pull): rebuilt.
+git -C "$S/b" reset -q --hard HEAD~1 && sw b hermes >/dev/null 2>&1 && [ ! -e "$SD/cwtfigo/cw-a-new" ] && git -C "$S/b" pull -q --ff-only || fail "cw hermes --sync setup: an older build"
+out=$(sw b hermes --sync 2>&1); [ $? = 0 ] && [ -f "$SD/cwtfigo/cw-a-new/SKILL.md" ] || fail "cw hermes --sync after a build from an older record: $out"
+# Another sync on it: skipped (2), not queued; no pull, the lock left to its owner.
+printf '#!/bin/sh\n# menu: more\necho more\n' > "$S/a/hosts/a/more.sh"; { sw a approve a more && sw a save three; } >/dev/null 2>&1 || fail "cw hermes --sync setup: another script"
+mkdir "$SD.lock"; out=$(sw b hermes --sync 2>&1); [ $? = 2 ] && [ -d "$SD.lock" ] && [ ! -e "$SD/cwtfigo/cw-a-more" ] || fail "cw hermes --sync under a lock: $out"; rmdir "$SD.lock"
+# A remote that can't be reached: ssh never prompts (BatchMode), exit 1, nothing rebuilt.
+mkdir "$S/bin"; printf '#!/bin/sh\necho "$*" > %s/ssh.args; exit 255\n' "$S" > "$S/bin/ssh"; chmod +x "$S/bin/ssh"
+git -C "$S/b" remote set-url origin fake:r.git; out=$(PATH=$S/bin:$PATH sw b hermes --sync 2>&1); [ $? = 1 ] && grep -q 'BatchMode=yes' "$S/ssh.args" && [ ! -e "$SD/cwtfigo/cw-a-more" ] && [ ! -e "$SD.lock" ] || fail "cw hermes --sync, remote gone: $out"
+# The hook as Hermes runs it, its paths as cw wrote them: the commit the gone remote held back arrives, one reload.
+git -C "$S/b" remote set-url origin "$S/r.git"; mkdir -p "$S/stub/agent"; : > "$S/stub/agent/__init__.py"; printf 'n = []\ndef reload_skills():\n    n.append(1)\n' > "$S/stub/agent/skill_commands.py"
+hk() { HOME=$S HERMES_HOME=$S/hh PATH=$PYB:$PATH "$PYB/python3" -I -c 'import asyncio, importlib.util, sys
+sys.path.insert(0, sys.argv[2]); import agent.skill_commands as sc
+s = importlib.util.spec_from_file_location("hermes_hook_cwtfigo", sys.argv[1]); m = importlib.util.module_from_spec(s); s.loader.exec_module(m)
+asyncio.run(m.handle("agent:start", {})); asyncio.run(m.handle("agent:start", {})); print(len(sc.n))' "$S/hh/hooks/cwtfigo/handler.py" "$S/stub" 2>&1; }
+out=$(hk); [ "$out" = 1 ] && [ -f "$SD/cwtfigo/cw-a-more/SKILL.md" ] || fail "the hook: a new commit, one reload: $out"
+# No remote: nothing to sync, nothing written.
+touch "$S/stamp"; out=$(sw n hermes --sync "$S/nr" 2>&1); [ $? = 2 ] && [ ! -e "$S/nr" ] && [ -z "$(find "$S/hh" -newer "$S/stamp")" ] || fail "cw hermes --sync with no remote: $out"
 [ -z "$(ls -A "$HM/decoy")" ] || fail "cw hermes tests wrote outside their temp dirs: $(ls -A "$HM/decoy")"
 unset XDG_DATA_HOME HERMES_HOME; [ -z "$OXS" ] || export XDG_DATA_HOME="$OXV"; [ -z "$OHS" ] || export HERMES_HOME="$OHV"
 [ "${XDG_DATA_HOME+1}${XDG_DATA_HOME-} ${HERMES_HOME+1}${HERMES_HOME-}" = "$OXS$OXV $OHS$OHV" ] || fail "cw hermes tests must give back XDG_DATA_HOME and HERMES_HOME as they were"

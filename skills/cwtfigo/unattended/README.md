@@ -42,13 +42,13 @@ Record, plugin link and SSH as above (on the box: `sh ~/.local/share/cwtfigo/plu
 
 ```sh
 CW=~/.local/share/cwtfigo/plugin/skills/cwtfigo/scripts/cw
-sh $CW hermes                                   # first build; says what to add if Hermes doesn't read the dir yet
+sh $CW hermes                                   # first build, and the hook; says what to add if Hermes doesn't read the dir yet
 # ~/.hermes/config.yaml:  skills:  external_dirs: [~/.local/share/cwtfigo/hermes]
-hermes gateway restart                          # once
-crontab -e                                      # rebuild from the latest record every 30 min:
-*/30 * * * * GIT_SSH_COMMAND='ssh -o BatchMode=yes' git -C ~/.cwtfigo pull -q --ff-only; sh ~/.local/share/cwtfigo/plugin/skills/cwtfigo/scripts/cw hermes >/dev/null
+hermes gateway restart                          # once: Hermes loads the hook when it starts
 ```
 
-In Discord, `/reload-skills` picks up a rebuild at once; each skill is `/skill cw-<machine>-<script>`.
+It also writes a Hermes hook, `~/.hermes/hooks/cwtfigo/`, so nothing needs a timer. Before Hermes answers a message, the hook asks the shared record (wherever it lives: GitHub, a NAS, a bare repo on the box) whether a visit saved something new. If so, it rebuilds the skills and Hermes rescans them, so the first message after a visit's approval already sees the new skill. Nothing new costs a moment; a record it can't reach costs a few seconds, then it doesn't try again for 5 minutes.
+
+The `/skill cw-<machine>-<script>` list in Discord is the one thing the hook can't refresh: after a change, `/reload-skills` updates it.
 
 Trust: `cw approve` is gated only by Claude Code's hook, so here the boundary is who may talk to Hermes plus the rules in each generated skill (never approve, never `--apply` without an explicit yes, never run anything else). The hash gate still holds: Hermes can run only scripts the owner approved, as they were approved.

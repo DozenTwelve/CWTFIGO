@@ -11,6 +11,7 @@
 #   cw join <ssh-alias>:<path>       share the record other operator machines keep there (any git URL or path)
 #   cw status                        welcome panel: what this is, which machines the record knows
 #   cw hermes [<dir>]                one Hermes skill per approved menu script (the TUI's), into <dir> (~/.local/share/cwtfigo/hermes)
+#   cw hermes --sync [<dir>]         pull the record; only if it changed, rebuild: exit 0 rebuilt, 2 nothing new (no remote, or another run busy)
 #   cw search [-n N] <words...>      what the record's own past cases (and a locally built archive of public bug threads, if any) say about these symptoms or error strings
 #   cw miss [--host <alias>] [--upstream <owner/repo|url>] <words...>   log a search whose hits didn't fit; where the answer was
 #   cw tui                           install or update the TUI (~/.local/bin/cwtfigo) to this plugin's version, Mac and Linux
@@ -35,6 +36,8 @@ git_rec() { git -C "$REC" "$@"; }
 SSHO='-o ServerAliveInterval=15 -o ServerAliveCountMax=4'
 ssh() { command ssh $SSHO "$@"; }
 remote() { [ -n "$(git_rec remote 2>/dev/null)" ]; }
+# What other operators saved since: fast-forward only. A failed one says so and returns 1; the caller goes on or not.
+pull() { git_rec pull -q --ff-only --no-rebase || { echo "cw: pull failed, using local record" >&2; return 1; }; }
 # No git identity on a fresh machine: fall back to one, never over the user's own. Used unquoted: no spaces in it.
 ident() { git_rec config user.email >/dev/null || { git_rec config user.name >/dev/null || printf '%s ' -c user.name=cwtfigo; printf '%s ' -c user.email=cwtfigo@localhost; }; }
 # On Windows python3 is often the Microsoft Store stub: it exists but runs nothing.
@@ -302,7 +305,7 @@ case $1 in
 run)
   # Pull first: resolve may copy a foundation, and a copy made in a stale record sits untracked where the pull would
   # bring the other operator's adapted script. Every pull after that fails and the record forks.
-  remote && { git_rec pull -q --ff-only --no-rebase || echo "cw: pull failed, using local record" >&2; }
+  remote && pull
   host "$2"; resolve "$3"; name=$3; unadapted; shift 3
   # A private copy is what gets hashed, shown and run: sh reads a script as it goes, so the file itself, rewritten
   # while it runs, would run code nobody approved. O stays the file, for git and for the human.
@@ -471,7 +474,7 @@ yolo)
   *) host "$2"; mkh; date +%s > "$H/yolo.on"; echo "YOLO on for $alias for 12 h, or until cw yolo off: unapproved scripts run without asking." ;;
   esac ;;
 status)
-  remote && { git_rec pull -q --ff-only --no-rebase || echo "cw: pull failed, using local record" >&2; }
+  remote && pull
   # One promise, true in every mode: a script runs once approved, and a change (--apply) asks each time. Under YOLO
   # the first half isn't: say so, for which machines, and the hours left of its 12 (fresh leaves the epoch in t).
   yw=; yh=0
@@ -552,7 +555,10 @@ hermes)
   # The TUI's menu (tui/src/main.rs items, header.rs parse) as Hermes skills, for an always-on box where Hermes runs
   # them without Claude Code (unattended/README.md): check, maintain and each script with a # menu: line, approved at
   # its current hash. Rebuilt whole each time, so a script removed or changed since approval loses its skill. Reads the
-  # record only: no pull, no ssh, no approval.
+  # record only: no pull (but --sync's), no ssh, no approval.
+  # --sync, from the Hermes hook before each message: a pull, and a rebuild only if it brought something. Exit 0 rebuilt,
+  # 2 nothing new; never a prompt (no terminal there), and a dead remote gives up within seconds.
+  sync=; [ "$2" = --sync ] && { sync=1; shift; remote || exit 2; }
   D=${2:-${XDG_DATA_HOME:-$HOME/.local/share}/cwtfigo/hermes}
   # No trailing /: mktemp -d "$D.XXXXXX" would land inside D, and the swap below would fail every run.
   D=${D%"${D##*[!/]}"}; [ -n "$D" ] || die "cw hermes needs a dir of its own, not /"
@@ -562,16 +568,25 @@ hermes)
   case $D in /*) G=$D ;; *) G=$PWD/$D ;; esac
   # Absolute, symlinks resolved: Hermes reads the dir from its config.yaml, not from where cw ran.
   p=$(CDPATH= cd -- "$(dirname "$D")" && pwd -P) || die "cannot write next to $D"; D=${p%/}/${D##*/}
-  # One run at a time (cron and a hand-run can overlap): the swap below is then never raced.
-  # A lock older than 10 min is a killed run's (cron's SIGKILL): a run takes seconds.
+  # One run at a time (two messages' syncs and a hand-run can overlap): the swap below is then never raced.
+  # A lock older than 10 min is a killed run's (a SIGKILL): a run takes seconds.
   [ -z "$(find "$D.lock" -maxdepth 0 -mmin +10 2>/dev/null)" ] || rmdir "$D.lock" 2>/dev/null
   if ! mkdir "$D.lock" 2>/dev/null; then
+    # Another message's sync is on it: skipped, not queued.
+    [ -n "$sync" ] && [ -d "$D.lock" ] && exit 2
     [ -d "$D.lock" ] && die "another cw hermes is running into $D (or one was killed in the last 10 min: rmdir $D.lock)"
     die "cannot create the lock $D.lock"
   fi
   T=; trap 'rmdir "$D.lock"; [ -z "$T" ] || rm -rf "$T" "$T.old"' EXIT; trap 'exit 1' INT TERM HUP
+  if [ -n "$sync" ]; then
+    export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh} -o BatchMode=yes -o ConnectTimeout=5" GIT_TERMINAL_PROMPT=0
+    # Nothing new is the commit the skills were built from (their marker holds it), not HEAD before the pull: a
+    # rebuild that failed after its pull is tried again.
+    pull </dev/null || die "nothing rebuilt"
+    [ "$(git_rec rev-parse -q --verify HEAD)" != "$(cat "$D/.cwtfigo-generated" 2>/dev/null)" ] || exit 2
+  fi
   [ ! -d "$D" ] || [ -e "$D/.cwtfigo-generated" ] || [ -z "$(ls -A "$D")" ] || die "$D has files cw hermes didn't make: nothing written. Give another dir: cw hermes <dir>"
-  T=$(mktemp -d "$D.XXXXXX") && touch "$T/.cwtfigo-generated" || die "cannot write next to $D"
+  T=$(mktemp -d "$D.XXXXXX") && { git_rec rev-parse -q --verify HEAD; :; } > "$T/.cwtfigo-generated" || die "cannot write next to $D"
   for d in "$REC"/hosts/*/; do
     [ -d "$d" ] || continue
     H=${d%/}; alias=${H##*/}; here=; [ "$alias" = "$SELF" ] && here=1
@@ -660,6 +675,73 @@ hermes)
     [ ! -e "$D" ] && mv "$T.old" "$D" && die "cannot replace $D"
     o=$T.old; rm -rf "$T"; T=; die "cannot replace $D; the skills it had are in $o"
   fi
+  # The Hermes hook (unattended/README.md): before each message, cw hermes --sync into this same dir, and Hermes rescans
+  # its skills if that rebuilt them. Its own dir, rebuilt whole. Paths go in as Python literals (ascii()), never raw.
+  K=${HERMES_HOME:-$HOME/.hermes}/hooks/cwtfigo
+  [ ! -d "$K" ] || [ -e "$K/.cwtfigo-generated" ] || die "$K has files cw hermes didn't make: the skills are written, the hook isn't"
+  pyfind || die "the Hermes hook needs python3, which this machine doesn't have: the skills are written, the hook isn't"
+  R=$(cd "$REC" && pwd -P) || die "cannot find $REC"
+  nk=; [ -d "$K" ] || nk=1
+  rm -rf "$K" && mkdir -p "$K" && touch "$K/.cwtfigo-generated" &&
+    printf '%s\n' 'name: cwtfigo' 'description: keeps the cwtfigo skills in step with the record (generated by cw hermes)' 'events: [agent:start]' > "$K/HOOK.yaml" ||
+    die "cannot write $K"
+  { cat <<'EOF'
+# Generated by cw hermes, overwritten on its next run. Before Hermes answers a message: cw pulls the record and, if a
+# visit changed it, rebuilds the cwtfigo skills; then Hermes rescans its skills, so this message already sees them.
+# Never raises: a failure is logged and the message goes on. A failed sync waits BACKOFF before the next try.
+import asyncio, contextlib, logging, os, signal, subprocess, time
+
+EOF
+    "$py" -I -c 'import sys; a = sys.argv[1:]; print("ARGV = " + ascii(a[:-1])); print("REC = " + ascii(a[-1]))' /bin/sh "$SKILL/scripts/cw" hermes --sync "$D" "$R"
+    cat <<'EOF'
+REBUILT, NOCHANGE = 0, 2
+TIMEOUT, BACKOFF = 8, 300
+log = logging.getLogger("hooks.cwtfigo")
+_quiet_until = 0.0
+
+
+def _run():
+    # Its own process group: on a timeout its git and ssh go too, and cw's trap frees its lock.
+    p = subprocess.Popen(ARGV, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+                         env=dict(os.environ, CWTFIGO_HOME=REC), start_new_session=True)
+    try:
+        err = p.communicate(timeout=TIMEOUT)[1]
+        return p.returncode, err
+    except subprocess.TimeoutExpired:
+        pass
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(p.pid, sig)
+        try:
+            p.communicate(timeout=2)
+            break
+        except subprocess.TimeoutExpired:
+            pass
+    return None, b"no answer in %d s" % TIMEOUT
+
+
+def _sync():
+    global _quiet_until
+    if time.monotonic() < _quiet_until:
+        return
+    rc, err = _run()
+    if rc == REBUILT:
+        # What /reload-skills does, but the Discord /skill list: a hook can't reach the adapter.
+        from agent.skill_commands import reload_skills
+        reload_skills()
+    elif rc != NOCHANGE:
+        _quiet_until = time.monotonic() + BACKOFF
+        log.warning("cwtfigo: cw hermes --sync failed (exit %s), next try in %d s: %s",
+                    rc, BACKOFF, err.decode(errors="replace").strip()[-500:])
+
+
+async def handle(event_type, context):
+    try:
+        await asyncio.get_running_loop().run_in_executor(None, _sync)
+    except Exception:
+        log.exception("cwtfigo: the skills sync failed")
+EOF
+  } > "$K/handler.py" || die "cannot write $K/handler.py"
   # ~ for $HOME, as written or with its symlinks resolved (D is).
   tl() { for h in "$HOME" "$(CDPATH= cd -- "$HOME" 2>/dev/null && pwd -P)"; do
            [ -n "$h" ] && case $1 in "$h"/*) echo "~${1#"$h"}"; return ;; esac; done; echo "$1"; }
@@ -668,7 +750,9 @@ hermes)
   # A commented-out line lists nothing.
   grep -sv '^[[:space:]]*#' "$cf" | grep -qF -e "$D" -e "$r" -e "$G" -e "$(tl "$G")" ||
     echo "Hermes doesn't read them yet: add $r to skills.external_dirs in $(tl "$cf"), then hermes gateway restart"
-  echo "In Discord, /reload-skills picks up what changed." ;;
+  # Hermes finds its hooks only when it starts.
+  [ -z "$nk" ] || echo "Hermes picks up the hook in $(tl "$K") at its next start: hermes gateway restart, once. From then on each message syncs the skills first."
+  echo "In Discord, /reload-skills updates the /skill list." ;;
 search)
   shift
   pyfind || die "search needs python3 on this machine"
