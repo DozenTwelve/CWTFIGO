@@ -804,8 +804,11 @@ CWTFIGO_HOME=$HM/rec sh "$CW" approve me check maintain attic once >/dev/null &&
 echo 'echo changed' >> "$HB/maintain.sh"
 # A path as the skills show it: in single quotes if a shell would read it as more than one plain word.
 qp() { case $1 in *[!A-Za-z0-9._/+@%,:=-]*) printf "'%s'" "$1" ;; *) printf %s "$1" ;; esac; }; QCW=$(qp "$CW")
-# Each command names the record it was built from: Hermes' terminal has no CWTFIGO_HOME. he runs one as Hermes would.
-P="CWTFIGO_HOME=$(qp "$(cd "$HM/rec" && pwd -P)") "
+# Each command names the record it was built from: Hermes' terminal has no CWTFIGO_HOME. And nothing in it can wait on
+# a prompt in Hermes' pty: no git credential prompt, and (where setsid -w runs) no terminal for ssh or sudo to ask on.
+# he runs one as Hermes would.
+NS=; setsid -w true 2>/dev/null && NS='setsid -w '
+P="GIT_TERMINAL_PROMPT=0 CWTFIGO_HOME=$(qp "$(cd "$HM/rec" && pwd -P)") $NS"
 he() { (unset CWTFIGO_HOME; HOME=$HM/nohome; eval "$1"); }
 ht() { find "$HM/rec" -type f -exec cksum {} + | sort; }; ht > "$HM/before"
 # A UTF-8 locale, as on most machines: a Latin-1 byte in a header must not cut the skill short. None here: say so.
@@ -947,6 +950,10 @@ c=$(sed -n 's/^       //p' "$HM/q/cwtfigo/cw-me-bang-echo-pwn/SKILL.md")
 grep -rF '!`' "$HM/q" && fail "inline shell from a script name reached a skill"
 [ ! -e "$HM/nohome" ] || fail "a skill command fell back to ~/.cwtfigo: $(ls -A "$HM/nohome")"
 grep -rF '`sh ' "$HM/q" && fail "a command in a \`span\`: a backtick in its name would end it"
+# setsid -w where it runs (a fake one here): in every command, which still runs as it reads.
+mkdir "$HM/fs"; printf '#!/bin/sh\n[ "$1" = -w ] && shift; exec "$@"\n' > "$HM/fs/setsid"; chmod +x "$HM/fs/setsid"
+(PATH=$HM/fs:$PATH; hw "$HM/ns" >/dev/null 2>&1) && c=$(sed -n 's/^       //p' "$HM/ns/cwtfigo/cw-me-check/SKILL.md") &&
+  [ "$c" = "GIT_TERMINAL_PROMPT=0 CWTFIGO_HOME=$(qp "$(cd "$HM/rec" && pwd -P)") setsid -w sh $QCW run me check" ] && (PATH=$HM/fs:$PATH; he "$c" >/dev/null 2>&1) || fail "cw hermes: setsid -w where it runs: $c"
 # + @ % , : = are plain to every shell: a checkout path holding them stays unquoted.
 mkdir "$HM/v+1@x,y=z"; ln -s "$HM/a b/skill" "$HM/v+1@x,y=z/skill"; (CW="$HM/v+1@x,y=z/skill/scripts/cw"; hw "$HM/p" >/dev/null) || fail "cw hermes from a path with +@,="
 grep -qxF "       ${P}sh $(qp "$HM/v+1@x,y=z/skill/scripts/cw") run me check" "$HM/p/cwtfigo/cw-me-check/SKILL.md" || fail "cw hermes: + @ , = need no quotes: $(grep '^       ' "$HM/p/cwtfigo/cw-me-check/SKILL.md")"
