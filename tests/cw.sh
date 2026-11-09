@@ -865,6 +865,11 @@ out=$(hw "$HM/pv" 2>&1) && [ -d "$HM/pv/cwtfigo/cw-me-check" ] && grep -q "/cwtf
 printf 'skills:\n  external_dirs:\n    - %s\n' "$HM/lst" > "$HM/hermes-home/config.yaml"
 out=$(hw "$HM/lst" 2>&1) && grep -q "/lst'\]$" "$HK/handler.py" && ! echo "$out" | grep -q 'left as it was' || fail "cw hermes <a dir config.yaml lists> moves the hook there: $out"
 hw >/dev/null 2>&1 && grep -q "/cwtfigo/hermes'\]$" "$HK/handler.py" || fail "cw hermes: the hook back on the default dir"
+# A python that runs '' but not the step writing ARGV and REC (a Python 2 has no -I): no handler.py without them.
+printf '#!/bin/sh\n[ "$1" = -c ] && exit 0; exit 2\n' > "$HM/bin/python3"; chmod +x "$HM/bin/python3"
+out=$(hw 2>&1); rc=$?; rm "$HM/bin/python3"; [ $rc != 0 ] || fail "cw hermes: a failed python step must fail: $out"
+grep -qs '^ARGV = ' "$HK/handler.py" || [ ! -e "$HK/handler.py" ] || fail "cw hermes: a handler.py without ARGV: $out"
+hw >/dev/null 2>&1 && grep -q '^ARGV = ' "$HK/handler.py" || fail "cw hermes: the hook after a fixed python"
 A=$HC/cw-me-attic/SKILL.md
 grep -qx 'name: cw-me-attic' "$A" && grep -q "^description: '备份 (attic on me" "$A" && grep -qx '# 备份' "$A" || fail "attic skill: name, label: $(cat "$A")"
 grep -qF "which way, unless they already said: guard | restore | ! \`echo pwn\` | it's | a/b:c | 照片 | 两 个." "$A" && grep -qxF "       ${P}sh $QCW run me attic guard" "$A" || fail "attic skill: its args, dry run with cw's absolute path: $(cat "$A")"
