@@ -574,6 +574,10 @@ hermes)
       s=$(N=$n A=$alias S=$name E=$x SH=$h REC=$REC CW="$SKILL/scripts/cw" LC_ALL=C awk -v q="'" -v bom="$(printf '\357\273\277')" '
         function trim(x) { sub(/^[ \t]+/, "", x); sub(/[ \t]+$/, "", x); return x }
         function yq(x) { gsub(q, q q, x); return q x q }
+        # A part of the command line in single quotes unless it is plain: a path with a space runs as it reads. A quote
+        # in it ends the quotes, adds one escaped and starts them again: joined by hand, awks differ on \ in gsub.
+        function sq(x,  p, k, i, o) { if (x ~ /^[A-Za-z0-9._\/-]+$/) return x
+          k = split(x, p, q); o = p[1]; for (i = 2; i <= k; i++) o = o q "\\" q q p[i]; return q o q }
         NR == 1 { h = 1; if (index($0, bom) == 1) $0 = substr($0, 4) }
         { sub(/\r$/, ""); l = trim($0) }
         l !~ /^#/ { h = 0; x = $0; gsub(/"/, "", x); gsub(q, "", x)
@@ -586,7 +590,7 @@ hermes)
           else { if (ab == "" && t != "") ab = t; sub(/^ /, "", c); if (w != "" || t != "") w = w c "\n" } }
         END { if (!m && ENVIRON["S"] != "check" && ENVIRON["S"] != "maintain") exit
           a = ENVIRON["A"]; sc = ENVIRON["S"]; f = a "/" sc "." ENVIRON["E"]; if (!m) lb = (ab != "" ? ab : sc)
-          sub(/\n+$/, "", w); r = "sh " ENVIRON["CW"] " run " a " " sc; v = (g != "" ? " " q "<choice>" q : "")
+          sub(/\n+$/, "", w); r = "sh " sq(ENVIRON["CW"]) " run " sq(a) " " sq(sc); v = (g != "" ? " " q "<choice>" q : "")
           print "---"; print "name: " ENVIRON["N"]
           print "description: " yq(lb " (" sc " on " a ", the owner" q "s own CWTFIGO script). Use when the owner asks for this on " a ", or names " sc ".")
           print "version: " yq("sha256-" substr(ENVIRON["SH"], 1, 12))

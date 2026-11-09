@@ -829,6 +829,12 @@ hw "$HM/out/" >/dev/null && hw "$HM/out//" >/dev/null && [ -f "$HM/out/cwtfigo/c
 out=$(hw / 2>&1) && fail "cw hermes / should fail"; echo "$out" | grep -q 'not /' || fail "cw hermes /: $out"
 mkdir "$HM/mine"; echo keep > "$HM/mine/x"; out=$(hw "$HM/mine" 2>&1) && fail "cw hermes into a dir it didn't make should fail"
 [ "$(cat "$HM/mine/x")" = keep ] && [ "$(ls -A "$HM/mine")" = x ] && echo "$out" | grep -q "didn't make" || fail "cw hermes must leave a foreign dir alone: $out"
+# cw's path and a script's name with a space (and a '): quoted in the command shown, which runs as it reads.
+mkdir "$HM/a b"; ln -s "$(cd "$(dirname "$CW")/.." && pwd)" "$HM/a b/skill"
+printf '#!/bin/sh\n# menu: job\necho "job ran: $1"\n' > "$HB/my jo'b.sh"; CWTFIGO_HOME=$HM/rec sh "$CW" approve me "my jo'b" >/dev/null || fail "cw hermes quoting setup"
+(CW="$HM/a b/skill/scripts/cw"; hw "$HM/q" >/dev/null) || fail "cw hermes from a path with a space"
+c=$(sed -n 's/^1\. Dry run, changes nothing: `\(.*\)`\. Relay.*/\1/p' "$HM/q/cwtfigo/cw-me-my-jo-b/SKILL.md")
+[ "$c" = "sh '$HM/a b/skill/scripts/cw' run me 'my jo'\\''b'" ] && [ "$(CWTFIGO_HOME=$HM/rec eval "$c" 2>&1)" = 'job ran: ' ] || fail "cw hermes: the command shown must run as it reads: $c"
 [ -z "$(ls -A "$HM/decoy")" ] || fail "cw hermes tests wrote outside their temp dirs: $(ls -A "$HM/decoy")"
 unset XDG_DATA_HOME HERMES_HOME
 # Unattended: approved scripts only, model and message only when something is found, never under YOLO.
