@@ -47,7 +47,7 @@ sh $CW hermes                                   # first build, and the hook; say
 hermes gateway restart                          # once: Hermes loads the hook when it starts
 ```
 
-It also writes a Hermes hook, `~/.hermes/hooks/cwtfigo/`, so nothing needs a timer. Before Hermes answers a message, the hook asks the shared record (wherever it lives: GitHub, a NAS, a bare repo on the box) whether a visit saved something new. If so, it rebuilds the skills and Hermes rescans them, so the first message after a visit's approval already sees the new skill. Nothing new costs a moment; a record it can't reach costs a few seconds, then it doesn't try again for 5 minutes.
+It also writes a Hermes hook, `~/.hermes/hooks/cwtfigo/`, so nothing needs a timer. The hook follows the dir Hermes reads: `cw hermes <dir>` moves it only to a dir `config.yaml` lists, so a build elsewhere (a preview) leaves it as it was. Before Hermes answers a message, the hook asks the shared record (wherever it lives: GitHub, a NAS, a bare repo on the box) whether a visit saved something new. If so, it rebuilds the skills and Hermes rescans them, so the first message after a visit's approval already sees the new skill. Nothing new costs a moment; a record it can't reach costs a few seconds, then it doesn't try again for 5 minutes.
 
 The `/skill cw-<machine>-<script>` list in Discord is the one thing the hook can't refresh: after a change, `/reload-skills` updates it.
 

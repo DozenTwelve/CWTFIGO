@@ -857,8 +857,14 @@ hw 2>&1 | grep -q external_dirs && fail "cw hermes: no hint once the config list
 # The hook is rebuilt whole (a stray file goes), asks for no restart once there, and a hook dir it didn't make is left alone.
 echo x > "$HK/stray"; out=$(hw 2>&1); [ ! -e "$HK/stray" ] && [ -f "$HK/handler.py" ] && ! echo "$out" | grep -q 'gateway restart, once' || fail "cw hermes: the hook rebuilt whole: $(ls -A "$HK") $out"
 mkdir -p "$HM/hh2/hooks/cwtfigo"; echo keep > "$HM/hh2/hooks/cwtfigo/handler.py"
-out=$(HOME=$HM HERMES_HOME=$HM/hh2 PATH=$PYB:$PATH CWTFIGO_HOME=$HM/rec sh "$CW" hermes "$HM/fh" 2>&1) && fail "cw hermes into a hook dir it didn't make should fail"
+out=$(HOME=$HM XDG_DATA_HOME=$HM/fh HERMES_HOME=$HM/hh2 PATH=$PYB:$PATH CWTFIGO_HOME=$HM/rec sh "$CW" hermes 2>&1) && fail "cw hermes into a hook dir it didn't make should fail"
 [ "$(cat "$HM/hh2/hooks/cwtfigo/handler.py")" = keep ] && [ "$(ls -A "$HM/hh2/hooks/cwtfigo")" = handler.py ] && echo "$out" | grep -q "hooks/cwtfigo has files cw hermes didn't make" || fail "cw hermes must leave a foreign hook dir alone: $out"
+# The hook syncs the dir Hermes reads: the default one, or one its config.yaml lists. Another dir (a preview) gets its
+# skills, the hook is left as it was, and the output says so.
+out=$(hw "$HM/pv" 2>&1) && [ -d "$HM/pv/cwtfigo/cw-me-check" ] && grep -q "/cwtfigo/hermes'\]$" "$HK/handler.py" && ! grep -q "/pv'" "$HK/handler.py" && echo "$out" | grep -q 'hook in ~/hermes-home/hooks/cwtfigo left as it was' || fail "cw hermes <another dir> must leave the hook on the dir Hermes reads: $out $(grep ^ARGV "$HK/handler.py")"
+printf 'skills:\n  external_dirs:\n    - %s\n' "$HM/lst" > "$HM/hermes-home/config.yaml"
+out=$(hw "$HM/lst" 2>&1) && grep -q "/lst'\]$" "$HK/handler.py" && ! echo "$out" | grep -q 'left as it was' || fail "cw hermes <a dir config.yaml lists> moves the hook there: $out"
+hw >/dev/null 2>&1 && grep -q "/cwtfigo/hermes'\]$" "$HK/handler.py" || fail "cw hermes: the hook back on the default dir"
 A=$HC/cw-me-attic/SKILL.md
 grep -qx 'name: cw-me-attic' "$A" && grep -q "^description: '备份 (attic on me" "$A" && grep -qx '# 备份' "$A" || fail "attic skill: name, label: $(cat "$A")"
 grep -qF "which way, unless they already said: guard | restore | ! \`echo pwn\` | it's | a/b:c | 照片 | 两 个." "$A" && grep -qxF "       ${P}sh $QCW run me attic guard" "$A" || fail "attic skill: its args, dry run with cw's absolute path: $(cat "$A")"

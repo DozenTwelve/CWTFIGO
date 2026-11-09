@@ -559,7 +559,7 @@ hermes)
   # --sync, from the Hermes hook before each message: a pull, and a rebuild only if it brought something. Exit 0 rebuilt,
   # 2 nothing new; never a prompt (no terminal there), and a dead remote gives up within seconds.
   sync=; [ "$2" = --sync ] && { sync=1; shift; remote || exit 2; }
-  D=${2:-${XDG_DATA_HOME:-$HOME/.local/share}/cwtfigo/hermes}
+  E=${XDG_DATA_HOME:-$HOME/.local/share}/cwtfigo/hermes; D=${2:-$E}
   # No trailing /: mktemp -d "$D.XXXXXX" would land inside D, and the swap below would fail every run.
   D=${D%"${D##*[!/]}"}; [ -n "$D" ] || die "cw hermes needs a dir of its own, not /"
   case ${D##*/} in .|..) die "cw hermes needs a dir by its own name, not ending in . or .." ;; esac
@@ -677,9 +677,19 @@ hermes)
     [ ! -e "$D" ] && mv "$T.old" "$D" && die "cannot replace $D"
     o=$T.old; rm -rf "$T"; T=; die "cannot replace $D; the skills it had are in $o"
   fi
+  # ~ for $HOME, as written or with its symlinks resolved (D is).
+  tl() { for h in "$HOME" "$(CDPATH= cd -- "$HOME" 2>/dev/null && pwd -P)"; do
+           [ -n "$h" ] && case $1 in "$h"/*) echo "~${1#"$h"}"; return ;; esac; done; echo "$1"; }
+  r=$(tl "$D"); cf=${HERMES_HOME:-$HOME/.hermes}/config.yaml; K=${HERMES_HOME:-$HOME/.hermes}/hooks/cwtfigo
+  echo "skills in $r"
+  # A commented-out line lists nothing.
+  ls=; grep -sv '^[[:space:]]*#' "$cf" | grep -qF -e "$D" -e "$r" -e "$G" -e "$(tl "$G")" && ls=1
+  [ -n "$ls" ] || echo "Hermes doesn't read them yet: add $r to skills.external_dirs in $(tl "$cf"), then hermes gateway restart"
+  echo "In Discord, /reload-skills updates the /skill list."
   # The Hermes hook (unattended/README.md): before each message, cw hermes --sync into this same dir, and Hermes rescans
   # its skills if that rebuilt them. Its own dir, rebuilt whole. Paths go in as Python literals (ascii()), never raw.
-  K=${HERMES_HOME:-$HOME/.hermes}/hooks/cwtfigo
+  # One hook, for the dir Hermes reads: the default one or one config.yaml lists. A build elsewhere (a preview) leaves it.
+  [ -n "$ls" ] || [ "$G" = "$E" ] || { echo "Hermes' hook in $(tl "$K") left as it was: it keeps $(tl "$E") or a dir config.yaml lists in step, not this one"; exit 0; }
   [ ! -d "$K" ] || [ -e "$K/.cwtfigo-generated" ] || die "$K has files cw hermes didn't make: the skills are written, the hook isn't"
   pyfind || die "the Hermes hook needs python3, which this machine doesn't have: the skills are written, the hook isn't"
   nk=; [ -d "$K" ] || nk=1
@@ -743,17 +753,8 @@ async def handle(event_type, context):
         log.exception("cwtfigo: the skills sync failed")
 EOF
   } > "$K/handler.py" || die "cannot write $K/handler.py"
-  # ~ for $HOME, as written or with its symlinks resolved (D is).
-  tl() { for h in "$HOME" "$(CDPATH= cd -- "$HOME" 2>/dev/null && pwd -P)"; do
-           [ -n "$h" ] && case $1 in "$h"/*) echo "~${1#"$h"}"; return ;; esac; done; echo "$1"; }
-  r=$(tl "$D"); cf=${HERMES_HOME:-$HOME/.hermes}/config.yaml
-  echo "skills in $r"
-  # A commented-out line lists nothing.
-  grep -sv '^[[:space:]]*#' "$cf" | grep -qF -e "$D" -e "$r" -e "$G" -e "$(tl "$G")" ||
-    echo "Hermes doesn't read them yet: add $r to skills.external_dirs in $(tl "$cf"), then hermes gateway restart"
   # Hermes finds its hooks only when it starts.
-  [ -z "$nk" ] || echo "Hermes picks up the hook in $(tl "$K") at its next start: hermes gateway restart, once. From then on each message syncs the skills first."
-  echo "In Discord, /reload-skills updates the /skill list." ;;
+  [ -z "$nk" ] || echo "Hermes picks up the hook in $(tl "$K") at its next start: hermes gateway restart, once. From then on each message syncs the skills first." ;;
 search)
   shift
   pyfind || die "search needs python3 on this machine"
