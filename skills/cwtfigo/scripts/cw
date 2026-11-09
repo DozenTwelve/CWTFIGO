@@ -578,21 +578,23 @@ hermes)
     die "cannot create the lock $D.lock"
   fi
   # Killed between the swap's two mv's ($D moved aside, the new one not in): the old one goes back, before the lock goes.
+  # What the skills are built from: the record's commit and this cw (its awk and rules), so a plugin update rebuilds too.
+  mk() { git_rec rev-parse -q --verify HEAD; sha "$SKILL/scripts/cw"; }
   T=; trap '[ -z "$T" ] || { rm -rf "$T"; { [ -e "$D" ] || mv "$T.old" "$D"; } 2>/dev/null && rm -rf "$T.old"; }; rmdir "$D.lock"' EXIT; trap 'exit 1' INT TERM HUP
   if [ -n "$sync" ]; then
     # The owner's own ssh (core.sshCommand, GIT_SSH), as for any pull. It can't ask: the hook runs this in a session of
     # its own (no terminal) with stdin /dev/null, and its timeout ends a hung remote.
     export GIT_TERMINAL_PROMPT=0
-    # Nothing new is the commit the skills were built from (their marker holds it), not HEAD before the pull: a
+    # Nothing new is what the skills were built from (their marker holds mk), not HEAD before the pull: a
     # rebuild that failed after its pull is tried again.
     pull </dev/null || die "nothing rebuilt"
-    [ "$(git_rec rev-parse -q --verify HEAD)" != "$(cat "$D/.cwtfigo-generated" 2>/dev/null)" ] || exit 2
+    [ "$(mk)" != "$(cat "$D/.cwtfigo-generated" 2>/dev/null)" ] || exit 2
   fi
   [ ! -d "$D" ] || [ -e "$D/.cwtfigo-generated" ] || [ -z "$(ls -A "$D")" ] || die "$D has files cw hermes didn't make: nothing written. Give another dir: cw hermes <dir>"
   # The record, absolute: the skills' commands and the hook name it (Hermes' terminal has no CWTFIGO_HOME).
   R=$(cd "$REC" && pwd -P) || die "cannot find $REC"
   pyfind || die "cw hermes needs python3 (for the skills' text and the Hermes hook), which this machine doesn't have: nothing written"
-  T=$(mktemp -d "$D.XXXXXX") && { git_rec rev-parse -q --verify HEAD; :; } > "$T/.cwtfigo-generated" || die "cannot write next to $D"
+  T=$(mktemp -d "$D.XXXXXX") && { mk; :; } > "$T/.cwtfigo-generated" || die "cannot write next to $D"
   for d in "$REC"/hosts/*/; do
     [ -d "$d" ] || continue
     H=${d%/}; alias=${H##*/}; here=; [ "$alias" = "$SELF" ] && here=1

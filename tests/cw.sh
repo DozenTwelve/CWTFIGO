@@ -961,6 +961,11 @@ SD=$S/share/cwtfigo/hermes; git init -q --bare "$S/r.git"
 { sw a approve a check && sw a save one && sw b join "$S/r.git" && sw b hermes; } >/dev/null 2>&1 || fail "cw hermes --sync setup"
 # Nothing new: exit 2, the skills untouched.
 touch "$S/stamp"; out=$(sw b hermes --sync 2>&1); [ $? = 2 ] && [ -z "$out" ] && [ -z "$(find "$SD" -newer "$S/stamp")" ] && [ ! -e "$SD.lock" ] || fail "cw hermes --sync, nothing new: $out $(find "$SD" -newer "$S/stamp")"
+# A plugin update (its cw changed), nothing new in the record: rebuilt all the same, the skills are cw's text.
+mkdir -p "$S/plug/scripts"; cp "$CW" "$S/plug/scripts/cw"
+(CW=$S/plug/scripts/cw; sw b hermes >/dev/null 2>&1 || exit 1; sw b hermes --sync >/dev/null 2>&1; [ $? = 2 ] || exit 1
+ echo '# a plugin update' >> "$CW"; sw b hermes --sync >/dev/null 2>&1) || fail "cw hermes --sync after a plugin update must rebuild"
+sw b hermes >/dev/null 2>&1 || fail "cw hermes: back to this plugin's cw"
 # A visit approved a new script and saved: pulled, rebuilt, exit 0.
 printf '#!/bin/sh\n# menu: new one\necho new\n' > "$S/a/hosts/a/new.sh"; { sw a approve a new && sw a save two; } >/dev/null 2>&1 || fail "cw hermes --sync setup: a new script"
 out=$(sw b hermes --sync 2>&1); [ $? = 0 ] && [ -f "$SD/cwtfigo/cw-a-new/SKILL.md" ] && [ "$(git -C "$S/b" rev-parse HEAD)" = "$(git -C "$S/a" rev-parse HEAD)" ] || fail "cw hermes --sync after a new commit: $out"
