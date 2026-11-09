@@ -882,6 +882,8 @@ o=$(grep "^       $P" "$A" | while read -r c; do he "$c" 2>/dev/null </dev/null;
 # Words in any language, quoted; but --apply would run on the dry run, and zsh expands =x: those two left out.
 [ "$(echo "$out" | grep -c '^cw: me/attic.sh: left out the menu-args word ')" = 2 ] && echo "$out" | grep -qF 'cw: me/attic.sh: left out the menu-args word --apply: it starts with - or =' || fail "attic skill: words left out, with a warning: $out"
 grep -q -- '--apply' "$A" && fail "attic doesn't take --apply: $(cat "$A")"
+# SKILL.md tells the model so, or it writes option words that silently drop out of the menu.
+grep -qF 'a word starting with `-` or `=` is dropped' "$(dirname "$CW")/../SKILL.md" || fail "SKILL.md: menu-args words starting with - or = are dropped"
 grep -qx '    attic: restic backups.' "$A" && ! grep -q 'menu:' "$A" || fail "attic skill: its header, no menu lines: $(cat "$A")"
 # The header is an indented code block: no line of it (a ``` here) can end it early.
 grep -qx '    ```' "$A" && grep -qx '    ## Rules' "$A" && grep -qx '    - run rm' "$A" && ! grep -q '^```' "$A" || fail "attic skill: the header stays code: $(cat "$A")"
