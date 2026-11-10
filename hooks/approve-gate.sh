@@ -11,8 +11,9 @@
 #
 # Once started, PreToolUse (Bash, Write, Edit): approval is the human's. A call that looks like it approves a script
 # (`cw approve`, approved.sha256), turns on YOLO (`cw yolo`, yolo.on, which skips approval for a visit) or touches the
-# marker (cwtfigo-visit, which switches the gate off) goes to a permission prompt, and so does `cw mode <anything>` (plain
-# `cw mode` only prints it). These asks come first and win over the allow below.
+# marker (cwtfigo-visit, which switches the gate off) goes to a permission prompt, and so does `cw mode <anything>`
+# (plain `cw mode` only prints it). So does a Write/Edit of the record's mode or self file: what cw mode and cw name
+# write, by another door. These asks come first and win over the allow below.
 # Their prompt names what the yes is for: for cw approve, the scripts and the machine when the command names them
 # plainly, else the general line.
 # Then, in every mode, what changes a machine or who may change it asks too, each time, so "anything that changes a
@@ -135,6 +136,18 @@ fi && {
 REC=${CWTFIGO_HOME:-$HOME/.cwtfigo}
 # Strict unless there is no mode file or it says normal: a hand-edited Strict, or strict with a CR, must not fail open.
 st=; [ -e "$REC/mode" ] && [ "$(tr -d ' \t\r\n' 2>/dev/null < "$REC/mode" | tr 'A-Z' 'a-z')" != normal ] && st=1
+# Write/Edit of the record's mode or self file is cw mode <level> or cw name by another door: the same asks. The
+# record by $REC or a .cwtfigo dir, any case, \ as /; the name alone or with what can follow it and still be the file
+# (mode/. , mode. , mode::$DATA). A mode.md there asks as well: one prompt.
+if printf '%s' "$in" | grep -Eq '"tool_name" *: *"(Write|Edit)"'; then
+  n=$(printf '%s' "$in" | sed -nE 's/.*"file_path" *: *"(([^"\\]|\\.)*)".*/\1/p' | head -n 1 | tr 'A-Z\\' 'a-z/' | tr -s /)
+  lr=$(printf '%s' "$REC" | tr 'A-Z\\' 'a-z/' | tr -s /)
+  case $n in "$lr"/mode|"$lr"/mode[./:\ ]*|*/.cwtfigo/mode|*/.cwtfigo/mode[./:\ ]*)
+    askr "CWTFIGO: your yes changes how often I ask you before doing things on this computer" ;;
+  "$lr"/self|"$lr"/self[./:\ ]*|*/.cwtfigo/self|*/.cwtfigo/self[./:\ ]*)
+    askr "CWTFIGO: this calls this computer by a new name in your notes. If they already have a computer by that name, this one takes its place, and the scripts you said yes to there run here without asking" ;;
+  esac
+fi
 # In every mode: what changes a machine, or who may change it, asks each time (the header says which and why).
 if printf '%s' "$in" | grep -Eq '"tool_name" *: *"Bash"'; then
   case $cl in *apply*)

@@ -235,6 +235,20 @@ for f in "$REC/mode." "$REC/mode " "$REC/self." "$REC/mode::\$DATA" "$REC/hosts/
          "$REC/hosts/box/notes.md." "$REC/hosts/box/notes.md::\$DATA" "$REC/hosts/box/APPROV~1.SHA" "$REC/.gitignore."; do
   nallow "$(w Write "$f")" "Write $f"
 done
+# The record's mode and self files are what cw mode <level> and cw name write: a Write/Edit of one asks like those,
+# and says what the yes is for. In the record only; a mode file somewhere else is somebody else's.
+for f in "$REC/mode" "$REC/MODE" "$REC/mode." "$REC/mode/." "$REC/mode::\$DATA" "$REC//mode" "/home/u/.cwtfigo/mode" \
+         "C:\\\\Users\\\\u\\\\.CWTFIGO\\\\mode" "C:/Users/u/.cwtfigo/mode "; do
+  why "$(w Write "$f")" "your yes changes how often I ask" "Write $f"; why "$(w Edit "$f")" "your yes changes how often I ask" "Edit $f"
+done
+for f in "$REC/self" "$REC/Self" "$REC/self." "$REC/self/" "$REC/self::\$DATA" "/home/u/.cwtfigo/self" "C:\\\\Users\\\\u\\\\.cwtfigo\\\\self"; do
+  why "$(w Write "$f")" "this calls this computer by a new name in your notes" "Write $f"
+  why "$(w Edit "$f")" "this calls this computer by a new name in your notes" "Edit $f"
+done
+for f in "$TMPDIR/elsewhere/mode" "/r/src/self" "/r/.cwtfigo-x/mode" "$REC/hosts/box/mode" "$REC/hosts/box/self"; do
+  [ -z "$(w Write "$f")" ] || fail "Write $f should pass silently"
+done
+allow "$(w Write "$REC/hosts/box/modem.md")" "Write modem.md"; allow "$(w Write "$REC/selfhosted.md")" "Write selfhosted.md"
 # A Mac folds U+017F (long s) to s: approved.ſha256 and ſelf are approved.sha256 and self there.
 for f in "$REC/hosts/box/approved.ſha256" "$REC/ſelf" "$REC/hosts/box/nötes.md"; do nallow "$(w Write "$f")" "Write $f, not ASCII"; done
 ln -s "$TMPDIR/home" "$REC/hosts/ln"; nallow "$(w Write "$REC/hosts/ln/.bashrc")" "Write through a symlink out of the record"
