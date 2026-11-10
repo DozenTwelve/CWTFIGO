@@ -62,7 +62,7 @@ Upgrading for fun, "why is it so hot", and "it's broken" differ only in how deep
     cases.jsonl             # one line per real problem, what cw search finds; see Cases
 ```
 
-`cw` creates `~/.cwtfigo` on first use, and a machine's directory once something is written there; that's the whole setup. `local` runs on this machine, whose name is in `self`. In a record that knows no other machine, the first `local` names it after its hostname and says so; `cw name <name>` renames it (and its host dir).
+`cw` creates `~/.cwtfigo` on first use, and a machine's directory once something is written there; that's the whole setup. `local` runs on this machine, whose name is in `self`. Unless the record is shared with other computers and already knows machines (then `cw` asks), the first `local` names it after its hostname and says so; `cw name <name>` renames it (and its host dir).
 
 `cw run <alias> collect` writes `facts.md`; distill `device.json` from it, only what scripts and searches key on, updated when the facts change. `id` is the collector's; `os` is lowercase, os-release's `ID` on Linux (`arch`, `ubuntu`, `steamos`), else `macos`, `openwrt`, `windows`, and names the foundation and `knowledge/sources/<os>.md` (a derivative without its own reads its base's: `ubuntu` reads `debian.md`); `version` is what `cw status` shows. The rest stays in `facts.md`, what the machine is for in `notes.md`.
 
