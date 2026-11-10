@@ -183,7 +183,7 @@ Floor at every level, `cw yolo` included: deleting user data (emptying the Trash
 - Before changing sshd, firewall or network config remotely: arm an auto-rollback (e.g. `sleep 300 && restore` in background), make the change, reconnect, then cancel it.
 - Code that runs inside a system transition (sleep/resume hooks, udev rules, boot units) puts a hard timeout on every call that can block (`timeout 5 fprintd-list`, D-Bus, network): a hook that hangs on resume freezes the whole session, leaving the human the power button.
 - Never store secrets in the record or in a contribution. Redact tokens, keys, passwords.
-- The record never leaves the operator's machine except as a contribution the user has read and approved.
+- The record never leaves the operator's machine except to the owner's own private shared remote (see Remote and several machines), in the unattended reports the owner set up, or as a contribution the user has read and approved.
 
 ## Remote and several machines
 
