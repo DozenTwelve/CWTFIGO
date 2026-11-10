@@ -58,7 +58,7 @@ What it learns goes into notes on your computer, one folder per machine: what it
 - **It asks first.** A script runs only after your yes (one yes covers the plugin's read-only checks), checked by its fingerprint: if it changes, it asks again.
 - **Scripts written for your machine, kept.** Each machine gets its own health check and upkeep script, written by Claude for that machine and approved by you, then rerun every visit and rewritten when something new is learned.
 - **Many machines.** Your laptop can look after your server, your NAS and your router over SSH, with the notes for all of them in one place.
-- **No AI needed afterwards.** A small terminal menu runs your approved checks and upkeep without Claude.
+- **No AI needed afterwards (Mac and Linux).** A small terminal menu runs your approved checks and upkeep without Claude.
 
 ## Without AI: the menu
 
