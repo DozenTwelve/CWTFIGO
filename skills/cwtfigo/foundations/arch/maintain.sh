@@ -21,13 +21,16 @@ JOURNAL_MAX=200M
 #   aur         AUR helper clone/build cache (-git packages re-clone next time)
 #   journal     systemd journal, vacuumed to JOURNAL_MAX
 #   usercache   ~/.cache: all app caches. Apps rebuild them, some log you out. Opt-in.
-#   trash       empty the Trash. User data, irreversible. Only when the owner asked.
+#   trash       empty the Trash. User data, irreversible. Only when the owner said yes in chat, and only
+#               when named after --apply (--apply trash): never from CLEAN.
 # Never removed here: orphans (listed only; removal cascades, show the full list and confirm separately).
 
 APPLY=; [ "$1" = --apply ] && APPLY=1 && shift
 # Items named after --apply are the owner's pick for this run, in place of CLEAN (none: clean nothing). The pick goes
 # as args, not as an edit: an edit changes the hash and asks for approval again. CLEAN stays the habit.
-[ $# -gt 0 ] && CLEAN="$*"
+# trash only when named after --apply (--apply trash), never from CLEAN: emptying it takes the owner's yes typed in
+# chat, and --apply runs on a permission prompt alone. So it is left out of CLEAN even if added there.
+[ $# -gt 0 ] && CLEAN="$*" || { c=; for i in $CLEAN; do [ "$i" = trash ] || c="${c:+$c }$i"; done; CLEAN=$c; }
 has() { command -v "$1" >/dev/null 2>&1; }
 on() { case " $1 " in *" $2 "*) return 0;; esac; return 1; }
 sec() { echo; echo "## $1"; }
