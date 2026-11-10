@@ -301,6 +301,13 @@ ask "$(bash 'cw approve local x')" "after Skill cwtfigo:cwtfigo"
 [ -e "$V/a" ] && [ ! -e "$XDG_RUNTIME_DIR/cwtfigo-visit" ] || fail "the marker belongs in ~/.cache/cwtfigo-visit, not under XDG_RUNTIME_DIR (gone at logout)"
 S=b
 [ -z "$(bash 'cw approve local x')" ] || fail "other session should stay silent"
+# The skill's name the way a model may write it: with a slash, with spaces. Another skill's name still doesn't start.
+for n in '/cwtfigo:cwtfigo' '/cwtfigo' ' cwtfigo ' ' /cwtfigo:cwtfigo'; do
+  S=n$(printf '%s' "$n" | cksum | cut -d' ' -f1); [ -z "$(bash 'cw approve local x')" ] || fail "before Skill '$n' should pass silently"
+  hook "$(printf '"tool_name":"Skill","tool_input":{"skill":"%s"}' "$n")" >/dev/null; ask "$(bash 'cw approve local x')" "after Skill '$n'"
+done
+S=n0; for n in '/cwtfigox' 'x/cwtfigo' 'cwtfigo:other' '//cwtfigo'; do hook "$(printf '"tool_name":"Skill","tool_input":{"skill":"%s"}' "$n")" >/dev/null; done
+[ -z "$(bash 'cw approve local x')" ] || fail "another skill's name shouldn't start"
 S=c
 up() { hook "$(printf '"hook_event_name":"UserPromptSubmit","prompt":"%s"' "$1")"; }
 [ -z "$(up 'what is /cwtfigo for')" ] && [ -z "$(up '/cwtfigox')" ] || fail "prompt not starting with /cwtfigo should print nothing"

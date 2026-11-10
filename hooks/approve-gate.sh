@@ -1,12 +1,13 @@
 #!/bin/sh
 # Approval gate. It only applies once the plugin has started in this session: changing the plugin and using it are
 # different things. Before that (working on the plugin, running its tests, a contributor's PR) nothing here asks.
-# Started = this session called the cwtfigo skill: a Skill call (PreToolUse, tool_input {"skill":"cwtfigo:cwtfigo"})
-# or a prompt beginning /cwtfigo or /cwtfigo:cwtfigo (UserPromptSubmit). Either one leaves a marker file
-# ~/.cache/cwtfigo-visit/<session_id>, the user's own (not /tmp, which every user on a Linux box shares: whoever made
-# it first would own it) and on disk on every OS. It used to be under XDG_RUNTIME_DIR where that is set: gone at
-# logout on Linux, so a session resumed after one (claude -c, the same session_id) came back ungated. A marker still
-# there counts, so a session started before the move stays gated.
+# Started = this session called the cwtfigo skill: a Skill call (PreToolUse, tool_input {"skill":"cwtfigo:cwtfigo"},
+# the name also as cwtfigo, with a / before it or spaces around it) or a prompt beginning /cwtfigo or
+# /cwtfigo:cwtfigo (UserPromptSubmit). Either one leaves a marker file ~/.cache/cwtfigo-visit/<session_id>, the
+# user's own (not /tmp, which every user on a Linux box shares: whoever made it first would own it) and on disk on
+# every OS. It used to be under XDG_RUNTIME_DIR where that is set: gone at logout on Linux, so a session resumed
+# after one (claude -c, the same session_id) came back ungated. A marker still there counts, so a session started
+# before the move stays gated.
 # No marker: the session's transcript (the input's transcript_path) is read, once per session, for a Skill call of
 # cwtfigo or a /cwtfigo prompt as Claude Code records them, and either one counts as started. That is for a session
 # that carries an earlier one's history under a new session_id (claude --fork-session) and for a marker that got
@@ -93,7 +94,7 @@ if printf '%s' "$in" | grep -Eq '"hook_event_name" *: *"UserPromptSubmit"'; then
   exit 0
 fi
 if printf '%s' "$in" | grep -Eq '"tool_name" *: *"Skill"'; then
-  printf '%s' "$in" | grep -Eq '"skill" *: *"(cwtfigo:)?cwtfigo"' && mark
+  printf '%s' "$in" | grep -Eq '"skill" *: *" */?(cwtfigo:)?cwtfigo *"' && mark
   exit 0
 fi
 if [ -n "$sid" ] && [ ! -e "$d/$sid" ] && ! { [ -n "${XDG_RUNTIME_DIR:-}" ] && [ -e "$XDG_RUNTIME_DIR/cwtfigo-visit/$sid" ]; } && mkd; then
