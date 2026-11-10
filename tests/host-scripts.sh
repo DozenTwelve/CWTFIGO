@@ -8,6 +8,8 @@ set -u
 S=$(cd "$(dirname "$0")/.." && pwd)/skills/cwtfigo
 F=$S/foundations; P=$S/scripts/probes
 SH=${SH:-sh}; SH="$(command -v ${SH%% *})${SH#${SH%% *}}"   # absolute: the scripts run with PATH=$D/bin
+# python3 by its real path, found before HOME moves: a version manager's shim (mise, pyenv) breaks under a temp HOME.
+PY=$(python3 -c 'import sys; print(sys.executable)') || { echo "FAIL: the kinds.json check needs python3"; exit 1; }
 T=$(mktemp -d); export HOME="$T/home"; mkdir "$HOME"
 fail() { echo "FAIL: $* (copy: ${D:-}/script)"; exit 1; }
 
@@ -255,7 +257,7 @@ fi
 
 # knowledge/kinds.json, which case items take their kind from: valid JSON, each label in one kind only, and no guess
 # or attempt under root cause or resolution (cw search reads any resolution as fixed).
-o=$(python3 - "$S/knowledge/kinds.json" <<'EOF' 2>&1
+o=$("$PY" - "$S/knowledge/kinds.json" <<'EOF' 2>&1
 import collections, json, re, sys
 k = json.load(open(sys.argv[1]))["kinds"]
 n = collections.Counter(m for x in k for m in x["members"])
