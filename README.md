@@ -42,7 +42,7 @@ You say the name and what's wrong:
 >
 > 一体どうなってやがるんだ、Wi-Fiがすぐ切れる
 
-Or just `cwtfigo`, and it offers a checkup: disk, memory, battery, heat, failed services, pending updates, how much space a cleanup would free.
+Or just `cwtfigo`, and it offers a checkup: disk, memory, battery, failed services, pending updates, how much space a cleanup would free.
 
 There's no fixed script library. Claude writes each machine's scripts on the spot, for that machine: its OS, what's installed, what you told it not to touch. It starts from a short template per OS and, where open-source projects already keep the data (which files an app leaves behind, where games keep saves, how each package manager upgrades), it reads theirs instead of guessing. It reads them; it never downloads and runs their code.
 
