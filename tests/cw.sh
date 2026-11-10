@@ -56,6 +56,10 @@ mkdir "$T/build"; ln -sf "$T/build/cwtfigo-tui" "$T/home/.local/bin/cwtfigo"
 out=$(tw 2>&1) && fail "cw tui should refuse to replace a link to an own build"
 echo "$out" | grep -q 'link to your own build.*cargo build --release' && [ -L "$T/home/.local/bin/cwtfigo" ] || fail "cw tui over a link: $out"
 rm "$T/home/.local/bin/cwtfigo"
+# A folder of that name: the binary would be moved into it and reported as installed. Refused, nothing fetched or put there.
+mkdir "$T/home/.local/bin/cwtfigo"; rm "$T/curl.args"; out=$(tw 2>&1) && fail "cw tui should refuse a folder named cwtfigo: $out"
+echo "$out" | grep -q 'cwtfigo is a folder, not the TUI: nothing installed' && [ -z "$(ls -A "$T/home/.local/bin/cwtfigo")" ] && [ ! -e "$T/curl.args" ] || fail "cw tui over a folder: $out"
+rmdir "$T/home/.local/bin/cwtfigo"; : > "$T/curl.args"
 # A tarball that doesn't match its .sha256: nothing installed, the old binary left as it was, no temp file left.
 echo old > "$T/home/.local/bin/cwtfigo"; echo "$(tsum "$T/pkg/LICENSE")  $A" > "$T/srv.sha256"
 out=$(tw 2>&1) && fail "cw tui should refuse a tarball that doesn't match its .sha256"

@@ -72,6 +72,8 @@ if [ "$1" = tui ]; then
   tag=tui-v$v; a=cwtfigo-tui-$os-$m.tar.gz; B=$HOME/.local/bin; u=https://github.com/DozenTwelve/CWTFIGO/releases/download/$tag/$a
   # A clone's own build, linked there (tui/README): replacing the link would cut it off from later rebuilds.
   [ -L "$B/cwtfigo" ] && die "~/.local/bin/cwtfigo is a link to your own build, $(readlink "$B/cwtfigo"): nothing installed. Rebuild it instead (git pull, then cargo build --release in tui/)"
+  # A folder of that name: the new binary would be moved into it, and "installed" said of a cwtfigo that can't run.
+  [ -d "$B/cwtfigo" ] && die "~/.local/bin/cwtfigo is a folder, not the TUI: nothing installed. Move it away, then try again"
   mkdir -p "$B" || die "cannot create $B"
   # The new binary is written next to the old one and renamed over it: one filesystem, so the swap is atomic and a
   # running TUI keeps its old file.
