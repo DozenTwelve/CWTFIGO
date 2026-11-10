@@ -108,6 +108,10 @@ Then `/reload-plugins`.
 
 </details>
 
+## Update
+
+Claude Code doesn't update this plugin by itself: it does that only for Anthropic's own marketplaces. To update now, run `/plugin`, open the **Marketplaces** tab, pick `cwtfigo`, choose **Update marketplace**, then run `/reload-plugins`. Choose **Enable auto-update** in the same place to have it done each time Claude Code starts.
+
 ## License
 
 MIT ([LICENSE](LICENSE)). How it behaves, for the curious: [`skills/cwtfigo/SKILL.md`](skills/cwtfigo/SKILL.md).
