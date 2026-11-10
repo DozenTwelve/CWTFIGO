@@ -668,6 +668,10 @@ echo "$out" | grep -q 'Mode\|C  W  T  F\|Reads nothing' && fail "status should h
 F=$(mktemp -d); out=$(CWTFIGO_HOME=$F/rec sh "$CW" status 2>/dev/null)
 [ "$(echo "$out" | head -7)" = "$art" ] || fail "a brand-new record's status should open with the art: $out"
 [ "$(echo "$out" | head -7 | LC_ALL=C grep -c '^[ -~]*[^ ]$')" = 7 ] || fail "art lines: ASCII, no trailing spaces: $out"
+# A new owner reads its last line: plain words, no "SSH alias".
+echo "$out" | tail -1 | grep -qx "  No machines yet. Tell me what's wrong with this one, or the name of another computer you reach over SSH." || fail "a brand-new record's last line, in plain words: $out"
+# The usage says what a <script> is as cw takes it: a name, never a path (resolve refuses one).
+sh "$CW" 2>/dev/null | grep -q 'hosts/<alias>/<name>' && fail "the usage should not offer a path as a <script>"
 mkdir -p "$F/h/hosts/box"; out=$(CWTFIGO_HOME=$F/h sh "$CW" status 2>/dev/null)
 [ "$(echo "$out" | head -7)" = "$art" ] || fail "a record with a host should open with the art too: $out"
 # Under YOLO the art's promise goes and the YOLO line says it.

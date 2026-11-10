@@ -18,7 +18,7 @@
 #
 # <alias>: the SSH alias, also the host's dir in hosts/. "local", or this machine's own name ($REC/self), runs here.
 # A record not shared with other computers (no remote) names this machine from its hostname on the first "local".
-# <script>: collect | check | maintain | hosts/<alias>/<name>.sh, else scripts/probes/<name>.sh. .ps1 on Windows.
+# <script>: collect | check | maintain | <name> (a script in hosts/<alias>/), else scripts/probes/<name>.sh. .ps1 on Windows.
 # A missing check.sh / maintain.sh is copied from foundations/<os>/ (os from device.json); run and approve refuse it
 # until the model has adapted it and deleted its CWTFIGO-FOUNDATION line. Unapproved scripts print (the plugin's own: header and path) and exit 3 (under yolo: print and run).
 # collect writes hosts/<alias>/facts.md and exits 4 if the machine id no longer matches or another host has it.
@@ -554,7 +554,7 @@ EOF
   done | awk -F '\t' '{h[NR] = $1; s[NR] = $2; l[NR] = $3; i[NR] = $4; if (length($1) > a) a = length($1); if (length($2) > b) b = length($2)}
     END {for (r = 1; r <= NR; r++) printf "  %-" a "s  %-" b "s  last visit %-10s  %s\n", h[r], s[r], l[r], i[r]}'
   [ $n = 0 ] || echo  # no rows: the blank line above already sets the last line apart
-  if [ $n = 0 ]; then echo "  No machines yet. Tell me what's wrong with this one, or the SSH alias of another."
+  if [ $n = 0 ]; then echo "  No machines yet. Tell me what's wrong with this one, or the name of another computer you reach over SSH."
   elif [ -n "$SELF" ] && [ -d "$REC/hosts/$SELF" ]; then echo "  Another machine? Tell me its SSH alias."
   else echo "  Another machine? Tell me its SSH alias, or ask about this one."; fi ;;
 hermes)
