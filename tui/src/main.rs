@@ -483,7 +483,9 @@ fn approved(rec: &Path, t: &Target) -> bool {
     };
     let sum = out.split_whitespace().next().unwrap_or("");
     let list = fs::read_to_string(h.join("approved.sha256")).unwrap_or_default();
-    !sum.is_empty() && list.lines().any(|l| l.split(' ').next() == Some(sum))
+    // A line ending in yolo is a run under YOLO, not the owner's yes: as in cw, it counts only while YOLO is on.
+    let yolo = fresh(&rec.join("yolo.on")) || fresh(&h.join("yolo.on"));
+    !sum.is_empty() && list.lines().any(|l| l.split(' ').next() == Some(sum) && (yolo || l.split_whitespace().last() != Some("yolo")))
 }
 
 /// What the owner can do about a failure cw explains only to the model, or ssh only by its exit code.
@@ -1290,6 +1292,12 @@ mod tests {
         let t = Target { name: "b".into(), stem: "fix".into(), file: "fix.sh".into(), arg: None, can_apply: false };
         assert!(!approved(&rec, &t));
         let sum = "bb6220bfa599c6294ebc0954c2781c5513b565eb55f01aba387bfd0dc90176b1"; // of fix.sh above
+        fs::write(h.join("approved.sha256"), format!("{sum}  fix  2026-11-07  yolo\n")).unwrap();
+        assert!(!approved(&rec, &t), "a run under YOLO isn't an approval once YOLO is off");
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        fs::write(h.join("yolo.on"), format!("{now}\n")).unwrap();
+        assert!(approved(&rec, &t), "it counts while YOLO is on");
+        fs::remove_file(h.join("yolo.on")).unwrap();
         fs::write(h.join("approved.sha256"), format!("{sum}  fix  2026-11-07\n")).unwrap();
         assert!(approved(&rec, &t));
         let mut a = app(vec![host("b", vec![item("fix", false)])]);
