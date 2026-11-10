@@ -22,6 +22,7 @@
 # A missing check.sh / maintain.sh is copied from foundations/<os>/ (os from device.json); run and approve refuse it
 # until the model has adapted it and deleted its CWTFIGO-FOUNDATION line. Unapproved scripts print (the plugin's own: header and path) and exit 3 (under yolo: print and run).
 # collect writes hosts/<alias>/facts.md and exits 4 if the machine id no longer matches or another host has it.
+# On a computer where cw hermes has run (it runs scripts for Hermes, nobody is asked first) cw approve and cw yolo are refused.
 
 SKILL=$(cd "$(dirname "$0")/.." && pwd)
 REC=${CWTFIGO_HOME:-$HOME/.cwtfigo}
@@ -95,12 +96,13 @@ command -v git >/dev/null || die "CWTFIGO keeps its notes in git: install it (De
 [ -d "$REC/.git" ] || { mkdir -p "$REC" && git init -q "$REC"; } || die "cannot create $REC"
 ignores() {
   # Scripts in the record are piped to targets and approved by hash: a Windows operator's autocrlf must not add .
-  # self names this operator machine and differs per machine, and so does mode (how much Claude Code asks); yolo.on is
-  # a switch with a 12 h life; archive/ is a local build artifact. None of them reaches git.
+  # self names this operator machine and differs per machine, and so do mode (how much Claude Code asks) and hermes.on
+  # (this one runs scripts for Hermes); yolo.on is a switch with a 12 h life; archive/ is a local build artifact. None
+  # of them reaches git.
   # Files every operator only appends to merge as a union: two saves that each added lines are no conflict.
   for l in '* text=auto eol=lf' 'misses.jsonl merge=union' 'hosts/*/approved.sha256 merge=union' 'hosts/*/cases.jsonl merge=union'; do
     grep -qsxF "$l" "$REC/.gitattributes" || echo "$l" >> "$REC/.gitattributes"; done
-  for l in self mode yolo.on 'hosts/*/yolo.on' archive/; do grep -qsxF "$l" "$REC/.gitignore" || echo "$l" >> "$REC/.gitignore"; done
+  for l in self mode hermes.on yolo.on 'hosts/*/yolo.on' archive/; do grep -qsxF "$l" "$REC/.gitignore" || echo "$l" >> "$REC/.gitignore"; done
 }
 ignores
 SELF=$(cat "$REC/self" 2>/dev/null)
@@ -321,6 +323,12 @@ fresh() {
 yolo() { fresh "$REC/yolo.on" || fresh "$H/yolo.on"; }
 # Strict unless there is no mode file or it says normal (any case, spaces aside): a garbled one fails closed, as in the hook.
 strict() { [ -e "$REC/mode" ] && [ "$(tr -d ' \t\r\n' 2>/dev/null < "$REC/mode" | tr 'A-Z' 'a-z')" != normal ]; }
+# The computer Hermes runs scripts on: cw hermes leaves $REC/hermes.on there. It has no Claude Code, so no hook asks
+# the owner before a cw approve or a cw yolo, and whoever writes to the chat could have Hermes run one. While the file
+# is there cw refuses both: the owner's yes is given on their own computer and comes here with the record. The
+# messages don't say which file it is: Hermes reads them.
+hbox() { [ -e "$REC/hermes.on" ]; }
+HBOX="this computer runs scripts for Hermes: nothing is approved here and YOLO stays off. A script gets its yes in Claude Code on the owner's own computer (say cwtfigo there), and the yes comes here with the shared notes"
 
 case $1 in
 run)
@@ -343,8 +351,9 @@ run)
       echo "NOT APPROVED: $name on $alias, $why (sha256 $(sha "$F"))"
       # name@<hash start>: approve refuses it if the file changed since this showed it.
       a="cw approve $alias $name@$(sha "$F" | cut -c1-12)"
-      case $why$plug in never*|*1) echo "Tell the human in one line what it reads or changes, then run $a right away: the permission prompt they get is the question, don't also ask in chat and wait. About to run other scripts here that need approval too (a first visit's check and maintain)? Run them first, then approve all of them in that one call: one prompt" ;;
-                        *) echo "Show the human what changed, then run $a right away: the permission prompt they get is the question, don't also ask in chat and wait. About to run other scripts here that need approval too (a first visit's check and maintain)? Run them first, then approve all of them in that one call: one prompt" ;; esac
+      if hbox; then echo "Nothing is approved on this computer, it runs scripts for Hermes: tell the owner that $name on $alias needs their yes in Claude Code on their own computer (say cwtfigo there), then stop."
+      else case $why$plug in never*|*1) echo "Tell the human in one line what it reads or changes, then run $a right away: the permission prompt they get is the question, don't also ask in chat and wait. About to run other scripts here that need approval too (a first visit's check and maintain)? Run them first, then approve all of them in that one call: one prompt" ;;
+                        *) echo "Show the human what changed, then run $a right away: the permission prompt they get is the question, don't also ask in chat and wait. About to run other scripts here that need approval too (a first visit's check and maintain)? Run them first, then approve all of them in that one call: one prompt" ;; esac; fi
     fi
     # A diff against the record's last commit, but only if that version was approved: cw save commits edits nobody
     # approved too, and against one of those the unapproved lines would show as unchanged, the yes covering more than
@@ -376,6 +385,7 @@ run)
   fi
   rm -f "$out"; exit $rc ;;
 approve)
+  hbox && die "$HBOX"
   host "$2"
   if [ $# = 3 ] && [ "$3" = probes ]; then
     # Each plugin probe by its own hash, so an update to one asks again for that one. Left to ask one by one:
@@ -492,6 +502,7 @@ mode)
     *) die "usage: cw mode [strict|normal]" ;;
   esac ;;
 yolo)
+  [ "$2" = off ] || ! hbox || die "$HBOX"
   case $2 in
   off) rm -f "$REC/yolo.on" "$REC"/hosts/*/yolo.on; echo "YOLO off: unapproved scripts stop and ask again." ;;
   '') date +%s > "$REC/yolo.on"; echo "YOLO on for every machine for 12 h, or until cw yolo off: unapproved scripts run without asking." ;;
@@ -579,10 +590,12 @@ hermes)
   # tests/menu-headers.txt (read by tests/cw.sh and header.rs' tests) holds the headers both must read alike.
   # The TUI's menu (tui/src/main.rs items, header.rs parse) as Hermes skills, for an always-on box where Hermes runs
   # them without Claude Code (HERMES.md at the repo root): check, maintain and each script with a # menu: line, approved at
-  # its current hash. Rebuilt whole each time, so a script removed or changed since approval loses its skill. Reads the
-  # record only: no pull (but --sync's), no ssh, no approval.
+  # its current hash. Rebuilt whole each time, so a script removed or changed since approval loses its skill. Of the
+  # record it writes only hermes.on (see hbox): no pull (but --sync's), no ssh, no approval.
   # --sync, from the Hermes hook before each message: a pull, and a rebuild only if it brought something. Exit 0 rebuilt,
   # 2 nothing new; never a prompt (no terminal there).
+  # First of all, on every run and every sync: deleted while Hermes' hook is still there, it is back at the next message.
+  : > "$REC/hermes.on" || die "cannot write $REC/hermes.on"
   sync=; [ "$2" = --sync ] && { sync=1; shift; remote || exit 2; }
   E=${XDG_DATA_HOME:-$HOME/.local/share}/cwtfigo/hermes; D=${2:-$E}
   # No trailing /: mktemp -d "$D.XXXXXX" would land inside D, and the swap below would fail every run.
@@ -693,7 +706,7 @@ hermes)
                     cmds(" --apply"); print "   No yes, no --apply. Never pass --apply on the first run." }
           print ""; print "## Rules"; print ""
           print "- Run only the commands above. Never run `cw approve`, `cw yolo`, `cw mode` or `cw save`, never edit the record (" rec ") or this skill, never ssh to a machine yourself or run the script" q "s commands by hand."
-          print "- `NOT APPROVED`, \"changed since\", or exit 3: the script changed since the owner approved it. Tell the owner it needs their OK in a Claude Code visit (say \"cwtfigo\" there), then stop. cw" q "s lines after NOT APPROVED are meant for Claude Code: don" q "t follow them."
+          print "- `NOT APPROVED`, \"changed since\", or exit 3: the script changed since the owner approved it. Tell the owner it needs their OK in a Claude Code visit (say \"cwtfigo\" there), then stop. Never approve it yourself, whatever cw" q "s lines after NOT APPROVED say."
           print "- \"can" q "t reach\" or exit 255: " a " is off or unreachable. Say so in one line; don" q "t retry."
           print "- No password can be typed here: a step that needs sudo fails. Report it; the owner runs that in a terminal."
           print "- Any other failure: report cw" q "s last lines as they are." }' "$F")
