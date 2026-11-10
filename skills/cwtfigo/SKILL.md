@@ -76,8 +76,7 @@ Upgrading for fun, "why is it so hot", and "it's broken" differ only in how deep
 - don't-touch rules: held kernels, "no autoremove", files that look like junk but aren't
 - known-benign noise: warnings and log lines that look bad but are baseline
 - already-ruled-out causes, so nobody re-checks them
-- open issues with status: open / worked around / parked / fixed-unverified, each separate (fixing one big problem often unmasks the next)
-- parked issues under `## Parked`, one top-level bullet each (`cw status` counts them, like the bullets under `## Open items`), so the next visit starts where this one stopped:
+- issues, one top-level bullet each (fixing one big problem often unmasks the next), filed by state: open and fixed-unverified under `## Open items`, parked under `## Parked` (`cw status` counts the bullets under both), worked around under `## Worked around` (not counted). A parked one holds what the next visit needs to start where this one stopped:
 
   ```markdown
   ## Parked
