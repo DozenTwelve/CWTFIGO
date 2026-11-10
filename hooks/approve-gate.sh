@@ -13,9 +13,21 @@
 # (`cw approve`, approved.sha256), turns on YOLO (`cw yolo`, yolo.on, which skips approval for a visit) or touches the
 # marker (cwtfigo-visit, which switches the gate off) goes to a permission prompt, and so does `cw mode <anything>` (plain
 # `cw mode` only prints it). These asks come first and win over the allow below.
+# Their prompt names what the yes is for: for cw approve, the scripts and the machine when the command names them
+# plainly, else the general line.
+# Then, in every mode, what changes a machine or who may change it asks too, each time, so "anything that changes a
+# computer asks every time" holds: any Bash command with apply anywhere in it, quotes and backslashes out (cw run ...
+# --apply, or a script run some other way with it; a save or search with the word asks as well: a false positive costs
+# one prompt), cw name (this machine would take a name, and with it the approvals, of a host in the record) and cw join
+# (whoever can save to the shared record can then approve scripts for this machine), cw also as $VAR. Without an ask
+# these would get no output, and an allow rule (Bash(sh:*)), an earlier "don't ask again" or auto mode would run them
+# unasked. Claude Code's hook docs: "ask" prompts the user to confirm, and in auto mode it goes to the prompt, not the
+# classifier. Out of this hook's reach: bypassPermissions mode, and a mod's tool.check approval outside managed settings.
 # Then the mode, $REC/mode (REC: CWTFIGO_HOME, else ~/.cwtfigo; cw mode writes it). strict (a mode file that doesn't
-# say normal, any case and spaces aside): everything else gets no output and takes Claude Code's normal permission
-# path. normal (no file, or normal): what can't change a machine without an approval cw itself checks gets "allow",
+# say normal, any case and spaces aside): every Bash command with cw in it as a word and every Write/Edit into the
+# record (by $REC, or a .cwtfigo dir on the path, any case) asks, as strict promises a prompt for every step; the rest
+# gets no output and takes Claude Code's normal permission path. normal (no file, or normal): what can't change a
+# machine without an approval cw itself checks gets "allow",
 # so a first visit isn't one prompt per step:
 # - Bash whose whole command is `sh <cw> <status|run|save|search|miss> [args]` or `sh <cw> yolo off`. <cw> is this
 #   plugin's own, skills/cwtfigo/scripts/cw under the dir this hook sits in (another file of that name could be
@@ -71,6 +83,14 @@ fi
 [ -n "$sid" ] && [ ! -e "$d/$sid" ] && mkd && exit 0
 # The command as typed, still JSON-escaped (\" for ", \n for a newline).
 cmd=$(printf '%s' "$in" | sed -nE 's/.*"command" *: *"(([^"\\]|\\.)*)".*/\1/p' | head -n 1)
+# The same as the shell reads it, near enough: lower case, JSON's \n and \t spaces, quotes and backslashes out (as the
+# shell drops them: --app''ly is --apply). With no " or \ left, a part of it is safe inside a JSON string.
+cl=$(printf '%s' "$cmd" | tr 'A-Z' 'a-z' | sed -E 's/\\[nt]/ /g' | tr -d "'\"\\\\")
+# Printable ASCII only, at most 80: a part of the command put into a prompt.
+pa() { printf '%s' "$1" | LC_ALL=C tr -cd ' -~' | sed -E 's/[[:space:]]+/ /g; s/^ //; s/ $//' | cut -c1-80; }
+askr() { printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":"%s"}}\n' "$1"; exit 0; }
+# The machine as the owner knows it.
+who() { [ "$1" = local ] && echo "this computer" || echo "$1"; }
 if printf '%s' "$in" | grep -Eq '"tool_name" *: *"Bash"'; then
   printf '%s' "$in" | sed -E 's/"(cwd|transcript_path)" *: *"[^"]*"//g' | tr 'A-Z' 'a-z' \
     | sed -E 's/cw[^a-z]*yolo[[:space:]]+off([[:space:];&|)"]|\\n|$)/\1/g' \
@@ -88,16 +108,52 @@ fi && {
   # What the yes is for, in the owner's words: the prompt is the question, and a newcomer reads it.
   t=${cmd:-$(printf '%s' "$in" | sed -nE 's/.*"file_path" *: *"([^"]*)".*/\1/p')}
   case $(printf '%s' "$t" | tr 'A-Z' 'a-z' | tr -d "'\"\\\\") in
-    *approve*) r="CWTFIGO: your yes lets this run from now on without asking again, until it changes" ;;
+    *approve*) r="CWTFIGO: your yes lets this run from now on without asking again, until it changes"
+      # Which scripts on which machine, when the command says so plainly: cw approve <alias> <script>[@hash]...
+      a=$(printf '%s' "$cl" | sed -nE 's/.*cw[[:space:]]+approve[[:space:]]+([a-z0-9._-]+)[[:space:]]+([a-z0-9._@ -]*[a-z0-9._@-]).*/\1|\2/p' | head -n 1)
+      s=$(pa "$(printf '%s' "${a#*|}" | sed -E 's/@[0-9a-f]*//g')")
+      if [ -n "$a" ] && [ -n "$s" ]; then
+        w=$(who "${a%%|*}")
+        case $s in
+          probes) r="CWTFIGO: your yes lets the plugin's read-only checks run on $w from now on without asking again, until one of them changes" ;;
+          *' '*) r="CWTFIGO: your yes lets $(echo "$s" | sed 's/ /, /g') run on $w from now on without asking again, until one of them changes" ;;
+          *) r="CWTFIGO: your yes lets $s run on $w from now on without asking again, until it changes" ;;
+        esac
+      fi ;;
     *yolo*) r="CWTFIGO: your yes lets me run things you haven't seen without asking, for 12 hours or until you turn it off" ;;
     *mode*) r="CWTFIGO: your yes changes how often I ask you before doing things on this computer" ;;
     *) r="CWTFIGO: this needs your own yes: it changes what I may do without asking you" ;;
   esac
-  printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":"%s"}}\n' "$r"
-  exit 0; }
+  askr "$r"; }
 REC=${CWTFIGO_HOME:-$HOME/.cwtfigo}
 # Strict unless there is no mode file or it says normal: a hand-edited Strict, or strict with a CR, must not fail open.
-[ -e "$REC/mode" ] && [ "$(tr -d ' \t\r\n' 2>/dev/null < "$REC/mode" | tr 'A-Z' 'a-z')" != normal ] && exit 0
+st=; [ -e "$REC/mode" ] && [ "$(tr -d ' \t\r\n' 2>/dev/null < "$REC/mode" | tr 'A-Z' 'a-z')" != normal ] && st=1
+# In every mode: what changes a machine, or who may change it, asks each time (the header says which and why).
+if printf '%s' "$in" | grep -Eq '"tool_name" *: *"Bash"'; then
+  case $cl in *apply*)
+    a=$(printf '%s' "$cl" | sed -nE 's/.*cw[[:space:]]+run[[:space:]]+([a-z0-9._-]+)[[:space:]]+([^;&|<>]*).*/\1|\2/p' | head -n 1)
+    s=$(pa "${a#*|}")
+    [ -n "$a" ] && [ -n "$s" ] && askr "CWTFIGO: this changes $(who "${a%%|*}") ($s), this time only"
+    askr "CWTFIGO: this changes a computer (it runs with --apply), this time only" ;;
+  esac
+  if printf '%s' "$cl" | grep -Eq '(cw|\$[{a-z_][a-z0-9_}]*)[^a-z]*name([^a-z0-9_]|$)'; then
+    n=$(pa "$(printf '%s' "$cl" | sed -nE 's/.*cw[[:space:]]+name[[:space:]]+([a-z0-9._-]+).*/\1/p' | head -n 1)")
+    askr "CWTFIGO: this calls this computer ${n:-by a new name} in your notes. If they already have a computer by that name, this one takes its place, and the scripts you said yes to there run here without asking"
+  fi
+  if printf '%s' "$cl" | grep -Eq '(cw|\$[{a-z_][a-z0-9_}]*)[^a-z]*join([^a-z0-9_]|$)'; then
+    j=$(pa "$(printf '%s' "$cl" | sed -nE 's/.*cw[[:space:]]+join[[:space:]]+([^[:space:];&|<>]+).*/\1/p' | head -n 1)")
+    askr "CWTFIGO: this shares your notes with ${j:-another computer}. Whoever can save there can then say yes to scripts that run on this computer without asking"
+  fi
+  [ -n "$st" ] && printf '%s' "$cl" | grep -Eq '(^|[^a-z0-9_])cw([^a-z0-9_]|$)' &&
+    askr "CWTFIGO: strict mode: you asked me to check with you before every step"
+elif [ -n "$st" ] && printf '%s' "$in" | grep -Eq '"tool_name" *: *"(Write|Edit)"'; then
+  f=$(printf '%s' "$in" | sed -nE 's/.*"file_path" *: *"(([^"\\]|\\.)*)".*/\1/p' | head -n 1)
+  lf=$(printf '%s' "$f" | tr 'A-Z' 'a-z'); lr=$(printf '%s' "$REC" | tr 'A-Z' 'a-z')
+  case $lf in "$lr"|"$lr"/*|*/.cwtfigo|*/.cwtfigo/*|*\\.cwtfigo|*\\.cwtfigo\\*)
+    askr "CWTFIGO: this changes your notes, and in strict mode you asked me to check with you before every step" ;;
+  esac
+fi
+[ -z "$st" ] || exit 0
 safe() { printf '%s' "$1" | LC_ALL=C tr -d '\200-\377' | LC_ALL=C grep -Eq "^[A-Za-z0-9 _./,:@%+=~#'\"-]*\$"; }
 # safe, with its quoted strings taken out first: inside '' the shell reads nothing but the closing ', inside "" only
 # $ ` \ and the closing ", so "fixed wifi (iwlwifi)!" is as plain as fixed wifi. Left to right, as the shell pairs

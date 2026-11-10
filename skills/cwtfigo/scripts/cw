@@ -18,7 +18,7 @@
 #
 # <alias>: the SSH alias, also the host's dir in hosts/. "local", or this machine's own name ($REC/self), runs here.
 # A record not shared with other computers (no remote) names this machine from its hostname on the first "local".
-# <script>: collect | check | maintain | hosts/<alias>/<name>.sh, else scripts/probes/<name>.sh. .ps1 on Windows.
+# <script>: collect | check | maintain | <name> (a script in hosts/<alias>/), else scripts/probes/<name>.sh. .ps1 on Windows.
 # A missing check.sh / maintain.sh is copied from foundations/<os>/ (os from device.json); run and approve refuse it
 # until the model has adapted it and deleted its CWTFIGO-FOUNDATION line. Unapproved scripts print (the plugin's own: header and path) and exit 3 (under yolo: print and run).
 # collect writes hosts/<alias>/facts.md and exits 4 if the machine id no longer matches or another host has it.
@@ -284,7 +284,14 @@ unsaved() {
     echo "$p"
   done
 }
-approved() { h=$(sha "$F") && [ -n "$h" ] && grep -qs "^$h " "$H/approved.sha256"; }
+# A line ending in yolo is a run under YOLO, not the owner's yes: it counts only while YOLO is on for this host, and
+# never with the arg own (the owner's yes only: cw approve, cw hermes). So a cw approve of the same hash adds a plain
+# line, which counts for good.
+approved() {
+  h=$(sha "$F") && [ -n "$h" ] || return 1
+  grep -s "^$h " "$H/approved.sha256" | grep -qv '[[:space:]]yolo[[:space:]]*$' ||
+    { [ -z "$1" ] && grep -qs "^$h .*[[:space:]]yolo[[:space:]]*$" "$H/approved.sha256" && yolo; }
+}
 unadapted() { ! grep -q '^# CWTFIGO-FOUNDATION' "$F" || die "$name on $alias is the unadapted foundation ($F): first adapt it to this machine from its record and delete the CWTFIGO-FOUNDATION line. Don't show it to the human or ask for approval before that."; }
 
 # YOLO is on while $REC/yolo.on (every machine) or $H/yolo.on (one host) holds an epoch less than 12 h old.
@@ -312,7 +319,7 @@ run)
   O=$F; F=$(mktemp) && cp "$O" "$F" || die "cannot copy $O"
   trap 'rm -f "$F"' EXIT; trap 'exit 1' INT TERM HUP
   if ! approved; then
-    grep -qs "  $name  " "$H/approved.sha256" && why="changed since it was last approved (plugin update or edit)" || why="never approved here"
+    grep -s "  $name  " "$H/approved.sha256" | grep -qv '[[:space:]]yolo[[:space:]]*$' && why="changed since it was last approved (plugin update or edit)" || why="never approved here"
     # The plugin's own collect and probes (plug, from resolve): their header says what they read, the rest stays at the path.
     if yolo; then
       y=1
@@ -361,7 +368,7 @@ approve)
       p=$(basename "$F" .$X)
       probe "$p" || continue
       [ "$p" != smart ] && [ ! -f "$H/$p.$X" ] || continue
-      approved || echo "$(sha "$F")  $p  $(date +%F)" >> "$H/approved.sha256"; n="$n $p"
+      approved own || echo "$(sha "$F")  $p  $(date +%F)" >> "$H/approved.sha256"; n="$n $p"
     done
     echo "approved on $alias:${n:- no read-only probes for this OS}"; exit 0
   fi
@@ -378,7 +385,7 @@ approve)
         die "$name changed since cw run showed it (or $w isn't the start of its sha256): run it again, so the human sees what they say yes to" ) || bad="$bad $name"
   done
   [ -z "$bad" ] || die "approved none: refused$bad"
-  mkh; for a; do name=${a%@*}; resolve "$name"; approved || echo "$(sha "$F")  $name  $(date +%F)" >> "$H/approved.sha256"; done
+  mkh; for a; do name=${a%@*}; resolve "$name"; approved own || echo "$(sha "$F")  $name  $(date +%F)" >> "$H/approved.sha256"; done
   echo "approved: $* on $alias" ;;
 name)
   { badname "$2" || [ "$2" = local ]; } && die "usage: cw name <name>: this machine's SSH alias as the other machines use it, not local, no / \\ * ? [ or spaces, not starting with -"
@@ -547,14 +554,14 @@ EOF
   done | awk -F '\t' '{h[NR] = $1; s[NR] = $2; l[NR] = $3; i[NR] = $4; if (length($1) > a) a = length($1); if (length($2) > b) b = length($2)}
     END {for (r = 1; r <= NR; r++) printf "  %-" a "s  %-" b "s  last visit %-10s  %s\n", h[r], s[r], l[r], i[r]}'
   [ $n = 0 ] || echo  # no rows: the blank line above already sets the last line apart
-  if [ $n = 0 ]; then echo "  No machines yet. Tell me what's wrong with this one, or the SSH alias of another."
+  if [ $n = 0 ]; then echo "  No machines yet. Tell me what's wrong with this one, or the name of another computer you reach over SSH."
   elif [ -n "$SELF" ] && [ -d "$REC/hosts/$SELF" ]; then echo "  Another machine? Tell me its SSH alias."
   else echo "  Another machine? Tell me its SSH alias, or ask about this one."; fi ;;
 hermes)
   # The awk below re-implements tui/src/header.rs parse and main.rs items(): a change to either is made in both, and
   # tests/menu-headers.txt (read by tests/cw.sh and header.rs' tests) holds the headers both must read alike.
   # The TUI's menu (tui/src/main.rs items, header.rs parse) as Hermes skills, for an always-on box where Hermes runs
-  # them without Claude Code (unattended/README.md): check, maintain and each script with a # menu: line, approved at
+  # them without Claude Code (HERMES.md at the repo root): check, maintain and each script with a # menu: line, approved at
   # its current hash. Rebuilt whole each time, so a script removed or changed since approval loses its skill. Reads the
   # record only: no pull (but --sync's), no ssh, no approval.
   # --sync, from the Hermes hook before each message: a pull, and a rebuild only if it brought something. Exit 0 rebuilt,
@@ -605,7 +612,8 @@ hermes)
     # The extension run would pick, without its ssh: another machine before its first collect gets both, as in the TUI.
     if [ -f "$H/device.json" ] || [ -n "$here" ]; then windows && X=ps1 || X=sh; else X='sh ps1'; fi
     for x in $X; do for F in "$H"/*."$x"; do
-      [ -f "$F" ] && approved || continue
+      # The owner's own yes only: a script that ran under YOLO isn't one, even while YOLO is on.
+      [ -f "$F" ] && approved own || continue
       name=$(basename "$F" ".$x")
       # Hermes' skill names: [a-z0-9._-], 64 at most; its slash commands keep only [a-z0-9-], Discord their first 32.
       n=$(printf 'cw-%s-%s' "$alias" "$name" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' - | tr -s - | cut -c1-64 | sed 's/-$//')
@@ -700,7 +708,7 @@ hermes)
   ls=; grep -sv '^[[:space:]]*#' "$cf" | grep -qF -e "$D" -e "$r" -e "$G" -e "$(tl "$G")" && ls=1
   [ -n "$ls" ] || echo "Hermes doesn't read them yet: add $r to skills.external_dirs in $(tl "$cf"), then hermes gateway restart"
   echo "In Discord, /reload-skills updates the /skill list."
-  # The Hermes hook (unattended/README.md): before each message, cw hermes --sync into this same dir, and Hermes rescans
+  # The Hermes hook (HERMES.md at the repo root): before each message, cw hermes --sync into this same dir, and Hermes rescans
   # its skills if that rebuilt them. Its own dir, rebuilt whole. Paths go in as Python literals (ascii()), never raw.
   # One hook, for the dir Hermes reads: the default one or one config.yaml lists. A build elsewhere (a preview) leaves it.
   [ -n "$ls" ] || [ "$G" = "$E" ] || { echo "Hermes' hook in $(tl "$K") left as it was: it keeps $(tl "$E") or a dir config.yaml lists in step, not this one"; exit 0; }

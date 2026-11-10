@@ -16,7 +16,8 @@ fresh() {
   D=$(mktemp -d "$T/r.XXXXXX"); mkdir "$D/bin"
   for c in awk sed grep sort head tail cut ls tr cat wc find mkdir mktemp rm du sleep touch; do ln -s "$(command -v $c)" "$D/bin/$c"; done
 }
-stub() { printf '#!/bin/sh\n%s\n' "$2" > "$D/bin/$1"; chmod +x "$D/bin/$1"; }
+# The link fresh made goes first: writing through it would rewrite the real command.
+stub() { rm -f "$D/bin/$1"; printf '#!/bin/sh\n%s\n' "$2" > "$D/bin/$1"; chmod +x "$D/bin/$1"; }
 # run <script> [args]: the copy runs, PATH=$D/bin. A placeholder first: $D itself may be under /var.
 run() {
   f=$1; shift; e=
@@ -157,6 +158,23 @@ for s in macos debian arch; do
     [ "$o" = "$w" ] || fail "$s maintain: args '$a' should give APPLY|CLEAN '$w', got '$o'"
   done
 done
+# maintain --apply with no items never empties the Trash, even with trash in CLEAN: that takes the owner's yes in chat
+# and a run that names it. The CLEAN lines, on, mb, item and the trash item, cut out of each script; rm is a stub.
+for s in macos debian arch; do
+  fresh; ln -s "${SH%% *}" "$D/bin/sh"; stub rm 'touch "$0.ran"'; mkdir -p "$HOME/.Trash" "$HOME/.local/share/Trash"
+  { sed -n 's/^CLEAN="/CLEAN="trash /p' "$F/$s/maintain.sh"; echo 'APPLY=1; S='
+    sed -n '/^\[ \$# -gt 0 \]/p; /^on()/p; /^mb()/p; /^item()/,/^}/p; /^item trash/p; s/^else \(item trash.*\); fi$/\1/p' "$F/$s/maintain.sh"; } > "$D/trash.sh"
+  out=$(run "$D/trash.sh" 2>&1); [ -e "$D/bin/rm.ran" ] && fail "$s maintain --apply with no items emptied the Trash: $out"
+  echo "$out" | grep -Eq '^trash +off ' || fail "$s maintain --apply with no items should show trash off: $out"
+  run "$D/trash.sh" trash >/dev/null 2>&1; [ -e "$D/bin/rm.ran" ] || fail "$s maintain --apply trash should empty the Trash"
+done
+# The same for the Recycle Bin on Windows: only its CLEAN lines, where pwsh is installed.
+if command -v pwsh >/dev/null; then
+  fresh; { sed -n 's/^\$CLEAN = '"'"'/$CLEAN = '"'"'recyclebin /p' "$F/windows/maintain.ps1"
+    sed -n '/^\$pick = /,/^if (\$pick.Count)/p' "$F/windows/maintain.ps1"; echo '$CLEAN'; } > "$D/rb.ps1"
+  pwsh -NoProfile -NonInteractive -File "$D/rb.ps1" --apply | grep -qw recyclebin && fail "windows maintain --apply with no items keeps recyclebin in CLEAN"
+  pwsh -NoProfile -NonInteractive -File "$D/rb.ps1" --apply recyclebin | grep -qx recyclebin || fail "windows maintain --apply recyclebin should clean it"
+fi
 # The dry run shows the pick as on/off too.
 fresh; stub id 'case $1 in -u) echo 1000 ;; -Gn) echo adm ;; *) echo u ;; esac'
 stub journalctl 'echo "Archived and active journals take up 8.0M in the file system."'

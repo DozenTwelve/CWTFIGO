@@ -30,13 +30,17 @@ $CHOCO_HOLD = 'python,python3'
 #   choco       choco's download cache (%TEMP%\chocolatey)
 #   npm pip     package manager caches (re-downloaded when needed)
 #   wudownload  Windows Update downloads (SoftwareDistribution\Download), re-downloaded if still needed. Admin.
-#   recyclebin  empty the Recycle Bin on every drive. User data, irreversible. Only when the owner asked.
+#   recyclebin  empty the Recycle Bin on every drive. User data, irreversible. Only when the owner said yes
+#               in chat, and only when named after --apply (--apply recyclebin): never from CLEAN.
 # Never touched: Windows.old, the component store (DISM), restore points: each ends a way back, ask separately.
 
 $APPLY = $args -contains '--apply'
 # Items named after --apply are the owner's pick for this run, in place of CLEAN (none: clean nothing). The pick goes
 # as args, not as an edit: an edit changes the hash and asks for approval again. CLEAN stays the habit.
-$pick = @($args | Where-Object { $_ -ne '--apply' }); if ($pick.Count) { $CLEAN = $pick -join ' ' }
+# recyclebin only when named after --apply (--apply recyclebin), never from CLEAN: emptying it takes the owner's yes
+# typed in chat, and --apply runs on a permission prompt alone. So it is left out of CLEAN even if added there.
+$pick = @($args | Where-Object { $_ -ne '--apply' })
+if ($pick.Count) { $CLEAN = $pick -join ' ' } else { $CLEAN = (($CLEAN -split ' ') | Where-Object { $_ -ne 'recyclebin' }) -join ' ' }
 $ErrorActionPreference = 'SilentlyContinue'
 $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 function has($c) { [bool](Get-Command $c) }

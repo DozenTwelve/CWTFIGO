@@ -559,6 +559,15 @@ sh "$CW" save "yolo test" >/dev/null || fail "save under yolo"
 [ -f "$H/yolo.on" ] || fail "save should not end yolo: a visit saves many times"
 sh "$CW" yolo off | grep -q 'YOLO off' || fail "yolo off should say so"
 [ -f "$H/yolo.on" ] && fail "yolo off should end yolo"
+# A run under YOLO is no yes of the owner's: its line counts only while YOLO is on, after off or 12 h it asks again.
+sh "$CW" run local y >/dev/null; [ $? = 3 ] || fail "a script that only ran under YOLO should ask again after yolo off"
+printf 'echo z-ran\n' > "$H/z.sh"; date +%s > "$H/yolo.on"
+sh "$CW" run local z >/dev/null || fail "unapproved z should run under yolo"
+echo "$(( $(date +%s) - 13 * 3600 ))" > "$H/yolo.on"
+sh "$CW" run local z >/dev/null; [ $? = 3 ] || fail "a script that only ran under YOLO should ask again once YOLO expired"
+# The owner's own cw approve of that same hash makes it for good.
+sh "$CW" approve local z >/dev/null && [ "$(sh "$CW" run local z)" = z-ran ] || fail "cw approve after a YOLO run should count without YOLO"
+rm "$H/z.sh"
 printf 'echo all-ran\n' > "$H/a.sh"
 sh "$CW" yolo | grep -q 'YOLO on for every machine' || fail "bare yolo should cover every machine"
 sh "$CW" run local a | tail -1 | grep -qx all-ran || fail "unapproved script should run under yolo for every machine"
@@ -659,6 +668,10 @@ echo "$out" | grep -q 'Mode\|C  W  T  F\|Reads nothing' && fail "status should h
 F=$(mktemp -d); out=$(CWTFIGO_HOME=$F/rec sh "$CW" status 2>/dev/null)
 [ "$(echo "$out" | head -7)" = "$art" ] || fail "a brand-new record's status should open with the art: $out"
 [ "$(echo "$out" | head -7 | LC_ALL=C grep -c '^[ -~]*[^ ]$')" = 7 ] || fail "art lines: ASCII, no trailing spaces: $out"
+# A new owner reads its last line: plain words, no "SSH alias".
+echo "$out" | tail -1 | grep -qx "  No machines yet. Tell me what's wrong with this one, or the name of another computer you reach over SSH." || fail "a brand-new record's last line, in plain words: $out"
+# The usage says what a <script> is as cw takes it: a name, never a path (resolve refuses one).
+sh "$CW" 2>/dev/null | grep -q 'hosts/<alias>/<name>' && fail "the usage should not offer a path as a <script>"
 mkdir -p "$F/h/hosts/box"; out=$(CWTFIGO_HOME=$F/h sh "$CW" status 2>/dev/null)
 [ "$(echo "$out" | head -7)" = "$art" ] || fail "a record with a host should open with the art too: $out"
 # Under YOLO the art's promise goes and the YOLO line says it.
@@ -802,6 +815,8 @@ printf '#!/bin/sh\n# once\necho "x --apply"\n' > "$HB/once.sh"; printf '#!/bin/s
 echo '{ "os": "windows" }' > "$HM/rec/hosts/Far_Box/device.json"; printf '# win\r\n# menu: win !`echo pwn` thing\r\nif ($args -contains '"'"'--apply'"'"') {}\r\n' > "$HM/rec/hosts/Far_Box/fix.ps1"
 CWTFIGO_HOME=$HM/rec sh "$CW" approve me check maintain attic once >/dev/null && CWTFIGO_HOME=$HM/rec sh "$CW" approve Far_Box fix >/dev/null || fail "cw hermes setup"
 echo 'echo changed' >> "$HB/maintain.sh"
+# A script that only ran under YOLO isn't the owner's yes: no skill, even while YOLO is on.
+echo "$(tsum "$HB/new.sh")  new  2026-11-10  yolo" >> "$HB/approved.sha256"; date +%s > "$HB/yolo.on"
 # A path as the skills show it: in single quotes if a shell would read it as more than one plain word.
 qp() { case $1 in *[!A-Za-z0-9._/+@%,:=-]*) printf "'%s'" "$1" ;; *) printf %s "$1" ;; esac; }; QCW=$(qp "$CW")
 # Each command names the record it was built from: Hermes' terminal has no CWTFIGO_HOME. And nothing in it can wait on
