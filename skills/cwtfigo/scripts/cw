@@ -561,7 +561,7 @@ hermes)
   # The awk below re-implements tui/src/header.rs parse and main.rs items(): a change to either is made in both, and
   # tests/menu-headers.txt (read by tests/cw.sh and header.rs' tests) holds the headers both must read alike.
   # The TUI's menu (tui/src/main.rs items, header.rs parse) as Hermes skills, for an always-on box where Hermes runs
-  # them without Claude Code (unattended/README.md): check, maintain and each script with a # menu: line, approved at
+  # them without Claude Code (HERMES.md at the repo root): check, maintain and each script with a # menu: line, approved at
   # its current hash. Rebuilt whole each time, so a script removed or changed since approval loses its skill. Reads the
   # record only: no pull (but --sync's), no ssh, no approval.
   # --sync, from the Hermes hook before each message: a pull, and a rebuild only if it brought something. Exit 0 rebuilt,
@@ -708,7 +708,7 @@ hermes)
   ls=; grep -sv '^[[:space:]]*#' "$cf" | grep -qF -e "$D" -e "$r" -e "$G" -e "$(tl "$G")" && ls=1
   [ -n "$ls" ] || echo "Hermes doesn't read them yet: add $r to skills.external_dirs in $(tl "$cf"), then hermes gateway restart"
   echo "In Discord, /reload-skills updates the /skill list."
-  # The Hermes hook (unattended/README.md): before each message, cw hermes --sync into this same dir, and Hermes rescans
+  # The Hermes hook (HERMES.md at the repo root): before each message, cw hermes --sync into this same dir, and Hermes rescans
   # its skills if that rebuilt them. Its own dir, rebuilt whole. Paths go in as Python literals (ascii()), never raw.
   # One hook, for the dir Hermes reads: the default one or one config.yaml lists. A build elsewhere (a preview) leaves it.
   [ -n "$ls" ] || [ "$G" = "$E" ] || { echo "Hermes' hook in $(tl "$K") left as it was: it keeps $(tl "$E") or a dir config.yaml lists in step, not this one"; exit 0; }
