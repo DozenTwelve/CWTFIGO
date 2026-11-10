@@ -8,7 +8,7 @@ It only runs what cw runs: scripts you approved, through cw's own approval check
 
 In Claude Code, say "CWTFIGO install the TUI": it runs `cw tui`, which installs the TUI of your plugin's version. That is the rule: the TUI runs the same version as the plugin, the one that fits its cw.
 
-Without Claude Code at hand, this gets the newest release; if the plugin is a different version, the TUI then offers `u` to switch to the plugin's:
+Plugin installed but no Claude Code at hand right now? This gets the newest release (the TUI always needs the installed plugin: it finds cw through it, see below); if the plugin is a different version, the TUI then offers `u` to switch to the plugin's:
 
 ```sh
 mkdir -p ~/.local/bin && curl -fsSL https://github.com/DozenTwelve/CWTFIGO/releases/latest/download/cwtfigo-tui-$(uname -s)-$(uname -m).tar.gz | tar -xz -C ~/.local/bin cwtfigo

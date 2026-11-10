@@ -62,7 +62,7 @@ What it learns goes into notes on your computer, one folder per machine: what it
 
 It shows the scripts Claude has written and you've approved, machine by machine, so on day one it's empty: it fills as you use CWTFIGO. Mac and Linux. In Claude Code, say "CWTFIGO install the TUI", then type `cwtfigo` in a terminal.
 
-Without Claude Code at hand, this gets the newest release instead:
+Plugin installed but no Claude Code at hand right now? This gets the newest release instead (the menu always needs the plugin installed, which is how it finds CWTFIGO, and the notes your visits made):
 
 ```
 mkdir -p ~/.local/bin && curl -fsSL https://github.com/DozenTwelve/CWTFIGO/releases/latest/download/cwtfigo-tui-$(uname -s)-$(uname -m).tar.gz | tar -xz -C ~/.local/bin cwtfigo
