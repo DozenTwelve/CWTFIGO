@@ -961,6 +961,11 @@ grep -qxF "    caf$(printf '\357\277\275') (Latin-1)" "$A" || fail "attic skill:
 F=$HC/cw-far-box-fix/SKILL.md
 grep -qxF "       ${P}sh $QCW run Far_Box fix --apply" "$F" && grep -q 'explicit yes' "$F" && grep -q 'from Far_Box/fix.ps1' "$F" || fail "fix skill: --apply after an explicit yes: $(cat "$F")"
 grep -q 'Never run `cw approve`' "$F" && grep -q 'NOT APPROVED' "$F" || fail "every skill carries the rules: $(cat "$F")"
+# "Dry run, changes nothing" only for a script with a test for --apply (fix): any other may change the machine on a
+# plain run, so its skill promises nothing (check, and attic with its menu-args).
+grep -q '^1\. Dry run, changes nothing: run this line as it is\.' "$F" || fail "fix skill: a script that tests for --apply has a dry run: $(cat "$F")"
+grep -q '^1\. Run this line as it is\. Relay' "$HC/cw-me-check/SKILL.md" && grep -q '^2\. Run the line below for the way they picked, as it is\. Relay' "$A" || fail "a skill for a script with no --apply test: run it, no promise: $(cat "$HC/cw-me-check/SKILL.md" "$A")"
+grep -qi 'dry run\|changes nothing' "$HC/cw-me-check/SKILL.md" "$A" && fail "a skill for a script with no --apply test must not call its run a dry run"
 # Rerun: a script gone, a new one approved. The dir is rebuilt; a dir cw hermes didn't make is never wiped.
 rm "$HB/attic.sh"; ha me new >/dev/null; hw >/dev/null || fail "cw hermes rerun"
 [ "$(LC_ALL=C ls "$HC" | tr '\n' ' ')" = 'cw-far-box-fix cw-me-check cw-me-new ' ] && [ -z "$(ls -d "$HS".* 2>/dev/null)" ] || fail "cw hermes rerun: $(ls "$HC") $(ls -d "$HS".* 2>/dev/null)"

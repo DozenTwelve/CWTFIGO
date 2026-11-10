@@ -700,7 +700,8 @@ hermes)
           # No menu-args: one line, for an empty word.
           ha = nw > 0; if (!ha) wd[nw = 1] = ""
           if (ha) print s++ ". Ask the owner with clarify which way, unless they already said: " g "."
-          print s++ ". Dry run, changes nothing: run " (ha ? "the line below for the way they picked, as it is" : "this line as it is") ". Relay what it printed, briefly."; cmds("")
+          # "Changes nothing" only where a test for --apply was seen: any other script may change the machine on a plain run.
+          print s++ ". " (ap ? "Dry run, changes nothing: run " : "Run ") (ha ? "the line below for the way they picked, as it is" : "this line as it is") ". Relay what it printed, briefly."; cmds("")
           if (ha) print "   Their answer matches no line: ask again. Never write a command of your own."
           if (ap) { print s++ ". It can also make those changes. Ask the owner with clarify whether to (in their language, e.g. 执行吗?). Only on an explicit yes, " (ha ? "the line below for the same way" : "this line") " (terminal timeout 600: upgrades take minutes). Report the outcome."
                     cmds(" --apply"); print "   No yes, no --apply. Never pass --apply on the first run." }
