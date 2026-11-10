@@ -346,6 +346,12 @@ elif command -v script >/dev/null; then out=$(script -qec "sh $W/t.sh" /dev/null
 # macOS script(1) echoes the ^D it sends at EOF ahead of the output.
 case $(printf %s "$out" | tr -d '\r') in skip|*"[a b][it's][\$(echo INJECTED)][]") ;; *) fail "ssh -t args: got '$out'" ;; esac
 grep -Eq "INJECTED|it's|a b" "$W/cmds" && fail "ssh -t: args must reach the target's sh only: $(cat "$W/cmds")"
+# collect is piped with a terminal too: it never needs sudo, and through the target's terminal its lines would arrive
+# with a CR each, the id too: an ID MISMATCH against a record collected without one.
+sh "$CW" approve nas collect >/dev/null; : > "$W/cmds"; printf 'PATH=%s:$PATH sh "%s" run nas collect\n' "$W" "$CW" > "$W/t.sh"
+if [ "$(uname -s)" = Darwin ]; then script -q /dev/null sh "$W/t.sh" </dev/null >/dev/null 2>&1
+elif command -v script >/dev/null; then script -qec "sh $W/t.sh" /dev/null </dev/null >/dev/null 2>&1; else echo 'sh -s' > "$W/cmds"; fi
+grep -qx 'sh -s' "$W/cmds" && ! grep -q mktemp "$W/cmds" || fail "collect with a terminal should be piped, not run under ssh -t: $(cat "$W/cmds")"
 rm -rf "$A" "$W"
 # A dying caller (a timed-out tool, a closed terminal) may signal cw alone: its ssh must not live on, orphaned.
 W=$(mktemp -d); printf '#!/bin/sh\necho $$ > "%s/pid"; cat >/dev/null; exec sleep 30\n' "$W" > "$W/ssh"; chmod +x "$W/ssh"

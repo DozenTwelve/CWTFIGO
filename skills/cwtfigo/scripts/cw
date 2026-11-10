@@ -278,9 +278,11 @@ go() {
     else psin "$@" | exec ssh $SSHO "$alias" powershell -NoProfile -NonInteractive -Command "\"$PSRUN\"" & reap; fi
   elif [ -n "$here" ]; then
     sh "$F" "$@"
-  elif [ -t 0 ]; then
+  elif [ -t 0 ] && [ "$name" != collect ]; then
     # Human at a terminal (sudo may prompt): copy over, run with a tty, remove.
     # Its command only sh -c with the temp path in '': the same in sh, bash, zsh and fish.
+    # Not collect: it never needs sudo, and through the target's terminal every line of its output would arrive with
+    # a CR, the id too: an ID MISMATCH against a record collected without one.
     t=$(ssh "$alias" mktemp) && sargs "$@" | ssh "$alias" "cat > $t" && ssh -t "$alias" "sh -c 'sh $t; r=\$?; rm -f $t; exit \$r'"
   else
     sargs "$@" | exec ssh $SSHO "$alias" 'sh -s' & reap
