@@ -9,7 +9,10 @@
 # Residual risk, accepted by the owner: in a session that never started the plugin, the model can write approved.sha256
 # directly without being asked.
 #
-# Once started, PreToolUse (Bash, Write, Edit): approval is the human's. A call that looks like it approves a script
+# Once started, PreToolUse (Bash, PowerShell, Write, Edit): approval is the human's. A PowerShell call (on Windows
+# Claude Code can send every shell command through that tool, and without Git Bash has no Bash tool) is read like a
+# Bash one for every ask below, and never gets allow: the allow reads a command the way sh does, not PowerShell.
+# A call that looks like it approves a script
 # (`cw approve`, approved.sha256), turns on YOLO (`cw yolo`, yolo.on, which skips approval for a visit) or touches the
 # marker (cwtfigo-visit, which switches the gate off) goes to a permission prompt, and so does `cw mode <anything>`
 # (plain `cw mode` only prints it). So does a Write/Edit of the record's mode or self file: what cw mode and cw name
@@ -91,13 +94,16 @@ fi
 cmd=$(printf '%s' "$in" | sed -nE 's/.*"command" *: *"(([^"\\]|\\.)*)".*/\1/p' | head -n 1)
 # The same as the shell reads it, near enough: lower case, JSON's \n and \t spaces, quotes and backslashes out (as the
 # shell drops them: --app''ly is --apply). With no " or \ left, a part of it is safe inside a JSON string.
-cl=$(printf '%s' "$cmd" | tr 'A-Z' 'a-z' | sed -E 's/\\[nt]/ /g' | tr -d "'\"\\\\")
+# What the shell drops from a word: quotes and backslashes. In a PowerShell call its own escape character too, the
+# backtick: appr`ove is approve there.
+Q="'\"\\\\"; printf '%s' "$in" | grep -Eq '"tool_name" *: *"PowerShell"' && Q="$Q\`"
+cl=$(printf '%s' "$cmd" | tr 'A-Z' 'a-z' | sed -E 's/\\[nt]/ /g' | tr -d "$Q")
 # Printable ASCII only, at most 80: a part of the command put into a prompt.
 pa() { printf '%s' "$1" | LC_ALL=C tr -cd ' -~' | sed -E 's/[[:space:]]+/ /g; s/^ //; s/ $//' | cut -c1-80; }
 askr() { printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":"%s"}}\n' "$1"; exit 0; }
 # The machine as the owner knows it.
 who() { [ "$1" = local ] && echo "this computer" || echo "$1"; }
-if printf '%s' "$in" | grep -Eq '"tool_name" *: *"Bash"'; then
+if printf '%s' "$in" | grep -Eq '"tool_name" *: *"(Bash|PowerShell)"'; then
   printf '%s' "$in" | sed -E 's/"(cwd|transcript_path)" *: *"[^"]*"//g' | tr 'A-Z' 'a-z' \
     | sed -E 's/cw[^a-z]*yolo[[:space:]]+off([[:space:];&|)"]|\\n|$)/\1/g' \
     | grep -Eq 'cw[^a-z]*(approve|yolo|[$`])|\$[{a-z_][a-z0-9_}]*[^a-z]*(approve|yolo)|approved(\.sha|\.?[?*[])|yolo\.|yolo[?*[]|cwtfigo(-v|-?[?*[])' || {
@@ -106,8 +112,8 @@ if printf '%s' "$in" | grep -Eq '"tool_name" *: *"Bash"'; then
     # the model turning YOLO off with nobody there would stop at a prompt. JSON's \n and \t are spaces here. Quotes
     # and backslashes go after that, as the shell drops them: appr''ove and approv\e are approve.
     printf '%s' "${cmd:-$in}" | tr 'A-Z' 'a-z' | sed -E 's/\\[nt]/ /g; s/(^|[^a-z0-9_])yolo[[:space:]]+off([[:space:];&|)"]|$)/\1\2/g' \
-      | tr -d "'\"\\\\" | grep -Eq '(^|[^a-z0-9_])(approve|yolo)([^a-z0-9_]|$)'
-  } || printf '%s' "$cmd" | tr 'A-Z' 'a-z' | tr -d "'\"\\\\" | grep -Eq 'cw[^a-z]*mode[[:space:]]*[^[:space:]]'
+      | tr -d "$Q" | grep -Eq '(^|[^a-z0-9_])(approve|yolo)([^a-z0-9_]|$)'
+  } || printf '%s' "$cmd" | tr 'A-Z' 'a-z' | tr -d "$Q" | grep -Eq 'cw[^a-z]*mode[[:space:]]*[^[:space:]]'
 else
   # The name anywhere in the path, whatever follows: approved.sha256/. and yolo.on/ are the file itself to Write, and
   # so are approved.sha256. and approved.sha256::$DATA on Windows.
@@ -115,7 +121,7 @@ else
 fi && {
   # What the yes is for, in the owner's words: the prompt is the question, and a newcomer reads it.
   t=${cmd:-$(printf '%s' "$in" | sed -nE 's/.*"file_path" *: *"([^"]*)".*/\1/p')}
-  case $(printf '%s' "$t" | tr 'A-Z' 'a-z' | tr -d "'\"\\\\") in
+  case $(printf '%s' "$t" | tr 'A-Z' 'a-z' | tr -d "$Q") in
     *approve*) r="CWTFIGO: your yes lets this run from now on without asking again, until it changes"
       # Which scripts on which machine, when the command says so plainly: cw approve <alias> <script>[@hash]...
       a=$(printf '%s' "$cl" | sed -nE 's/.*cw[[:space:]]+approve[[:space:]]+([a-z0-9._-]+)[[:space:]]+([a-z0-9._@ -]*[a-z0-9._@-]).*/\1|\2/p' | head -n 1)
@@ -149,7 +155,7 @@ if printf '%s' "$in" | grep -Eq '"tool_name" *: *"(Write|Edit)"'; then
   esac
 fi
 # In every mode: what changes a machine, or who may change it, asks each time (the header says which and why).
-if printf '%s' "$in" | grep -Eq '"tool_name" *: *"Bash"'; then
+if printf '%s' "$in" | grep -Eq '"tool_name" *: *"(Bash|PowerShell)"'; then
   case $cl in *apply*)
     a=$(printf '%s' "$cl" | sed -nE 's/.*cw[[:space:]]+run[[:space:]]+([a-z0-9._-]+)[[:space:]]+([^;&|<>]*).*/\1|\2/p' | head -n 1)
     s=$(pa "${a#*|}")

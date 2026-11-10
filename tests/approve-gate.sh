@@ -109,6 +109,20 @@ why "$(bash "sh $CW join nas:cwtfigo.git")" "this shares your notes with nas:cwt
 bash "sh $CW run local hostname" | grep -q '"ask"' && fail "name inside a word, in a run without apply, should not ask"
 [ -z "$(bash 'git log --format=%an')" ] || fail "name inside a word should pass silently"
 
+# The PowerShell tool (Windows): the same asks as Bash, also with its own escape character, the backtick. Never allow.
+grep -q '"matcher": *"[^"]*PowerShell' "$R/hooks/hooks.json" || fail "hooks.json should match the PowerShell tool"
+pwsh() { hook "$(printf '"tool_name":"PowerShell","tool_input":{"command":"%s"}' "$1")"; }
+for c in "sh $CW approve box check" 'sh scripts/cw yolo' "sh $CW mode strict" "sh $CW run box maintain --apply" "sh $CW name box" \
+         "sh $CW join nas:rec" 'sh scripts/cw appr`ove local x' 'sh scripts/cw yo`lo' 'sh scripts/cw run box fix --app`ly' 'sh scripts/cw mo`de strict' \
+         'Add-Content $HOME/.cwtfigo/hosts/box/approved.sha256 abc' 'Remove-Item -Recurse $HOME/.cache/cwtfigo-visit'; do
+  ask "$(pwsh "$c")" "PowerShell: $c"
+done
+why "$(pwsh "sh $CW approve box check")" "your yes lets check run on box from now on" "PowerShell, cw approve"
+why "$(pwsh "sh $CW run box maintain --apply")" "this changes box (maintain --apply), this time only" "PowerShell, --apply"
+for c in 'Get-ChildItem' "sh $CW status" "sh $CW run local logs" "sh $CW save \\\"x\\\"" "sh $CW yolo off"; do
+  [ -z "$(pwsh "$c")" ] || fail "PowerShell: $c should pass silently (no ask, and never allow)"
+done
+
 # Normal mode (no mode file): what can't change a machine without an approval cw checks gets allow.
 allow() { echo "$1" | grep -q '"permissionDecision":"allow"' || fail "should allow: $2"; }
 nallow() { echo "$1" | grep -q '"allow"' && fail "should not allow: $2"; }
@@ -263,6 +277,7 @@ for c in "sh $CW status" "sh $CW yolo off" "sh $CW save \\\"x\\\"" "cd $R/skills
   why "$(bash "$c")" "strict mode: you asked me to check with you before every step" "strict mode, $c"
 done
 why "$(bash "sh $CW run local maintain --apply")" "this changes this computer" "strict mode, --apply"
+why "$(pwsh "sh $CW status")" "strict mode: you asked me to check with you before every step" "strict mode, PowerShell"
 for f in "$REC/hosts/box/notes.md" "$REC/operator.md" "$(echo "$REC" | tr 'a-z' 'A-Z')/x.md" "/home/u/.cwtfigo/hosts/box/fix.sh" "C:\\\\\\\\Users\\\\\\\\u\\\\\\\\.cwtfigo\\\\\\\\x.md"; do
   why "$(w Write "$f")" "this changes your notes, and in strict mode" "strict mode, Write $f"
   why "$(w Edit "$f")" "this changes your notes, and in strict mode" "strict mode, Edit $f"
