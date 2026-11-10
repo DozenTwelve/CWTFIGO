@@ -84,7 +84,11 @@ ask "$(bash 'sh scripts/cw mode \"x\"')" "cw mode with a quoted argument"
 [ -z "$(bash "sh $CW mode")" ] || fail "plain cw mode should pass silently"
 # The prompt says, in plain words to the owner, what their yes does.
 why() { echo "$1" | grep -q "\"permissionDecisionReason\":\"CWTFIGO: $2" || fail "the prompt for $3 should say: $2 ($1)"; }
-why "$(bash "sh $CW approve box check")" "your yes lets this run from now on" "cw approve"
+# cw approve names the scripts and the machine, as the command does; the general line when it doesn't plainly.
+why "$(bash "sh $CW approve box check")" "your yes lets check run on box from now on without asking again, until it changes\"" "cw approve"
+why "$(bash "sh $CW approve local check maintain@0123456789ab && echo ok")" "your yes lets check, maintain run on this computer from now on without asking again, until one of them changes\"" "cw approve, several"
+why "$(bash "sh \\\"$CW\\\" approve box probes")" "your yes lets the plugin's read-only checks run on box from now on" "cw approve probes"
+why "$(bash "sh $CW approve box")" "your yes lets this run from now on" "cw approve with no script named"
 why "$(hook '"tool_name":"Write","tool_input":{"file_path":"/u/.cwtfigo/hosts/box/approved.sha256","content":"x"}')" "your yes lets this run from now on" "Write approved.sha256"
 why "$(bash "sh $CW yolo")" "your yes lets me run things you haven't seen" "cw yolo"
 why "$(bash "sh $CW mode strict")" "your yes changes how often I ask" "cw mode strict"

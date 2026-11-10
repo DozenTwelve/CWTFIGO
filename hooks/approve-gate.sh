@@ -13,6 +13,8 @@
 # (`cw approve`, approved.sha256), turns on YOLO (`cw yolo`, yolo.on, which skips approval for a visit) or touches the
 # marker (cwtfigo-visit, which switches the gate off) goes to a permission prompt, and so does `cw mode <anything>` (plain
 # `cw mode` only prints it). These asks come first and win over the allow below.
+# Their prompt names what the yes is for: for cw approve, the scripts and the machine when the command names them
+# plainly, else the general line.
 # Then, in every mode, what changes a machine or who may change it asks too, each time, so "anything that changes a
 # computer asks every time" holds: any Bash command with apply anywhere in it, quotes and backslashes out (cw run ...
 # --apply, or a script run some other way with it; a save or search with the word asks as well: a false positive costs
@@ -106,7 +108,18 @@ fi && {
   # What the yes is for, in the owner's words: the prompt is the question, and a newcomer reads it.
   t=${cmd:-$(printf '%s' "$in" | sed -nE 's/.*"file_path" *: *"([^"]*)".*/\1/p')}
   case $(printf '%s' "$t" | tr 'A-Z' 'a-z' | tr -d "'\"\\\\") in
-    *approve*) r="CWTFIGO: your yes lets this run from now on without asking again, until it changes" ;;
+    *approve*) r="CWTFIGO: your yes lets this run from now on without asking again, until it changes"
+      # Which scripts on which machine, when the command says so plainly: cw approve <alias> <script>[@hash]...
+      a=$(printf '%s' "$cl" | sed -nE 's/.*cw[[:space:]]+approve[[:space:]]+([a-z0-9._-]+)[[:space:]]+([a-z0-9._@ -]*[a-z0-9._@-]).*/\1|\2/p' | head -n 1)
+      s=$(pa "$(printf '%s' "${a#*|}" | sed -E 's/@[0-9a-f]*//g')")
+      if [ -n "$a" ] && [ -n "$s" ]; then
+        w=$(who "${a%%|*}")
+        case $s in
+          probes) r="CWTFIGO: your yes lets the plugin's read-only checks run on $w from now on without asking again, until one of them changes" ;;
+          *' '*) r="CWTFIGO: your yes lets $(echo "$s" | sed 's/ /, /g') run on $w from now on without asking again, until one of them changes" ;;
+          *) r="CWTFIGO: your yes lets $s run on $w from now on without asking again, until it changes" ;;
+        esac
+      fi ;;
     *yolo*) r="CWTFIGO: your yes lets me run things you haven't seen without asking, for 12 hours or until you turn it off" ;;
     *mode*) r="CWTFIGO: your yes changes how often I ask you before doing things on this computer" ;;
     *) r="CWTFIGO: this needs your own yes: it changes what I may do without asking you" ;;
