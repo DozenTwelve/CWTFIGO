@@ -159,6 +159,26 @@ for w in /tmp "$R" "$R/skills" "$D/scripts" skills/cwtfigo "$D\\\\"; do
   nallow "$(bcwd "$w" "sh scripts/cw status")" "cwd $w"
 done
 nallow "$(bash "sh scripts/cw status")" "no cwd"
+# Quotes pair as the shell pairs them. An apostrophe inside "" is a letter there, not the start of a '' string: a
+# backtick or $( ) between two of them is live, and the shell would run it. In every form that can get allow.
+M=$TMPDIR/M
+for c in "save \\\"didn't need \`touch $M\`, user's call\\\"" "search \\\"it's \$(touch $M) user's\\\"" "miss \\\"didn't \`touch $M\` user's\\\"" \
+         "status \\\"it's\\\" \`touch $M\` \\\"user's\\\"" "save \\\"it's \$HOME, user's\\\"" "save \\\"it's a\\\\\\\\b, user's\\\""; do
+  nallow "$(bash "sh $CW $c")" "sh cw $c"
+  nallow "$(bash "sh \\\"$CW\\\" $c")" "sh \"cw\" $c"
+  nallow "$(bcwd /tmp "cd $D && sh scripts/cw $c")" "cd && sh scripts/cw $c"
+  nallow "$(bcwd "$D" "sh scripts/cw $c")" "cwd skills/cwtfigo: sh scripts/cw $c"
+done
+# A quote with no partner: the shell would read on past the end of the command.
+for c in "save didn't" "save \\\"didn't \`touch $M\`\\\"" "save \\\"a" "save 'a" "save \\\"a\\\" 'b" "save 'a' \\\"b" "save \\\"it's\\\" 'a" \
+         "save 'it\\\"s' \$(touch $M) 'x\\\"y'" "save 'a\\\"' \\\"\$(touch $M)\\\"" "run local logs \\\"a" "run local logs 'a"; do
+  nallow "$(bash "sh $CW $c")" "sh cw $c"
+done
+# Still allowed: an apostrophe inside "" with nothing live, and inside '' anything, as the shell reads nothing there.
+for c in "save \\\"didn't need it, user's call\\\"" "save \\\"it's\\\" \\\"user's\\\"" "save 'costs \$5, see \`man x\` and \$(id)'" "save 'a\\\\\\\\b'" \
+         "search 'a' \\\"b's\\\" 'c\\\"d' \\\"(e)\\\"" "run local net \\\"eth0\\\" 'x'"; do
+  allow "$(bash "sh $CW $c")" "sh cw $c"
+done
 # Git Bash on Windows: Claude Code shows C:\Users\..., the shell has /c/Users/... and cygpath between them. A fake
 # cygpath maps C:<posix path> both ways.
 Y=$TMPDIR/cyg; mkdir "$Y"; printf '#!/bin/sh\ncase $1 in -m) printf "C:%%s\\n" "$2" ;; -u) printf "%%s\\n" "$2" | sed "s|^C:||; s|\\\\\\\\|/|g" ;; esac\n' > "$Y/cygpath"; chmod +x "$Y/cygpath"

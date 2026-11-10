@@ -37,8 +37,10 @@
 #   else). Dirs compared by cd and pwd -P, as the shell's own cd would land. The command holds nothing but letters,
 #   digits, spaces, quotes, _ . / , : @ % + = ~ # - and non-ASCII (a save message in the owner's language), the cd
 #   prefix's && aside: no ; & | ` $ ( ) < > \ newline, glob or brace, so no variable. Except inside quotes, for save,
-#   search and miss: there anything but ` $ \ and the closing quote (an error string, a message with "(...)!"), as the
-#   shell reads nothing else inside them. run only without "apply" anywhere in its args, quotes taken out (--app''ly
+#   search and miss: inside '' anything, inside "" anything but ` $ \ (an error string, a message with "(...)!"), as
+#   the shell reads nothing else inside them. Quotes are paired the way the shell pairs them, so an apostrophe inside
+#   "" is a letter ("didn't"), and a command with a quote left open gets no allow. A ` $ or \ outside quotes or inside
+#   "" means no allow, wherever it is. run only without "apply" anywhere in its args, quotes taken out (--app''ly
 #   is --apply): --apply changes the machine, and that is the owner's OK moment. SKILL makes every script that changes
 #   a machine a dry run without --apply, like maintain, so a rerun of an approved fix only shows what it would do. And
 #   only with a script name, unquoted, no / or ~ in it: given a path, cw would show that file.
@@ -157,8 +159,18 @@ fi
 safe() { printf '%s' "$1" | LC_ALL=C tr -d '\200-\377' | LC_ALL=C grep -Eq "^[A-Za-z0-9 _./,:@%+=~#'\"-]*\$"; }
 # safe, with its quoted strings taken out first: inside '' the shell reads nothing but the closing ', inside "" only
 # $ ` \ and the closing ", so "fixed wifi (iwlwifi)!" is as plain as fixed wifi. Left to right, as the shell pairs
-# them: the leftmost match is where the shell's own quote opens. One it can't pair stays and is checked as by safe.
-qsafe() { safe "$(printf '%s' "$1" | sed -E "s/'[^']*'|\"[^\"\$\`\\\\]*\"//g")"; }
+# them: each kind is matched wherever its quote opens, whatever is inside, so an apostrophe inside "" opens nothing
+# ("didn't need `x`, user's call" is one "" string with a live `x` in it, not a '' string from n't to user').
+# First the '' strings go, "" left in their place, and the "" strings stay whole: a $ ` or \ still there is outside
+# quotes or inside "", live either way, so no allow. Then the "" strings go. A quote left after that has no partner.
+# By bytes (LC_ALL=C): in a locale the input isn't valid in, sed would stop and leave nothing to check.
+qsafe() {
+  q=$(printf '%s' "$1" | LC_ALL=C sed -E "s/'[^']*'|\"([^\"]*)\"/\"\\1\"/g") || return 1
+  case $q in *[\$\`\\]*) return 1 ;; esac
+  q=$(printf '%s' "$q" | LC_ALL=C sed -E 's/"[^"]*"//g') || return 1
+  case $q in *[\"\']*) return 1 ;; esac
+  safe "$q"
+}
 # The physical dir an absolute path lands in, by the shell's own (logical) cd. Git Bash on Windows: C:/... or C:\...
 # as Claude Code shows it, by cygpath (only Git Bash has it).
 phys() (
