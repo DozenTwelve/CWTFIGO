@@ -49,7 +49,7 @@ body:
     attributes:
       label: Output of `cw status`
       description: |
-        Ask Claude "CWTFIGO, run cw status and show me all of its output, hint lines included", or run it yourself:
+        Easiest: in Claude Code, say "CWTFIGO, open an issue about this". It drafts this whole report, this output included, and shows it to you before posting. Or run it yourself in a terminal:
         `sh ~/.claude/plugins/cache/cwtfigo/cwtfigo/<version>/skills/cwtfigo/scripts/cw status 2>&1` (or `skills/cwtfigo/scripts/cw` in your clone, if you installed from one).
         It lists your machines by the names you gave them: change any that say too much.
         If CWTFIGO never installed, leave this empty.
