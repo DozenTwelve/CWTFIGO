@@ -243,7 +243,9 @@ PSRUN="iex([Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('$PSLO
 
 # Args for sh, quoted: each one in '', ' as '\''. They go in a "set --" line ahead of the script, never into ssh's
 # command: that is parsed by the target's login shell, and fish reads \' inside '' as an escape (x\'; echo PWN #).
-q() { for a; do printf "'%s' " "$(printf %s "$a" | sed "s/'/'\\\\''/g")"; done; }
+# LC_ALL=C: bytes, whatever they are. In a UTF-8 locale a Mac's sed stops at a byte that isn't UTF-8 (a Latin-1 file
+# name) and the arg would arrive empty.
+q() { for a; do printf "'%s' " "$(printf %s "$a" | LC_ALL=C sed "s/'/'\\\\''/g")"; done; }
 # Over ssh without a terminal the script is the target sh's stdin. All of it goes in { }: sh reads to the closing
 # brace before it runs a line, so stdin is at its end by then. Without them a command in the script that reads stdin
 # (read, apt-get asking) eats the script's next lines: with a guard like [ "$1" = --apply ] || exit 0 among them, the

@@ -332,6 +332,10 @@ printf 'cat <<EOF\nhere $1 $2\nEOF' > "$A/h.sh"; out=$(nr h 'a b' "it's \$(echo 
 printf 'echo out\nexit 7\necho never\n' > "$A/x.sh"; out=$(nr x); [ $? = 7 ] && [ "$out" = out ] || fail "a script's exit code over ssh: $out"
 printf 'echo last; false' > "$A/f.sh"; out=$(nr f); [ $? = 1 ] && [ "$out" = last ] || fail "the last command's exit code over ssh, no last newline: $out"
 printf '#!/bin/sh\n# nothing yet\n' > "$A/e.sh"; out=$(nr e); [ $? = 0 ] && [ -z "$out" ] || fail "a script with no command over ssh: $out"
+# An arg with a byte that isn't UTF-8 (a Latin-1 file name) arrives as it is, in a UTF-8 locale too: a Mac's sed stops
+# at such a byte, and the arg would arrive empty. A locale the system lacks tests nothing.
+out=$( (LC_ALL=en_US.UTF-8; export LC_ALL; nr c "$(printf 'caf\351')" "it's") | od -An -tx1 | tr -d ' \n')
+[ "$out" = 5b636166e95d5b697427735d ] || fail "an arg with a non-UTF-8 byte over ssh: got bytes $out"
 # Off later on (device.json known, so no first-run check): cw says so, not only ssh's own line.
 mkdir "$W/off"; printf '#!/bin/sh\necho "ssh: connect to host nas port 22: Operation timed out" >&2; exit 255\n' > "$W/off/ssh"; chmod +x "$W/off/ssh"
 out=$(PATH=$W/off:$PATH sh "$CW" run nas c </dev/null 2>&1); [ $? = 255 ] && echo "$out" | grep -q "^cw: can't reach nas over ssh" || fail "an unreachable known host should say so, exit 255: $out"
