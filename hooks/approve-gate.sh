@@ -40,10 +40,11 @@
 #   search and miss: inside '' anything, inside "" anything but ` $ \ (an error string, a message with "(...)!"), as
 #   the shell reads nothing else inside them. Quotes are paired the way the shell pairs them, so an apostrophe inside
 #   "" is a letter ("didn't"), and a command with a quote left open gets no allow. A ` $ or \ outside quotes or inside
-#   "" means no allow, wherever it is. run only without "apply" anywhere in its args, quotes taken out (--app''ly
-#   is --apply): --apply changes the machine, and that is the owner's OK moment. SKILL makes every script that changes
-#   a machine a dry run without --apply, like maintain, so a rerun of an approved fix only shows what it would do. And
-#   only with a script name, unquoted, no / or ~ in it: given a path, cw would show that file.
+#   "" means no allow, wherever it is. So does a # that starts a word outside quotes: it opens a comment, and a ''
+#   string after it is then no string to the shell. run only without "apply" anywhere in its args, quotes taken out
+#   (--app''ly is --apply): --apply changes the machine, and that is the owner's OK moment. SKILL makes every script
+#   that changes a machine a dry run without --apply, like maintain, so a rerun of an approved fix only shows what it
+#   would do. And only with a script name, unquoted, no / or ~ in it: given a path, cw would show that file.
 # - Write/Edit of a file in the record, but not approved.sha256, yolo.on, mode, self or .git* anywhere in it (any case),
 #   no . .. or // in the path, nothing but ASCII (a Mac folds U+017F, the long s, to s: approved.sha256 spelled with
 #   it is the same file) and no symlink on the way (Write follows one out of the record). A host script written there
@@ -168,7 +169,9 @@ qsafe() {
   q=$(printf '%s' "$1" | LC_ALL=C sed -E "s/'[^']*'|\"([^\"]*)\"/\"\\1\"/g") || return 1
   case $q in *[\$\`\\]*) return 1 ;; esac
   q=$(printf '%s' "$q" | LC_ALL=C sed -E 's/"[^"]*"//g') || return 1
-  case $q in *[\"\']*) return 1 ;; esac
+  # A # that starts a word outside quotes opens a comment: the shell drops the rest of the line, a ' with it, and
+  # reads what comes after a newline in that '' string as the next command.
+  case $q in *[\"\']*|'#'*|*' #'*) return 1 ;; esac
   safe "$q"
 }
 # The physical dir an absolute path lands in, by the shell's own (logical) cd. Git Bash on Windows: C:/... or C:\...

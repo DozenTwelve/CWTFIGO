@@ -174,6 +174,13 @@ for c in "save didn't" "save \\\"didn't \`touch $M\`\\\"" "save \\\"a" "save 'a"
          "save 'it\\\"s' \$(touch $M) 'x\\\"y'" "save 'a\\\"' \\\"\$(touch $M)\\\"" "run local logs \\\"a" "run local logs 'a"; do
   nallow "$(bash "sh $CW $c")" "sh cw $c"
 done
+# A # that starts a word outside quotes is a comment to the end of the line: the ' after it opens nothing, and the
+# line after the newline "inside" it is a command.
+for c in "status # 'x\\ntouch $M #'" "save 'a' #'b\\ntouch $M #'" "save a # b" "status #" "run local logs #x"; do
+  nallow "$(bash "sh $CW $c")" "sh cw $c"
+  nallow "$(bcwd "$D" "sh scripts/cw $c")" "cwd skills/cwtfigo: sh scripts/cw $c"
+done
+for c in "save a#b" "save '#6 done'" "save \\\"# done\\\"" "save 'two\\nlines'"; do allow "$(bash "sh $CW $c")" "sh cw $c"; done
 # Still allowed: an apostrophe inside "" with nothing live, and inside '' anything, as the shell reads nothing there.
 for c in "save \\\"didn't need it, user's call\\\"" "save \\\"it's\\\" \\\"user's\\\"" "save 'costs \$5, see \`man x\` and \$(id)'" "save 'a\\\\\\\\b'" \
          "search 'a' \\\"b's\\\" 'c\\\"d' \\\"(e)\\\"" "run local net \\\"eth0\\\" 'x'"; do
