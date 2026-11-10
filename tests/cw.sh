@@ -315,6 +315,21 @@ out=$(PATH=$W:$PATH sh "$CW" run nas c 'a b' "it's" '$(echo INJECTED)' '' </dev/
 # The target's login shell may quote otherwise (fish: \' in '' is an escape): no arg goes into ssh's command at all.
 grep -Eq "INJECTED|it's|a b" "$W/cmds" && fail "args must reach the target's sh only, not its login shell: $(cat "$W/cmds")"
 PATH=$W:$PATH sh "$CW" run nas c "$(printf 'a\rb')" </dev/null >/dev/null 2>&1; [ $? = 1 ] || fail "an sh arg with a CR should be refused too"
+# Without a terminal the script is the target sh's stdin: a command in it that reads stdin must find it at its end, not
+# the script's next lines. A read ahead of the --apply guard would eat the guard, and the apply branch would run.
+nr() { n=$1; shift; sh "$CW" approve nas "$n" >/dev/null; PATH=$W:$PATH sh "$CW" run nas "$n" "$@" </dev/null 2>&1; }
+printf 'echo dry\nread -r a\n[ "$1" = --apply ] || exit 0\necho APPLIED\n' > "$A/r.sh"
+out=$(nr r); [ $? = 0 ] && [ "$out" = dry ] || fail "a read ahead of the --apply guard must not eat it: $out"
+[ "$(nr r --apply | tr '\n' ' ')" = 'dry APPLIED ' ] || fail "with --apply the apply branch should still run"
+# Whatever the target's sh had already read of the script (dash reads ahead in blocks): nothing of it is left on stdin.
+{ printf 'echo "left: $(wc -c | tr -d " ")"\n'; awk 'BEGIN { for (i = 0; i < 5000; i++) print "# padding padding padding padding padding" }'; } > "$A/w.sh"
+out=$(nr w); [ "$out" = 'left: 0' ] || fail "a script over ssh should find stdin at its end: $out"
+# In the braces still a whole script: a here-document ending the file with no last newline, its args as they were, the
+# script's own exit code, the last command's, and a script with no command at all.
+printf 'cat <<EOF\nhere $1 $2\nEOF' > "$A/h.sh"; out=$(nr h 'a b' "it's \$(echo INJECTED)"); [ "$out" = "here a b it's \$(echo INJECTED)" ] || fail "a here-document script over ssh: $out"
+printf 'echo out\nexit 7\necho never\n' > "$A/x.sh"; out=$(nr x); [ $? = 7 ] && [ "$out" = out ] || fail "a script's exit code over ssh: $out"
+printf 'echo last; false' > "$A/f.sh"; out=$(nr f); [ $? = 1 ] && [ "$out" = last ] || fail "the last command's exit code over ssh, no last newline: $out"
+printf '#!/bin/sh\n# nothing yet\n' > "$A/e.sh"; out=$(nr e); [ $? = 0 ] && [ -z "$out" ] || fail "a script with no command over ssh: $out"
 # Off later on (device.json known, so no first-run check): cw says so, not only ssh's own line.
 mkdir "$W/off"; printf '#!/bin/sh\necho "ssh: connect to host nas port 22: Operation timed out" >&2; exit 255\n' > "$W/off/ssh"; chmod +x "$W/off/ssh"
 out=$(PATH=$W/off:$PATH sh "$CW" run nas c </dev/null 2>&1); [ $? = 255 ] && echo "$out" | grep -q "^cw: can't reach nas over ssh" || fail "an unreachable known host should say so, exit 255: $out"

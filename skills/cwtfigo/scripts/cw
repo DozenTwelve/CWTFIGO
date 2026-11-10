@@ -227,12 +227,16 @@ PSRUN="iex([Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('$PSLO
 # Args for sh, quoted: each one in '', ' as '\''. They go in a "set --" line ahead of the script, never into ssh's
 # command: that is parsed by the target's login shell, and fish reads \' inside '' as an escape (x\'; echo PWN #).
 q() { for a; do printf "'%s' " "$(printf %s "$a" | sed "s/'/'\\\\''/g")"; done; }
+# Over ssh without a terminal the script is the target sh's stdin. All of it goes in { }: sh reads to the closing
+# brace before it runs a line, so stdin is at its end by then. Without them a command in the script that reads stdin
+# (read, apt-get asking) eats the script's next lines: with a guard like [ "$1" = --apply ] || exit 0 among them, the
+# apply branch runs without --apply. The : is for a script with no command in it: { } alone is a syntax error.
+sargs() { printf 'set -- %s\n{ :\n' "$(q "$@")"; cat "$F"; printf '\n}\n'; }
 
 # The caller can die (a timed-out tool, a closed terminal) and signal cw alone: ssh would run on, orphaned, until the
 # script on the target ends. So ssh runs in the background and goes down with cw; exec, so $! is ssh itself, not the
 # subshell the ssh function would run in. The run on the target is left to finish: sshd doesn't stop it (Windows
 # neither, checked), and a half-done maintain --apply is worse.
-sargs() { printf 'set -- %s\n' "$(q "$@")"; cat "$F"; }
 reap() { p=$!; trap 'kill $p 2>/dev/null; exit 1' INT TERM HUP; wait $p; }
 # ssh exits 255 when it can't reach the machine or loses it: past the first collect nothing but ssh's own line said so.
 gone() { [ "$1" = 255 ] && [ -z "$here" ] && echo "cw: can't reach $alias over ssh, or lost it (exit 255, ssh's error is above)" >&2; return "$1"; }
