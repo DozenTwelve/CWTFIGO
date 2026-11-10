@@ -1360,6 +1360,10 @@ mod tests {
         a.scroll = 1000;
         let s = screen(&mut a, 80, 24);
         assert!(s.contains("echo 99") && !s.contains("echo 70"), "PgDn stops at the last page\n{s}");
+        a.hosts[0].items[0].text = (0..400).map(|i| format!("w{i} ")).collect();
+        a.scroll = 1000;
+        let s = screen(&mut a, 80, 24);
+        assert!(s.contains("w399") && !s.contains("w0 "), "one long line scrolls by its wrapped rows\n{s}");
         a.message.clear();
         let long = "Approve a script with a name long enough that its confirm runs past sixty columns? y/N";
         a.mode = Mode::Confirm(long.into(), Then::Apply(target(&a, None)));

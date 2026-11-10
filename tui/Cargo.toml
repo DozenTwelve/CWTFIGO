@@ -5,8 +5,8 @@ edition = "2021"
 description = "Run the scripts in your CWTFIGO record without AI"
 
 [dependencies]
-# line_count: how far the wrapped preview scrolls (unstable in ratatui, pinned to 0.29 here)
-ratatui = { version = "0.29", features = ["unstable-rendered-line-info"] }
+# line_count: how far the wrapped preview scrolls (unstable in ratatui, pinned to 0.30 here)
+ratatui = { version = "0.30", features = ["unstable-rendered-line-info"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
