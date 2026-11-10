@@ -643,6 +643,15 @@ done
 [ "$(ls -a "$CWTFIGO_HOME/hosts")" = "$hb" ] || fail "a bad alias made a host dir: $(ls -a "$CWTFIGO_HOME/hosts")"
 [ -e "$CWTFIGO_HOME/yolo.on" ] || [ -e "$CWTFIGO_HOME/approved.sha256" ] && fail "a bad alias reached the record's root"
 for n in .. -x 'a\b' 'b*' 'b?x' 'b[x]'; do sh "$CW" name "$n" >/dev/null 2>&1 && fail "cw name '$n' should be refused"; done
+# off in any case turns YOLO off, never on for a machine called OFF. A word that is no machine in the record (on, a
+# typo) turns nothing on and makes no host dir.
+for o in OFF Off; do
+  sh "$CW" yolo >/dev/null; out=$(sh "$CW" yolo $o 2>&1) && echo "$out" | grep -q '^YOLO off' && [ ! -e "$CWTFIGO_HOME/yolo.on" ] || fail "cw yolo $o should turn YOLO off: $out"
+done
+for a in on nosuch; do
+  out=$(sh "$CW" yolo $a 2>&1); [ $? = 1 ] && echo "$out" | grep -q "^cw: no machine called $a in the record" || fail "cw yolo $a: no such machine, nothing on: $out"
+done
+[ "$(ls -a "$CWTFIGO_HOME/hosts")" = "$hb" ] && [ -z "$(find "$CWTFIGO_HOME" -name yolo.on)" ] || fail "cw yolo OFF, on or an unknown name made a host dir or left YOLO on: $(ls -a "$CWTFIGO_HOME/hosts")"
 # A script's name is a field of its approved.sha256 line: with a newline in it a run under YOLO would leave a line
 # without its yolo (approved for good), and cw approve a second line for a hash nobody saw. After an @ comes a hash
 # (cw approve <script>@<sha256 start>), so a file named fix@x.sh is no script either. Refused, under YOLO too.

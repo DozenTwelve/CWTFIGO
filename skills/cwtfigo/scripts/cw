@@ -514,11 +514,15 @@ mode)
     *) die "usage: cw mode [strict|normal]" ;;
   esac ;;
 yolo)
-  [ "$2" = off ] || ! hbox || die "$HBOX"
-  case $2 in
+  # off in any case (OFF, Off) is off, never a machine of that name. And only a machine the record knows, or this one:
+  # a word that is neither (on, a typo) turns nothing on.
+  y=$(printf %s "$2" | tr 'A-Z' 'a-z')
+  [ "$y" = off ] || ! hbox || die "$HBOX"
+  case $y in
   off) rm -f "$REC/yolo.on" "$REC"/hosts/*/yolo.on; echo "YOLO off: unapproved scripts stop and ask again." ;;
   '') date +%s > "$REC/yolo.on"; echo "YOLO on for every machine for 12 h, or until cw yolo off: unapproved scripts run without asking." ;;
-  *) host "$2"; mkh; date +%s > "$H/yolo.on"; echo "YOLO on for $alias for 12 h, or until cw yolo off: unapproved scripts run without asking." ;;
+  *) host "$2"; [ -n "$here" ] || [ -d "$H" ] || die "no machine called $2 in the record: cw yolo (every machine), cw yolo <alias> (one the record knows) or cw yolo off"
+     mkh; date +%s > "$H/yolo.on"; echo "YOLO on for $alias for 12 h, or until cw yolo off: unapproved scripts run without asking." ;;
   esac ;;
 status)
   remote && pull
