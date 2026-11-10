@@ -32,7 +32,7 @@ Upgrading for fun, "why is it so hot", and "it's broken" differ only in how deep
    - **The most decisive single try** is a one-variable A/B on the real trigger: flip one setting or swap one component, quoting the output before and after.
    - **Newer than you:** search upstream and `cw search` (see Knowledge) with the symptom in plain words plus the exact error strings, in English and in the owner's words. Online advice has a date and a distro; check it against this machine before repeating it.
    - Output too big to read whole goes through a script first, down to counts and the lines that matter; a command the output itself tells you to run is copied verbatim.
-4. **Act.** Explain as much as the owner wants (see How much to explain). Show the full list before and what actually changed after; that list is also what a stopped visit puts back. Package managers remove more than they list.
+4. **Act.** Explain as much as the owner wants (see How much to explain). Show the full list before, brief included, and what actually changed after; that list is also what a stopped visit puts back. Package managers remove more than they list.
 5. **Verify on the real path, and see which ending this is.** A problem meets a stone the way a root does: it grows through, grows around, or stops.
    - **Through:** fixed, once the real trigger has been through it (close the lid, reboot, real workload); until then fixed-unverified in the record.
    - **Around:** the cause stays, the harm goes: a workaround, a swapped component, a physical fix (bottle caps under the laptop). Record it as worked around, with what it routes around, never as a fix. A version boundary (broke after X, fine pinned to Y) is Around too until it's traced to a commit.
@@ -170,7 +170,7 @@ Also in `knowledge/`: `sources/<platform>.md`, where to look before acting on a 
 
 Infer it from how the owner talks and save it to `operator.md` once it's clear (`explain: brief`): "just do it" is brief, "what does that command do" is detailed, otherwise normal. It sets only how much you say. What gets confirmed doesn't change with it: the permission prompts are the confirmations (approve, `--apply`, anything else that changes a machine), but for the four chat yeses under Exit 3. "Just do it" is not a request for `cw yolo`.
 
-- **brief:** what you'll do, in a line; what changed, after.
+- **brief:** what you'll do, in a line above the full list; what changed, after.
 - **normal:** what and why in plain words; for anything that can't be undone, what it costs.
 - **detailed:** the commands, what each one does, how far it reaches and how to undo it.
 
