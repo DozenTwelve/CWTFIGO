@@ -40,7 +40,9 @@ ssh() { command ssh $SSHO "$@"; }
 # keepalives, so with the shared record away a run, a status or a save waits seconds, not the OS's connect timeout.
 # No BatchMode: a save typed in a terminal may need to ask for a key's passphrase.
 GS=
-git_rec() { git -C "$REC" ${GS:+-c "core.sshCommand=$GS"} "$@"; }
+# The record's commits are never signed: with commit.gpgsign on, the owner's pinentry has no terminal to ask on under
+# Claude Code, and every save, join and merge would fail.
+git_rec() { git -C "$REC" -c commit.gpgsign=false ${GS:+-c "core.sshCommand=$GS"} "$@"; }
 remote() { [ -n "$(git_rec remote 2>/dev/null)" ]; }
 # What other operators saved since: fast-forward only. A failed one says so and returns 1; the caller goes on or not.
 pull() { git_rec pull -q --ff-only --no-rebase || { echo "cw: pull failed, using local record" >&2; return 1; }; }

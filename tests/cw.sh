@@ -503,6 +503,10 @@ touch "$I/a"; GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 CWTFIGO_HOME=$I 
 [ "$(git -C "$I" log -1 --format=%B)" = "$(printf 'a\n\ncw-version: %s' "$V")" ] || fail "save should add a cw-version trailer: $(git -C "$I" log -1 --format=%B)"
 git -C "$I" config user.email me@x; touch "$I/b"; GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 CWTFIGO_HOME=$I sh "$CW" save b >/dev/null
 [ "$(git -C "$I" log -1 --format=%ae)" = me@x ] || fail "a configured identity must not be overridden"
+# The owner signs their commits, and the signing can't ask here (a gpg that fails): the record's commits aren't signed,
+# so a save still works. Left on for the saves below; and in the records further down that merge (K's a) and join (J's c).
+git -C "$I" config commit.gpgsign true; git -C "$I" config gpg.program false; touch "$I/s"
+GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 CWTFIGO_HOME=$I sh "$CW" save signed >/dev/null 2>&1 && [ "$(git -C "$I" log -1 --format=%s)" = signed ] || fail "save with commit.gpgsign on and a gpg that can't sign"
 # A remote added by hand has no upstream: the first save sets it. A failed push says git's own error.
 git init -q --bare "$I.git"; git -C "$I" remote add origin "$I.git"; touch "$I/c"
 CWTFIGO_HOME=$I sh "$CW" save c >/dev/null 2>&1 || fail "first save to a new remote should push"
@@ -540,6 +544,7 @@ git -C "$CWTFIGO_HOME" remote remove origin; sed '$d' "$H/notes.md" > "$H/n" && 
 K=$(mktemp -d); kw() { r=$1; shift; HOME=$K PATH=$K/bin:$PATH CWTFIGO_HOME=$K/$r sh "$CW" "$@" </dev/null; }; kg() { r=$1; shift; HOME=$K git -C "$K/$r" "$@"; }
 mkdir "$K/bin"; printf '#!/bin/sh\ncat >/dev/null; echo ran-on-nas\n' > "$K/bin/ssh"; chmod +x "$K/bin/ssh"; git init -q --bare "$K/s.git"
 kw a name a >/dev/null; mkdir -p "$K/a/hosts/nas"; echo '{ "os": "arch" }' > "$K/a/hosts/nas/device.json"; touch "$K/a/hosts/nas/approved.sha256"
+kg a config commit.gpgsign true; kg a config gpg.program false   # a's merges below go unsigned too
 kg a remote add origin "$K/s.git"; kw a save init >/dev/null 2>&1 || fail "two operators: first save"
 kw b join "$K/s.git" >/dev/null 2>&1; kw b name b >/dev/null; kw b run nas check >/dev/null 2>&1
 sed -i.bak '/^# CWTFIGO-FOUNDATION/d' "$K/b/hosts/nas/check.sh"; rm "$K/b/hosts/nas/check.sh.bak"
@@ -1174,6 +1179,7 @@ mkdir -p "$J/c/hosts/server" "$J/c/hosts/pc"; echo 'id: home-id' > "$J/c/hosts/s
 echo pc > "$J/c/self"; echo x > "$J/c/hosts/pc/log.md"
 mkdir -p "$J/c/hosts/nas"; echo 'id: nas-id' > "$J/c/hosts/nas/facts.md"; printf '# CWTFIGO-FOUNDATION\n' > "$J/c/hosts/nas/maintain.sh"
 printf '%s\n' '- shared bullet' '- uses fish' > "$J/c/operator.md"; echo '- server: off at night' > "$J/c/topology.md"
+jg c config commit.gpgsign true; jg c config gpg.program false   # the join's commits go unsigned too
 jw c save own >/dev/null 2>&1; echo 'mine-only' >> "$J/c/.gitignore"; jw c save ign >/dev/null 2>&1
 touch "$J/c/dirty"; jw c join "$J/shared.git" >/dev/null 2>&1 && fail "join with unsaved changes should be refused"
 rm "$J/c/dirty"; c0=$(jg c rev-parse HEAD)
