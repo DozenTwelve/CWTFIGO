@@ -89,6 +89,21 @@ why "$(hook '"tool_name":"Write","tool_input":{"file_path":"/u/.cwtfigo/hosts/bo
 why "$(bash "sh $CW yolo")" "your yes lets me run things you haven't seen" "cw yolo"
 why "$(bash "sh $CW mode strict")" "your yes changes how often I ask" "cw mode strict"
 why "$(bash 'rm -rf $TMPDIR/cwtfigo-visit')" "this needs your own yes" "the marker"
+# In every mode, what changes a machine or who may change it asks each time: an allow rule, an earlier "don't ask
+# again" or auto mode would let it through otherwise. The prompt says what changes.
+for c in "sh $CW run local maintain --apply" "sh $CW run box maintain --app''ly trash" "sh scripts/cw run box fix --APPLY" \
+         "cd $R/skills/cwtfigo && sh scripts/cw run local maintain --apply" "sh ~/.cwtfigo/hosts/box/maintain.sh --apply" \
+         "sh $CW name box" "sh $CW name local2" "C=$CW; sh \$C name box" "sh scripts/c''w name x" "sh $CW join box:rec" "sh \$C join /srv/rec"; do
+  ask "$(bash "$c")" "$c"
+done
+why "$(bash "sh $CW run box maintain --apply trash")" "this changes box (maintain --apply trash), this time only" "--apply"
+why "$(bash "sh $CW run local maintain --apply")" "this changes this computer (maintain --apply), this time only" "--apply here"
+why "$(bash "sh $CW run box maintain --apply; ls")" "this changes box (maintain --apply), this time only" "--apply, then ;"
+why "$(bash "sh x --apply")" "this changes a computer (it runs with --apply), this time only" "--apply, not by cw run"
+why "$(bash "sh $CW name box")" "this calls this computer box in your notes" "cw name"
+why "$(bash "sh $CW join nas:cwtfigo.git")" "this shares your notes with nas:cwtfigo.git\." "cw join"
+bash "sh $CW run local hostname" | grep -q '"ask"' && fail "name inside a word, in a run without apply, should not ask"
+[ -z "$(bash 'git log --format=%an')" ] || fail "name inside a word should pass silently"
 
 # Normal mode (no mode file): what can't change a machine without an approval cw checks gets allow.
 allow() { echo "$1" | grep -q '"permissionDecision":"allow"' || fail "should allow: $2"; }
@@ -186,6 +201,16 @@ mkdir -p "$HOME/.cwtfigo"; allow "$(CWTFIGO_HOME= hook "$(printf '"tool_name":"W
 echo strict > "$REC/mode"
 nallow "$(bash "sh $CW status")" "strict mode, cw status"
 nallow "$(w Write "$REC/hosts/box/notes.md")" "strict mode, Write notes.md"
+# Strict promises a prompt for every step: every cw call and every edit of the record asks, not just goes unallowed.
+for c in "sh $CW status" "sh $CW yolo off" "sh $CW save \\\"x\\\"" "cd $R/skills/cwtfigo && sh scripts/cw search wifi"; do
+  why "$(bash "$c")" "strict mode: you asked me to check with you before every step" "strict mode, $c"
+done
+why "$(bash "sh $CW run local maintain --apply")" "this changes this computer" "strict mode, --apply"
+for f in "$REC/hosts/box/notes.md" "$REC/operator.md" "$(echo "$REC" | tr 'a-z' 'A-Z')/x.md" "/home/u/.cwtfigo/hosts/box/fix.sh" "C:\\\\\\\\Users\\\\\\\\u\\\\\\\\.cwtfigo\\\\\\\\x.md"; do
+  why "$(w Write "$f")" "this changes your notes, and in strict mode" "strict mode, Write $f"
+  why "$(w Edit "$f")" "this changes your notes, and in strict mode" "strict mode, Edit $f"
+done
+[ -z "$(bash 'ls')" ] && [ -z "$(w Write "$TMPDIR/elsewhere/notes.md")" ] || fail "strict mode: what isn't cw or the record takes Claude Code's own path"
 ask "$(bash "sh $CW approve local x")" "strict mode, cw approve"
 # A hand-edited mode file: anything but normal (case and spaces aside) is strict. Never fails open.
 for m in 'strict\r\n' 'Strict\n' ' strict\n' '' 'x\n'; do printf "$m" > "$REC/mode"; nallow "$(bash "sh $CW status")" "mode file '$m'"; done
