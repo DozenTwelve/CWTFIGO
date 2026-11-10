@@ -31,7 +31,9 @@
 # computer asks every time" holds: any Bash command with apply anywhere in it, quotes and backslashes out (cw run ...
 # --apply, or a script run some other way with it; a save or search with the word asks as well: a false positive costs
 # one prompt), cw name (this machine would take a name, and with it the approvals, of a host in the record) and cw join
-# (whoever can save to the shared record can then approve scripts for this machine), cw also as $VAR. Without an ask
+# (whoever can save to the shared record can then approve scripts for this machine), cw also as $VAR. The --apply
+# prompt names the machine and the script when the command holds one cw run; with several, the general line (one
+# name would hide the other machines). Without an ask
 # these would get no output, and an allow rule (Bash(sh:*)), an earlier "don't ask again" or auto mode would run them
 # unasked. Claude Code's hook docs: "ask" prompts the user to confirm, and in auto mode it goes to the prompt, not the
 # classifier. Out of this hook's reach: bypassPermissions mode, and a mod's tool.check approval outside managed settings.
@@ -177,6 +179,8 @@ if printf '%s' "$in" | grep -Eq '"tool_name" *: *"(Bash|PowerShell)"'; then
   case $cl in *apply*)
     a=$(printf '%s' "$cl" | sed -nE 's/.*cw[[:space:]]+run[[:space:]]+([a-z0-9._-]+)[[:space:]]+([^;&|<>]*).*/\1|\2/p' | head -n 1)
     s=$(pa "${a#*|}")
+    # More than one cw run in the command: naming one machine would hide the others.
+    printf '%s' "$cl" | grep -Eq 'cw[[:space:]]+run[[:space:]].*cw[[:space:]]+run[[:space:]]' && a=
     [ -n "$a" ] && [ -n "$s" ] && askr "CWTFIGO: this changes $(who "${a%%|*}") ($s), this time only"
     askr "CWTFIGO: this changes a computer (it runs with --apply), this time only" ;;
   esac

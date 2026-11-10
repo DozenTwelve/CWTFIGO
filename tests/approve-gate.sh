@@ -104,6 +104,10 @@ why "$(bash "sh $CW run box maintain --apply trash")" "this changes box (maintai
 why "$(bash "sh $CW run local maintain --apply")" "this changes this computer (maintain --apply), this time only" "--apply here"
 why "$(bash "sh $CW run box maintain --apply; ls")" "this changes box (maintain --apply), this time only" "--apply, then ;"
 why "$(bash "sh x --apply")" "this changes a computer (it runs with --apply), this time only" "--apply, not by cw run"
+# Several machines in one command: the prompt must not name just one of them.
+for c in "echo == a; sh $CW run a maintain --apply; echo == c; sh $CW run c maintain --apply" "sh $CW run a maintain --apply && sh $CW run c check"; do
+  why "$(bash "$c")" "this changes a computer (it runs with --apply), this time only\"" "--apply on more than one machine"
+done
 why "$(bash "sh $CW name box")" "this calls this computer box in your notes" "cw name"
 why "$(bash "sh $CW join nas:cwtfigo.git")" "this shares your notes with nas:cwtfigo.git\." "cw join"
 bash "sh $CW run local hostname" | grep -q '"ask"' && fail "name inside a word, in a run without apply, should not ask"
