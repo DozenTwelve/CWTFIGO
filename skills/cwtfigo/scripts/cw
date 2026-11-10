@@ -193,7 +193,13 @@ PROBES=" apps.sh boot.sh dns.sh docker.sh env.ps1 health.ps1 health.sh hw.sh lin
 # A listed probe by name. Only a word: a file named "apps.sh boot.sh" would match two entries of the list at once.
 probe() { word "$1" && case $PROBES in *" $1.$X "*) ;; *) false ;; esac; }
 
+# A script's name is a field in a line of approved.sha256, and what follows an @ is a hash (cw approve <script>@<sha256
+# start>). A newline in a name would split the line: a run under YOLO would leave one without its yolo, which counts
+# for good, and cw approve a second one for a hash nobody saw. A file named fix@<hash>.sh would read as fix at that hash.
+badscript() { case $1 in *[[:space:][:cntrl:]]*|*\\*|*@*) return 0 ;; esac; return 1; }
+
 resolve() {
+  badscript "$1" && die "a script's name can't hold a space, a control character, \\ or @ (<script>@<sha256 start> is for cw approve): rename the file, then use its new name"
   windows && X=ps1 || X=sh
   case /$1/ in *[/\\]..[/\\]*) die "no .. in a script name or path: $1" ;; esac
   plug=
@@ -619,6 +625,8 @@ hermes)
       # The owner's own yes only: a script that ran under YOLO isn't one, even while YOLO is on.
       [ -f "$F" ] && approved own || continue
       name=$(basename "$F" ".$x")
+      # Approved before cw refused such names: cw run refuses it now, so its skill could only fail.
+      badscript "$name" && continue
       # Hermes' skill names: [a-z0-9._-], 64 at most; its slash commands keep only [a-z0-9-], Discord their first 32.
       n=$(printf 'cw-%s-%s' "$alias" "$name" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' - | tr -s - | cut -c1-64 | sed 's/-$//')
       [ ! -e "$T/cwtfigo/$n" ] || { echo "cw: skipped $alias/$name.$x: its skill name $n is taken" >&2; continue; }

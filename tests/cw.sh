@@ -416,10 +416,11 @@ rm "$H/perf.sh"
 PC=$(mktemp -d); cp -R "$(dirname "$CW")/.." "$PC/cwtfigo"; printf '# Reads uptime.\necho new-probe-body\n' > "$PC/cwtfigo/scripts/probes/zz.sh"
 sh "$PC/cwtfigo/scripts/cw" approve local probes | grep -q ' zz' && fail "approve probes must leave out a probe the plugin didn't ship"
 out=$(sh "$PC/cwtfigo/scripts/cw" run local zz); [ $? = 3 ] && echo "$out" | grep -qx 'echo new-probe-body' || fail "a probe the plugin didn't ship should be shown in full: $out"
-# A name with a space matches two list entries at once ("apps.sh boot.sh"): not a plugin probe either.
+# A name with a space matches two list entries at once ("apps.sh boot.sh"): not a plugin probe either, and no script
+# cw runs at all (no name with a space is).
 printf '# Reads uptime.\ntouch "%s/ran"\n' "$PC" > "$PC/cwtfigo/scripts/probes/apps.sh boot.sh"
 sh "$PC/cwtfigo/scripts/cw" approve local probes | grep -q 'apps.sh boot' && fail "approve probes must leave out a probe name with a space"
-out=$(sh "$PC/cwtfigo/scripts/cw" run local "apps.sh boot"); [ $? = 3 ] && echo "$out" | grep -q '^touch ' || fail "a probe name with a space should be shown in full: $out"
+out=$(sh "$PC/cwtfigo/scripts/cw" run local "apps.sh boot" 2>&1); [ $? = 1 ] && echo "$out" | grep -q "name can't hold a space" || fail "a probe name with a space should be refused: $out"
 [ -e "$PC/ran" ] && fail "a probe name with a space ran unapproved"
 printf '# Reads uptime.\necho outside-body\n' > "$PC/evil.sh"
 sh "$CW" run local "$PC/cwtfigo/scripts/../../evil.sh" >/dev/null 2>&1; [ $? = 1 ] || fail "a path with .. should be refused"
@@ -613,6 +614,20 @@ done
 [ "$(ls -a "$CWTFIGO_HOME/hosts")" = "$hb" ] || fail "a bad alias made a host dir: $(ls -a "$CWTFIGO_HOME/hosts")"
 [ -e "$CWTFIGO_HOME/yolo.on" ] || [ -e "$CWTFIGO_HOME/approved.sha256" ] && fail "a bad alias reached the record's root"
 for n in .. -x 'a\b' 'b*' 'b?x' 'b[x]'; do sh "$CW" name "$n" >/dev/null 2>&1 && fail "cw name '$n' should be refused"; done
+# A script's name is a field of its approved.sha256 line: with a newline in it a run under YOLO would leave a line
+# without its yolo (approved for good), and cw approve a second line for a hash nobody saw. After an @ comes a hash
+# (cw approve <script>@<sha256 start>), so a file named fix@x.sh is no script either. Refused, under YOLO too.
+BN=$(mktemp -d); cp "$H/approved.sha256" "$BN/before"; sh "$CW" yolo local >/dev/null
+for n in "$(printf 'nl\n%s  y  2026-11-10' "$(tsum "$H/y.sh")")" "$(printf 'a\033b')" 'a b' fix@x; do
+  printf 'touch "%s/ran"\n' "$BN" > "$H/$n.sh"
+  out=$(sh "$CW" run local "$n" 2>&1); [ $? = 1 ] && echo "$out" | grep -q "name can't hold" || fail "cw run of a script named '$n' should be refused: $out"
+  sh "$CW" approve local "$n" >/dev/null 2>&1 && fail "cw approve of a script named '$n' should be refused"
+  sh "$CW" approve local "$n@$(tsum "$H/$n.sh" | cut -c1-12)" >/dev/null 2>&1 && fail "cw approve of a script named '$n', by its hash, should be refused"
+  rm "$H/$n.sh"
+done
+sh "$CW" yolo off >/dev/null
+[ ! -e "$BN/ran" ] && cmp -s "$H/approved.sha256" "$BN/before" || fail "a script with a bad name must not run, nor leave an approval line: $(cat "$H/approved.sha256")"
+rm -rf "$BN"
 
 git -C "$CWTFIGO_HOME" ls-files | grep -q '^self$' && fail "self must never be committed"
 # Here, not over ssh (that ssh fails): the run has to get past approval to show which way it went.
@@ -967,16 +982,20 @@ out=$(hw "$HM/rel/.." 2>&1) && fail "cw hermes <dir>/.. should fail"; echo "$out
 out=$(hw / 2>&1) && fail "cw hermes / should fail"; echo "$out" | grep -q 'not /' || fail "cw hermes /: $out"
 mkdir "$HM/mine"; echo keep > "$HM/mine/x"; out=$(hw "$HM/mine" 2>&1) && fail "cw hermes into a dir it didn't make should fail"
 [ "$(cat "$HM/mine/x")" = keep ] && [ "$(ls -A "$HM/mine")" = x ] && [ ! -e "$HM/mine.lock" ] && echo "$out" | grep -q "didn't make" || fail "cw hermes must leave a foreign dir alone: $out"
-# cw's path and a script's name with a space (and a '): quoted in the command shown, which runs as it reads.
+# cw's path with a space and a script's name with a ' (cw takes no name with a space): quoted in the command shown,
+# which runs as it reads.
 mkdir "$HM/a b"; ln -s "$(cd "$(dirname "$CW")/.." && pwd)" "$HM/a b/skill"
 # A name with !` (Hermes' inline shell) too: it runs as it reads, and no !` is in the skill.
-for x in "my jo'b" 'bang!`echo pwn`'; do printf '#!/bin/sh\n# menu: job\necho "job ran: $1"\n' > "$HB/$x.sh"; done
-CWTFIGO_HOME=$HM/rec sh "$CW" approve me "my jo'b" 'bang!`echo pwn`' >/dev/null || fail "cw hermes quoting setup"
+for x in "my-jo'b" 'bang!`echo-pwn`'; do printf '#!/bin/sh\n# menu: job\necho "job ran: $1"\n' > "$HB/$x.sh"; done
+CWTFIGO_HOME=$HM/rec sh "$CW" approve me "my-jo'b" 'bang!`echo-pwn`' >/dev/null || fail "cw hermes quoting setup"
+# A script approved under a name cw has refused since (a space): no skill, cw run would only refuse it.
+printf '#!/bin/sh\n# menu: old name\necho old\n' > "$HB/old name.sh"; echo "$(tsum "$HB/old name.sh")  old name  2026-11-01" >> "$HB/approved.sha256"
 (CW="$HM/a b/skill/scripts/cw"; hw "$HM/q" >/dev/null) || fail "cw hermes from a path with a space"
+[ ! -e "$HM/q/cwtfigo/cw-me-old-name" ] || fail "cw hermes: a script cw run refuses by its name should get no skill"
 c=$(sed -n 's/^       //p' "$HM/q/cwtfigo/cw-me-my-jo-b/SKILL.md")
-[ "$c" = "${P}sh '$HM/a b/skill/scripts/cw' run me 'my jo'\\''b'" ] && [ "$(he "$c" 2>&1)" = 'job ran: ' ] || fail "cw hermes: the command shown must run as it reads: $c"
+[ "$c" = "${P}sh '$HM/a b/skill/scripts/cw' run me 'my-jo'\\''b'" ] && [ "$(he "$c" 2>&1)" = 'job ran: ' ] || fail "cw hermes: the command shown must run as it reads: $c"
 c=$(sed -n 's/^       //p' "$HM/q/cwtfigo/cw-me-bang-echo-pwn/SKILL.md")
-[ "$c" = "${P}sh '$HM/a b/skill/scripts/cw' run me 'bang'\\!'\`echo pwn\`'" ] && [ "$(he "$c" 2>&1)" = 'job ran: ' ] || fail "cw hermes: a name with !\` must run as it reads: $c"
+[ "$c" = "${P}sh '$HM/a b/skill/scripts/cw' run me 'bang'\\!'\`echo-pwn\`'" ] && [ "$(he "$c" 2>&1)" = 'job ran: ' ] || fail "cw hermes: a name with !\` must run as it reads: $c"
 grep -rF '!`' "$HM/q" && fail "inline shell from a script name reached a skill"
 [ ! -e "$HM/nohome" ] || fail "a skill command fell back to ~/.cwtfigo: $(ls -A "$HM/nohome")"
 grep -rF '`sh ' "$HM/q" && fail "a command in a \`span\`: a backtick in its name would end it"
