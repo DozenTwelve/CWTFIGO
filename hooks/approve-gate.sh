@@ -28,12 +28,14 @@
 # Their prompt names what the yes is for: for cw approve, the scripts and the machine when the command names them
 # plainly, else the general line.
 # Then, in every mode, what changes a machine or who may change it asks too, each time, so "anything that changes a
-# computer asks every time" holds: any Bash command with apply anywhere in it, quotes and backslashes out (cw run ...
-# --apply, or a script run some other way with it; a save or search with the word asks as well: a false positive costs
-# one prompt), cw name (this machine would take a name, and with it the approvals, of a host in the record) and cw join
-# (whoever can save to the shared record can then approve scripts for this machine), cw also as $VAR. The --apply
-# prompt names the machine and the script when the command holds one cw run; with several, the general line (one
-# name would hide the other machines). Without an ask
+# computer asks every time" holds: any Bash command with --apply in it, quotes and backslashes out (cw run ...
+# --apply, or a script run some other way with it), any with the word apply anywhere when the command also holds cw
+# as a word, a $ or cwtfigo (a save or search with the word asks as well: a false positive costs one prompt; git
+# stash apply or kubectl apply, in a session that went back to other work, is another tool's word and doesn't), cw
+# name (this machine would take a name, and with it the approvals, of a host in the record) and cw join (whoever can
+# save to the shared record can then approve scripts for this machine), cw also as $VAR. The --apply prompt names the
+# machine and the script when the command holds one cw run; with several, the general line (one name would hide the
+# other machines). Without an ask
 # these would get no output, and an allow rule (Bash(sh:*)), an earlier "don't ask again" or auto mode would run them
 # unasked. Claude Code's hook docs: "ask" prompts the user to confirm, and in auto mode it goes to the prompt, not the
 # classifier. Out of this hook's reach: bypassPermissions mode, and a mod's tool.check approval outside managed settings.
@@ -69,7 +71,8 @@
 # The rest gets no output. YOLO (cw yolo) is the third level: cw's, not this hook's.
 # What it is: a string match that stops the model approving by habit or by mistake. What it is not: a wall. A model set
 # on getting around it can: build the words at run time (eval, base64, printf), write a script with Write and run it
-# (Write content isn't read), use a glob or a copy of the host dir it doesn't name, or clear the marker dir as a whole.
+# (Write content isn't read), use a glob or a copy of the host dir it doesn't name, run a copy of cw under another
+# name, or clear the marker dir as a whole.
 # Limits of the allow itself, known: an approved script's args aren't hashed (wifi --test runs as freely as wifi); a
 # host script edited between the run that showed it and a cw approve by plain name is approved as edited (cw approve
 # <alias> <script>@<hash start>, as run prints it, refuses that); and cw run and cw status pull the shared record
@@ -77,7 +80,10 @@
 # Matches the raw stdin JSON, no jq: a false positive costs one extra prompt. Bash: the whole command (cwd and
 # transcript_path are dropped first, a checkout path may hold cwtfigo-visit); [^a-z]* lets quotes and extra spaces
 # through: cw" approve, cw  approve. Also asked: cw with a variable for its subcommand (cw ${X}ove), a variable just
-# before approve or yolo ($C approve), and the file names in a glob (approved.sha25?, yolo.*, cwtfigo-v*).
+# before approve or yolo ($C approve), and the file names in a glob (approved.sha25?, yolo.*, cwtfigo-v*). And approve
+# or yolo as a whole word with cw's name hidden (c''w, c\w), when the command still holds cw as a word once quotes
+# and backslashes are out, a $ or cwtfigo: without one of those the word is another tool's (gh pr review --approve,
+# --grep yolo), and a copy of cw under another name, run with none of them in the command, is not asked.
 # Write/Edit: only the file_path, so editing a file that merely mentions them doesn't ask. There the name anywhere
 # in the path asks, whatever follows it (approved.sha256/. , yolo.on/ , approved.sha256::$DATA are the file itself).
 # -i: macOS and Windows filesystems ignore case. `cw yolo off` only takes a switch away, so it passes (and in normal
@@ -121,18 +127,22 @@ cl=$(printf '%s' "$cmd" | tr 'A-Z' 'a-z' | sed -E 's/\\[nt]/ /g' | tr -d "$Q")
 # Printable ASCII only, at most 80: a part of the command put into a prompt.
 pa() { printf '%s' "$1" | LC_ALL=C tr -cd ' -~' | sed -E 's/[[:space:]]+/ /g; s/^ //; s/ $//' | cut -c1-80; }
 askr() { printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":"%s"}}\n' "$1"; exit 0; }
+# Ours: cw as a word, a $ (cw or the word may be in a variable) or cwtfigo somewhere in the command, lower case,
+# quotes and backslashes out. Without one of them apply, approve and yolo are another tool's words (git stash apply,
+# gh pr review --approve, --grep yolo): a session goes back to other work, and a CWTFIGO prompt there would be false.
+ours() { printf '%s' "$1" | grep -Eq '(^|[^a-z0-9_])cw([^a-z0-9_]|$)|\$|cwtfigo'; }
 # The machine as the owner knows it.
 who() { [ "$1" = local ] && echo "this computer" || echo "$1"; }
 if printf '%s' "$in" | grep -Eq '"tool_name" *: *"(Bash|PowerShell)"'; then
   printf '%s' "$in" | sed -E 's/"(cwd|transcript_path)" *: *"[^"]*"//g' | tr 'A-Z' 'a-z' \
     | sed -E 's/cw[^a-z]*yolo[[:space:]]+off([[:space:];&|)"]|\\n|$)/\1/g' \
     | grep -Eq 'cw[^a-z]*(approve|yolo|[$`])|\$[{a-z_][a-z0-9_}]*[^a-z]*(approve|yolo)|approved(\.sha|\.?[?*[])|yolo\.|yolo[?*[]|cwtfigo(-v|-?[?*[])' || {
-    # cw's name hidden from the match above (c''w, c\w, a copy under another name): approve or yolo as a whole word in
-    # the command asks too, a plain yolo off aside. Only the command, not its description ("Switch off YOLO"), else
-    # the model turning YOLO off with nobody there would stop at a prompt. JSON's \n and \t are spaces here. Quotes
-    # and backslashes go after that, as the shell drops them: appr''ove and approv\e are approve.
-    printf '%s' "${cmd:-$in}" | tr 'A-Z' 'a-z' | sed -E 's/\\[nt]/ /g; s/(^|[^a-z0-9_])yolo[[:space:]]+off([[:space:];&|)"]|$)/\1\2/g' \
-      | tr -d "$Q" | grep -Eq '(^|[^a-z0-9_])(approve|yolo)([^a-z0-9_]|$)'
+    # cw's name hidden from the match above (c''w, c\w): approve or yolo as a whole word in the command asks too, a
+    # plain yolo off aside, when the command is ours (below). Only the command, not its description ("Switch off
+    # YOLO"), else the model turning YOLO off with nobody there would stop at a prompt. JSON's \n and \t are spaces
+    # here. Quotes and backslashes go after that, as the shell drops them: appr''ove and approv\e are approve.
+    x=$(printf '%s' "${cmd:-$in}" | tr 'A-Z' 'a-z' | sed -E 's/\\[nt]/ /g; s/(^|[^a-z0-9_])yolo[[:space:]]+off([[:space:];&|)"]|$)/\1\2/g' | tr -d "$Q")
+    printf '%s' "$x" | grep -Eq '(^|[^a-z0-9_])(approve|yolo)([^a-z0-9_]|$)' && { [ -z "$cmd" ] || ours "$x"; }
   } || printf '%s' "$cmd" | tr 'A-Z' 'a-z' | tr -d "$Q" | grep -Eq 'cw[^a-z]*mode[[:space:]]*[^[:space:]]'
 else
   # The name anywhere in the path, whatever follows: approved.sha256/. and yolo.on/ are the file itself to Write, and
@@ -176,14 +186,15 @@ if printf '%s' "$in" | grep -Eq '"tool_name" *: *"(Write|Edit)"'; then
 fi
 # In every mode: what changes a machine, or who may change it, asks each time (the header says which and why).
 if printf '%s' "$in" | grep -Eq '"tool_name" *: *"(Bash|PowerShell)"'; then
-  case $cl in *apply*)
+  # --apply as a flag wherever it is; the bare word only in a command that is ours.
+  if case $cl in *--apply*) true ;; *apply*) ours "$cl" ;; *) false ;; esac; then
     a=$(printf '%s' "$cl" | sed -nE 's/.*cw[[:space:]]+run[[:space:]]+([a-z0-9._-]+)[[:space:]]+([^;&|<>]*).*/\1|\2/p' | head -n 1)
     s=$(pa "${a#*|}")
     # More than one cw run in the command: naming one machine would hide the others.
     printf '%s' "$cl" | grep -Eq 'cw[[:space:]]+run[[:space:]].*cw[[:space:]]+run[[:space:]]' && a=
     [ -n "$a" ] && [ -n "$s" ] && askr "CWTFIGO: this changes $(who "${a%%|*}") ($s), this time only"
-    askr "CWTFIGO: this changes a computer (it runs with --apply), this time only" ;;
-  esac
+    askr "CWTFIGO: this changes a computer (it runs with --apply), this time only"
+  fi
   if printf '%s' "$cl" | grep -Eq '(cw|\$[{a-z_][a-z0-9_}]*)[^a-z]*name([^a-z0-9_]|$)'; then
     n=$(pa "$(printf '%s' "$cl" | sed -nE 's/.*cw[[:space:]]+name[[:space:]]+([a-z0-9._-]+).*/\1/p' | head -n 1)")
     askr "CWTFIGO: this calls this computer ${n:-by a new name} in your notes. If they already have a computer by that name, this one takes its place, and the scripts you said yes to there run here without asking"

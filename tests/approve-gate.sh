@@ -43,6 +43,16 @@ ask "$(hook '"tool_name":"Write","tool_input":{"file_path":"/Users/u/.cwtfigo/ho
 ask "$(hook '"tool_name":"Write","tool_input":{"file_path":"/Users/u/.cwtfigo/hosts/local/APPROVED.SHA256","content":"x"}')" "Write, other case"
 
 [ -z "$(bash 'ls')" ] || fail "ls should pass silently"
+# A session that went back to other work: another tool's apply, approve and yolo are not CWTFIGO's to ask about.
+for c in 'git stash apply' 'kubectl apply -f k8s/' 'gh pr review 12 --approve' 'npm run test -- --grep yolo' 'terraform apply -auto-approve'; do
+  [ -z "$(bash "$c")" ] || fail "$c should pass silently"
+done
+# With --apply as a flag, or cw as a word, a variable or the plugin's name in the command, they still ask.
+for c in 'sh maintain.sh --apply' 'sh maintain.sh -\\-apply' 'A=--apply; sh x \"$A\"' 'A=apply; sh x --$A' 'cd ~/.cwtfigo/hosts/box && sh maintain.sh apply' \
+         'sh /tmp/cw apply' 'sh /tmp/x/c\\w approve local y' 'sh $X approve local y' 'sh ~/.cwtfigo/x yolo' 'sh /tmp/CWTFIGO-copy approve local y' \
+         'git stash apply; sh scripts/cw status' 'gh pr review $PR --approve'; do
+  ask "$(bash "$c")" "$c"
+done
 [ -z "$(hook '"tool_name":"Edit","tool_input":{"file_path":"/r/tests/cw.sh","old_string":"a","new_string":"sh cw approve local x >> approved.sha256; cw yolo local; yolo.on"}')" ] || fail "Edit mentioning cw approve should pass silently"
 [ -z "$(hook '"tool_name":"Write","tool_input":{"file_path":"/r/hooks/approve-gate.sh","content":"cw approve approved.sha256 yolo.on"}')" ] || fail "Write mentioning approved.sha256 should pass silently"
 ask "$(bash 'sh scripts/cw yolo office')" "cw yolo on a host whose name starts with off"
