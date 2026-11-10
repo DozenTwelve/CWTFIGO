@@ -101,6 +101,9 @@ out=$(PATH=$N:$PATH FAKE_OS=Darwin FAKE_N=MacBook-Air.local CWTFIGO_HOME=$N/rec 
 mkdir -p "$N/r2/hosts/nas"; out=$(PATH=$N:$PATH CWTFIGO_HOME=$N/r2 sh "$CW" run local collect 2>&1); [ $? = 3 ] && grep -qx mybox-2 "$N/r2/self" || fail "a record with only a remote host, not shared, should name this machine: $out"
 mkdir -p "$N/r3/hosts/nas"; out=$(PATH=$N:$PATH FAKE_N=nas CWTFIGO_HOME=$N/r3 sh "$CW" run local collect 2>&1); [ $? = 1 ] && [ ! -e "$N/r3/self" ] || fail "this machine must not take another host's name: $out"
 echo "$out" | grep -q 'already called nas.*cw name <name>' || fail "a hostname another host has should ask for a name: $out"
+# A hostname whose first letters aren't a-z 0-9 (мой-pc): no dash left in front, cw's alias check refuses such a name.
+out=$(PATH=$N:$PATH FAKE_N='мой-pc.lan' CWTFIGO_HOME=$N/r4 sh "$CW" run local collect 2>&1); [ $? = 3 ] && grep -qx pc "$N/r4/self" || fail "a hostname that starts with other letters: $(cat "$N/r4/self" 2>&1) $out"
+CWTFIGO_HOME=$N/r4 sh "$CW" yolo pc >/dev/null 2>&1 && CWTFIGO_HOME=$N/r4 sh "$CW" yolo off >/dev/null || fail "the automatic name should pass cw's own alias check"
 out=$(PATH=$N:$PATH sh "$CW" run local collect 2>&1); [ $? = 3 ] || fail "local alone in the record should name itself and go on: $out"
 grep -qx mybox-2 "$CWTFIGO_HOME/self" || fail "automatic name: $(cat "$CWTFIGO_HOME/self")"
 echo "$out" | grep -q 'called mybox-2 in the record.*cw name' || fail "automatic name should be said: $out"

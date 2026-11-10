@@ -132,7 +132,8 @@ autoname() {
   # A Mac's LocalHostName, else uname -n (POSIX: stock Arch has no hostname command) up to its domain: MacBook-Air.local is macbook-air.
   n=; [ "$(uname -s)" = Darwin ] && n=$(scutil --get LocalHostName 2>/dev/null)
   [ -n "$n" ] || n=$(uname -n 2>/dev/null)
-  n=$(printf %s "${n%%.*}" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9-')
+  # No dash in front (мой-pc is -pc once its other letters are gone): cw's own alias check refuses such a name.
+  n=$(printf %s "${n%%.*}" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9-' | sed 's/^-*//')
   case $n in ''|local) die "$NONAME" ;; esac
   # Another machine's dir: this one would run with its approvals.
   [ -e "$REC/hosts/$n" ] && die "another computer in the notes is already called $n. $NONAME"
