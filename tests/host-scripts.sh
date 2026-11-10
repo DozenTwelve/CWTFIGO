@@ -16,7 +16,8 @@ fresh() {
   D=$(mktemp -d "$T/r.XXXXXX"); mkdir "$D/bin"
   for c in awk sed grep sort head tail cut ls tr cat wc find mkdir mktemp rm du sleep touch; do ln -s "$(command -v $c)" "$D/bin/$c"; done
 }
-stub() { printf '#!/bin/sh\n%s\n' "$2" > "$D/bin/$1"; chmod +x "$D/bin/$1"; }
+# The link fresh made goes first: writing through it would rewrite the real command.
+stub() { rm -f "$D/bin/$1"; printf '#!/bin/sh\n%s\n' "$2" > "$D/bin/$1"; chmod +x "$D/bin/$1"; }
 # run <script> [args]: the copy runs, PATH=$D/bin. A placeholder first: $D itself may be under /var.
 run() {
   f=$1; shift; e=
