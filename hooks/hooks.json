@@ -3,7 +3,7 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash|Write|Edit|Skill",
+        "matcher": "Bash|PowerShell|Write|Edit|Skill",
         "hooks": [
           { "type": "command", "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/approve-gate.sh\"", "timeout": 10 }
         ]

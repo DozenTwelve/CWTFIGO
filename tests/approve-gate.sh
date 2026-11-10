@@ -6,11 +6,11 @@ set -u
 R=$(cd "$(dirname "$0")/.." && pwd); G=$R/hooks/approve-gate.sh; CW=$R/skills/cwtfigo/scripts/cw
 fail() { echo "FAIL: $*"; exit 1; }
 TMPDIR=$(mktemp -d) || exit 1; export TMPDIR; trap 'chmod -R u+w "$TMPDIR"; rm -rf "$TMPDIR"' EXIT
-# The marker dir: $XDG_RUNTIME_DIR/cwtfigo-visit, here the temp dir.
-XDG_RUNTIME_DIR=$TMPDIR; export XDG_RUNTIME_DIR
 # The hook reads the mode from the record: a temp one, never the real ~/.cwtfigo.
 HOME=$TMPDIR/home; REC=$TMPDIR/rec; export HOME CWTFIGO_HOME=$REC; mkdir -p "$HOME" "$REC/hosts/box"
-mkdir "$TMPDIR/cwtfigo-visit" && : > "$TMPDIR/cwtfigo-visit/on"
+# The marker dir: ~/.cache/cwtfigo-visit, also with XDG_RUNTIME_DIR set (Linux), where markers were kept before.
+XDG_RUNTIME_DIR=$TMPDIR/run; export XDG_RUNTIME_DIR; V=$HOME/.cache/cwtfigo-visit
+mkdir -p "$V" "$XDG_RUNTIME_DIR" && : > "$V/on"
 S=on   # session the calls below come from; "on" has a marker
 hook() { printf '{"session_id":"%s",%s}' "$S" "$1" | ${SH:-sh} "$G"; }
 bash() { hook "$(printf '"tool_name":"Bash","tool_input":{"command":"%s"}' "$1")"; }
@@ -43,6 +43,16 @@ ask "$(hook '"tool_name":"Write","tool_input":{"file_path":"/Users/u/.cwtfigo/ho
 ask "$(hook '"tool_name":"Write","tool_input":{"file_path":"/Users/u/.cwtfigo/hosts/local/APPROVED.SHA256","content":"x"}')" "Write, other case"
 
 [ -z "$(bash 'ls')" ] || fail "ls should pass silently"
+# A session that went back to other work: another tool's apply, approve and yolo are not CWTFIGO's to ask about.
+for c in 'git stash apply' 'kubectl apply -f k8s/' 'gh pr review 12 --approve' 'npm run test -- --grep yolo' 'terraform apply -auto-approve'; do
+  [ -z "$(bash "$c")" ] || fail "$c should pass silently"
+done
+# With --apply as a flag, or cw as a word, a variable or the plugin's name in the command, they still ask.
+for c in 'sh maintain.sh --apply' 'sh maintain.sh -\\-apply' 'A=--apply; sh x \"$A\"' 'A=apply; sh x --$A' 'cd ~/.cwtfigo/hosts/box && sh maintain.sh apply' \
+         'sh /tmp/cw apply' 'sh /tmp/x/c\\w approve local y' 'sh $X approve local y' 'sh ~/.cwtfigo/x yolo' 'sh /tmp/CWTFIGO-copy approve local y' \
+         'git stash apply; sh scripts/cw status' 'gh pr review $PR --approve'; do
+  ask "$(bash "$c")" "$c"
+done
 [ -z "$(hook '"tool_name":"Edit","tool_input":{"file_path":"/r/tests/cw.sh","old_string":"a","new_string":"sh cw approve local x >> approved.sha256; cw yolo local; yolo.on"}')" ] || fail "Edit mentioning cw approve should pass silently"
 [ -z "$(hook '"tool_name":"Write","tool_input":{"file_path":"/r/hooks/approve-gate.sh","content":"cw approve approved.sha256 yolo.on"}')" ] || fail "Write mentioning approved.sha256 should pass silently"
 ask "$(bash 'sh scripts/cw yolo office')" "cw yolo on a host whose name starts with off"
@@ -104,10 +114,28 @@ why "$(bash "sh $CW run box maintain --apply trash")" "this changes box (maintai
 why "$(bash "sh $CW run local maintain --apply")" "this changes this computer (maintain --apply), this time only" "--apply here"
 why "$(bash "sh $CW run box maintain --apply; ls")" "this changes box (maintain --apply), this time only" "--apply, then ;"
 why "$(bash "sh x --apply")" "this changes a computer (it runs with --apply), this time only" "--apply, not by cw run"
+# Several machines in one command: the prompt must not name just one of them.
+for c in "echo == a; sh $CW run a maintain --apply; echo == c; sh $CW run c maintain --apply" "sh $CW run a maintain --apply && sh $CW run c check"; do
+  why "$(bash "$c")" "this changes a computer (it runs with --apply), this time only\"" "--apply on more than one machine"
+done
 why "$(bash "sh $CW name box")" "this calls this computer box in your notes" "cw name"
 why "$(bash "sh $CW join nas:cwtfigo.git")" "this shares your notes with nas:cwtfigo.git\." "cw join"
 bash "sh $CW run local hostname" | grep -q '"ask"' && fail "name inside a word, in a run without apply, should not ask"
 [ -z "$(bash 'git log --format=%an')" ] || fail "name inside a word should pass silently"
+
+# The PowerShell tool (Windows): the same asks as Bash, also with its own escape character, the backtick. Never allow.
+grep -q '"matcher": *"[^"]*PowerShell' "$R/hooks/hooks.json" || fail "hooks.json should match the PowerShell tool"
+pwsh() { hook "$(printf '"tool_name":"PowerShell","tool_input":{"command":"%s"}' "$1")"; }
+for c in "sh $CW approve box check" 'sh scripts/cw yolo' "sh $CW mode strict" "sh $CW run box maintain --apply" "sh $CW name box" \
+         "sh $CW join nas:rec" 'sh scripts/cw appr`ove local x' 'sh scripts/cw yo`lo' 'sh scripts/cw run box fix --app`ly' 'sh scripts/cw mo`de strict' \
+         'Add-Content $HOME/.cwtfigo/hosts/box/approved.sha256 abc' 'Remove-Item -Recurse $HOME/.cache/cwtfigo-visit'; do
+  ask "$(pwsh "$c")" "PowerShell: $c"
+done
+why "$(pwsh "sh $CW approve box check")" "your yes lets check run on box from now on" "PowerShell, cw approve"
+why "$(pwsh "sh $CW run box maintain --apply")" "this changes box (maintain --apply), this time only" "PowerShell, --apply"
+for c in 'Get-ChildItem' "sh $CW status" "sh $CW run local logs" "sh $CW save \\\"x\\\"" "sh $CW yolo off"; do
+  [ -z "$(pwsh "$c")" ] || fail "PowerShell: $c should pass silently (no ask, and never allow)"
+done
 
 # Normal mode (no mode file): what can't change a machine without an approval cw checks gets allow.
 allow() { echo "$1" | grep -q '"permissionDecision":"allow"' || fail "should allow: $2"; }
@@ -159,6 +187,33 @@ for w in /tmp "$R" "$R/skills" "$D/scripts" skills/cwtfigo "$D\\\\"; do
   nallow "$(bcwd "$w" "sh scripts/cw status")" "cwd $w"
 done
 nallow "$(bash "sh scripts/cw status")" "no cwd"
+# Quotes pair as the shell pairs them. An apostrophe inside "" is a letter there, not the start of a '' string: a
+# backtick or $( ) between two of them is live, and the shell would run it. In every form that can get allow.
+M=$TMPDIR/M
+for c in "save \\\"didn't need \`touch $M\`, user's call\\\"" "search \\\"it's \$(touch $M) user's\\\"" "miss \\\"didn't \`touch $M\` user's\\\"" \
+         "status \\\"it's\\\" \`touch $M\` \\\"user's\\\"" "save \\\"it's \$HOME, user's\\\"" "save \\\"it's a\\\\\\\\b, user's\\\""; do
+  nallow "$(bash "sh $CW $c")" "sh cw $c"
+  nallow "$(bash "sh \\\"$CW\\\" $c")" "sh \"cw\" $c"
+  nallow "$(bcwd /tmp "cd $D && sh scripts/cw $c")" "cd && sh scripts/cw $c"
+  nallow "$(bcwd "$D" "sh scripts/cw $c")" "cwd skills/cwtfigo: sh scripts/cw $c"
+done
+# A quote with no partner: the shell would read on past the end of the command.
+for c in "save didn't" "save \\\"didn't \`touch $M\`\\\"" "save \\\"a" "save 'a" "save \\\"a\\\" 'b" "save 'a' \\\"b" "save \\\"it's\\\" 'a" \
+         "save 'it\\\"s' \$(touch $M) 'x\\\"y'" "save 'a\\\"' \\\"\$(touch $M)\\\"" "run local logs \\\"a" "run local logs 'a"; do
+  nallow "$(bash "sh $CW $c")" "sh cw $c"
+done
+# A # that starts a word outside quotes is a comment to the end of the line: the ' after it opens nothing, and the
+# line after the newline "inside" it is a command.
+for c in "status # 'x\\ntouch $M #'" "save 'a' #'b\\ntouch $M #'" "save a # b" "status #" "run local logs #x"; do
+  nallow "$(bash "sh $CW $c")" "sh cw $c"
+  nallow "$(bcwd "$D" "sh scripts/cw $c")" "cwd skills/cwtfigo: sh scripts/cw $c"
+done
+for c in "save a#b" "save '#6 done'" "save \\\"# done\\\"" "save 'two\\nlines'"; do allow "$(bash "sh $CW $c")" "sh cw $c"; done
+# Still allowed: an apostrophe inside "" with nothing live, and inside '' anything, as the shell reads nothing there.
+for c in "save \\\"didn't need it, user's call\\\"" "save \\\"it's\\\" \\\"user's\\\"" "save 'costs \$5, see \`man x\` and \$(id)'" "save 'a\\\\\\\\b'" \
+         "search 'a' \\\"b's\\\" 'c\\\"d' \\\"(e)\\\"" "run local net \\\"eth0\\\" 'x'"; do
+  allow "$(bash "sh $CW $c")" "sh cw $c"
+done
 # Git Bash on Windows: Claude Code shows C:\Users\..., the shell has /c/Users/... and cygpath between them. A fake
 # cygpath maps C:<posix path> both ways.
 Y=$TMPDIR/cyg; mkdir "$Y"; printf '#!/bin/sh\ncase $1 in -m) printf "C:%%s\\n" "$2" ;; -u) printf "%%s\\n" "$2" | sed "s|^C:||; s|\\\\\\\\|/|g" ;; esac\n' > "$Y/cygpath"; chmod +x "$Y/cygpath"
@@ -196,6 +251,32 @@ for f in "$REC/hosts/box/approved.sha256" "$REC/hosts/box/yolo.on" "$REC/yolo.on
          "$REC/hosts/box/a\\\\b"; do
   nallow "$(w Write "$f")" "Write $f"
 done
+# Other spellings of the same file. approved.sha256/. and yolo.on/ are the file itself to Write; on Windows so are a
+# trailing dot or space and ::$DATA. With the name in the path: ask, whatever follows. Other files in the record
+# spelled that way (mode. is mode there), or by a short name (APPROV~1.SHA): no allow.
+for f in "$REC/hosts/box/approved.sha256/." "$REC/hosts/box/yolo.on/" "$REC/yolo.on/." "$REC/hosts/box/approved.sha256." \
+         "$REC/hosts/box/approved.sha256::\$DATA" "$REC/hosts/box/APPROVED.SHA256 " "$REC/hosts/box/yolo.on.bak" \
+         "/u/a\\\\\\\"b/.cwtfigo/hosts/box/approved.sha256" "C:\\\\\\\\Users\\\\\\\\u\\\\\\\\.cwtfigo\\\\\\\\yolo.on."; do
+  ask "$(w Write "$f")" "Write $f"; ask "$(w Edit "$f")" "Edit $f"
+done
+for f in "$REC/mode." "$REC/mode " "$REC/self." "$REC/mode::\$DATA" "$REC/hosts/box./notes.md" "$REC/hosts/box /notes.md" \
+         "$REC/hosts/box/notes.md." "$REC/hosts/box/notes.md::\$DATA" "$REC/hosts/box/APPROV~1.SHA" "$REC/.gitignore."; do
+  nallow "$(w Write "$f")" "Write $f"
+done
+# The record's mode and self files are what cw mode <level> and cw name write: a Write/Edit of one asks like those,
+# and says what the yes is for. In the record only; a mode file somewhere else is somebody else's.
+for f in "$REC/mode" "$REC/MODE" "$REC/mode." "$REC/mode/." "$REC/mode::\$DATA" "$REC//mode" "/home/u/.cwtfigo/mode" \
+         "C:\\\\Users\\\\u\\\\.CWTFIGO\\\\mode" "C:/Users/u/.cwtfigo/mode "; do
+  why "$(w Write "$f")" "your yes changes how often I ask" "Write $f"; why "$(w Edit "$f")" "your yes changes how often I ask" "Edit $f"
+done
+for f in "$REC/self" "$REC/Self" "$REC/self." "$REC/self/" "$REC/self::\$DATA" "/home/u/.cwtfigo/self" "C:\\\\Users\\\\u\\\\.cwtfigo\\\\self"; do
+  why "$(w Write "$f")" "this calls this computer by a new name in your notes" "Write $f"
+  why "$(w Edit "$f")" "this calls this computer by a new name in your notes" "Edit $f"
+done
+for f in "$TMPDIR/elsewhere/mode" "/r/src/self" "/r/.cwtfigo-x/mode" "$REC/hosts/box/mode" "$REC/hosts/box/self"; do
+  [ -z "$(w Write "$f")" ] || fail "Write $f should pass silently"
+done
+allow "$(w Write "$REC/hosts/box/modem.md")" "Write modem.md"; allow "$(w Write "$REC/selfhosted.md")" "Write selfhosted.md"
 # A Mac folds U+017F (long s) to s: approved.ſha256 and ſelf are approved.sha256 and self there.
 for f in "$REC/hosts/box/approved.ſha256" "$REC/ſelf" "$REC/hosts/box/nötes.md"; do nallow "$(w Write "$f")" "Write $f, not ASCII"; done
 ln -s "$TMPDIR/home" "$REC/hosts/ln"; nallow "$(w Write "$REC/hosts/ln/.bashrc")" "Write through a symlink out of the record"
@@ -210,6 +291,7 @@ for c in "sh $CW status" "sh $CW yolo off" "sh $CW save \\\"x\\\"" "cd $R/skills
   why "$(bash "$c")" "strict mode: you asked me to check with you before every step" "strict mode, $c"
 done
 why "$(bash "sh $CW run local maintain --apply")" "this changes this computer" "strict mode, --apply"
+why "$(pwsh "sh $CW status")" "strict mode: you asked me to check with you before every step" "strict mode, PowerShell"
 for f in "$REC/hosts/box/notes.md" "$REC/operator.md" "$(echo "$REC" | tr 'a-z' 'A-Z')/x.md" "/home/u/.cwtfigo/hosts/box/fix.sh" "C:\\\\\\\\Users\\\\\\\\u\\\\\\\\.cwtfigo\\\\\\\\x.md"; do
   why "$(w Write "$f")" "this changes your notes, and in strict mode" "strict mode, Write $f"
   why "$(w Edit "$f")" "this changes your notes, and in strict mode" "strict mode, Edit $f"
@@ -230,8 +312,16 @@ S=a
 [ -z "$(bash 'cw approve local x')" ] || fail "other Skill shouldn't start"
 [ -z "$(hook '"tool_name":"Skill","tool_input":{"skill":"cwtfigo:cwtfigo","args":"slow"}')" ] || fail "Skill call should print nothing"
 ask "$(bash 'cw approve local x')" "after Skill cwtfigo:cwtfigo"
+[ -e "$V/a" ] && [ ! -e "$XDG_RUNTIME_DIR/cwtfigo-visit" ] || fail "the marker belongs in ~/.cache/cwtfigo-visit, not under XDG_RUNTIME_DIR (gone at logout)"
 S=b
 [ -z "$(bash 'cw approve local x')" ] || fail "other session should stay silent"
+# The skill's name the way a model may write it: with a slash, with spaces. Another skill's name still doesn't start.
+for n in '/cwtfigo:cwtfigo' '/cwtfigo' ' cwtfigo ' ' /cwtfigo:cwtfigo'; do
+  S=n$(printf '%s' "$n" | cksum | cut -d' ' -f1); [ -z "$(bash 'cw approve local x')" ] || fail "before Skill '$n' should pass silently"
+  hook "$(printf '"tool_name":"Skill","tool_input":{"skill":"%s"}' "$n")" >/dev/null; ask "$(bash 'cw approve local x')" "after Skill '$n'"
+done
+S=n0; for n in '/cwtfigox' 'x/cwtfigo' 'cwtfigo:other' '//cwtfigo'; do hook "$(printf '"tool_name":"Skill","tool_input":{"skill":"%s"}' "$n")" >/dev/null; done
+[ -z "$(bash 'cw approve local x')" ] || fail "another skill's name shouldn't start"
 S=c
 up() { hook "$(printf '"hook_event_name":"UserPromptSubmit","prompt":"%s"' "$1")"; }
 [ -z "$(up 'what is /cwtfigo for')" ] && [ -z "$(up '/cwtfigox')" ] || fail "prompt not starting with /cwtfigo should print nothing"
@@ -240,17 +330,46 @@ up() { hook "$(printf '"hook_event_name":"UserPromptSubmit","prompt":"%s"' "$1")
 ask "$(bash 'cw approve local x')" "after /cwtfigo prompt"
 S=d; up '/cwtfigo:cwtfigo' >/dev/null
 ask "$(bash 'cw yolo local')" "after /cwtfigo:cwtfigo prompt"
-# A marker dir this user can't write (another user's /tmp dir, a read-only disk): fail closed, never off, and quiet.
-for x in ro/cwtfigo-visit ro2; do mkdir -p "$TMPDIR/$x"; chmod 555 "$TMPDIR/$x"; done
-S=e; XDG_RUNTIME_DIR=$TMPDIR/ro
+# A marker where they were kept before, under XDG_RUNTIME_DIR: a session started before the update stays gated.
+S=old; [ -z "$(bash 'cw approve local x')" ] || fail "no marker in either place should pass silently"
+mkdir "$XDG_RUNTIME_DIR/cwtfigo-visit" && : > "$XDG_RUNTIME_DIR/cwtfigo-visit/old"
+ask "$(bash 'cw approve local x')" "a marker in the old place"
+# No marker, but the session's transcript holds a Skill call of cwtfigo or a /cwtfigo prompt, as Claude Code records
+# them (a fork carries the old session's history under a new session_id; a marker got deleted): started.
+tp() { hook "$(printf '"transcript_path":"%s","tool_name":"Bash","tool_input":{"command":"cw approve local x"}' "$1")"; }
+J=$TMPDIR/t; mkdir "$J"
+printf '%s\n' '{"type":"user","message":{"role":"user","content":"my mac is hot, CWTFIGO"}}' \
+  '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_01","name":"Skill","input":{"skill":"cwtfigo:cwtfigo"},"caller":{"type":"direct"}}]}}' > "$J/skill.jsonl"
+printf '%s\n' '{"type":"user","message":{"role":"user","content":"<command-message>cwtfigo:cwtfigo</command-message>\n<command-name>/cwtfigo:cwtfigo</command-name>\n<command-args>slow</command-args>"}}' > "$J/prompt.jsonl"
+# Only mentions of it: in a tool's output and in a message the quotes are escaped. And another skill's real call.
+printf '%s\n' '{"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":"{\"type\":\"tool_use\",\"name\":\"Skill\",\"input\":{\"skill\":\"cwtfigo:cwtfigo\"}} \"content\":\"<command-message>cwtfigo"}]}}' \
+  '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_02","name":"Skill","input":{"skill":"caveman:caveman"}}]}}' > "$J/mention.jsonl"
+S=t1; ask "$(tp "$J/skill.jsonl")" "transcript with a Skill call of cwtfigo"
+[ -e "$V/t1" ] || fail "a session started by its transcript should get its marker"
+S=t2; ask "$(tp "$J/prompt.jsonl")" "transcript with a /cwtfigo prompt"
+S=t3; [ -z "$(tp "$J/mention.jsonl")" ] || fail "a transcript that only mentions the skill should pass silently"
+[ -e "$V/t3.no" ] && [ ! -e "$V/t3" ] || fail "a transcript read and found without the skill should leave t3.no"
+# Read once per session: a long transcript is not read again on every call. A Skill call still starts the session.
+cat "$J/skill.jsonl" >> "$J/mention.jsonl"; [ -z "$(tp "$J/mention.jsonl")" ] || fail "the transcript should be read once per session"
+hook '"tool_name":"Skill","tool_input":{"skill":"cwtfigo:cwtfigo"}' >/dev/null; ask "$(tp "$J/mention.jsonl")" "after Skill, with a .no file"
+S=t4; [ -z "$(tp "$J/none.jsonl")" ] && [ -z "$(bash 'cw approve local x')" ] && [ ! -e "$V/t4.no" ] || fail "no transcript to read: silent, and no .no"
+cp "$J/skill.jsonl" "$J/none.jsonl"; ask "$(tp "$J/none.jsonl")" "the transcript is there on a later call"
+# .no files older than 30 days are cleared when a new one is written; markers stay.
+touch -t 202001010000 "$V/t3.no" "$V/t1"; S=t5; tp "$J/mention.jsonl" >/dev/null; S=t6; : > "$J/empty.jsonl"; tp "$J/empty.jsonl" >/dev/null
+[ ! -e "$V/t3.no" ] && [ -e "$V/t6.no" ] && [ -e "$V/t1" ] || fail "old .no files should be cleared, markers and new .no files kept"
+# A marker dir this user can't write (another user's dir, a read-only disk): fail closed, never off, and quiet.
+H=$HOME; mkdir -p "$TMPDIR/ro/.cache/cwtfigo-visit" "$TMPDIR/ro2/.cache"; chmod 555 "$TMPDIR/ro/.cache/cwtfigo-visit" "$TMPDIR/ro2/.cache"
+S=e; HOME=$TMPDIR/ro
 o=$(up '/cwtfigo my mac is hot' 2>&1) && [ -z "$o" ] || fail "unwritable marker dir: UserPromptSubmit should exit 0 and print nothing: $o"
 ask "$(bash 'cw approve local x')" "unwritable marker dir, after /cwtfigo prompt"
 S=f; ask "$(bash 'cw approve local x')" "unwritable marker dir, never started"
-XDG_RUNTIME_DIR=$TMPDIR/ro2; ask "$(bash 'cw approve local x')" "marker dir can't be made"
-# No XDG_RUNTIME_DIR (macOS): ~/.cache/cwtfigo-visit, only the user's.
-unset XDG_RUNTIME_DIR; S=g
+ask "$(tp "$J/mention.jsonl")" "unwritable marker dir, never started, with a transcript"
+HOME=$TMPDIR/ro2; ask "$(bash 'cw approve local x')" "marker dir can't be made"
+HOME=; ask "$(bash 'cw approve local x')" "no HOME"
+HOME=$H
+# No XDG_RUNTIME_DIR (macOS): the same dir, only the user's.
+unset XDG_RUNTIME_DIR; S=g; HOME=$TMPDIR/home2; mkdir "$HOME"; V=$HOME/.cache/cwtfigo-visit
 [ -z "$(bash 'cw approve local x')" ] || fail "no XDG_RUNTIME_DIR, not started, should pass silently"
 up '/cwtfigo' >/dev/null; ask "$(bash 'cw approve local x')" "no XDG_RUNTIME_DIR, after /cwtfigo prompt"
-[ -e "$HOME/.cache/cwtfigo-visit/g" ] && [ "$(ls -ld "$HOME/.cache/cwtfigo-visit" | cut -c1-10)" = drwx------ ] \
-  || fail "marker should be in ~/.cache/cwtfigo-visit, mode 700"
+[ -e "$V/g" ] && [ "$(ls -ld "$V" | cut -c1-10)" = drwx------ ] || fail "marker should be in ~/.cache/cwtfigo-visit, mode 700"
 echo "ok"

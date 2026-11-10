@@ -1,25 +1,41 @@
 #!/bin/sh
 # Approval gate. It only applies once the plugin has started in this session: changing the plugin and using it are
 # different things. Before that (working on the plugin, running its tests, a contributor's PR) nothing here asks.
-# Started = this session called the cwtfigo skill: a Skill call (PreToolUse, tool_input {"skill":"cwtfigo:cwtfigo"})
-# or a prompt beginning /cwtfigo or /cwtfigo:cwtfigo (UserPromptSubmit). Either one leaves a marker file
-# ${XDG_RUNTIME_DIR:-~/.cache}/cwtfigo-visit/<session_id>, the user's own (not /tmp, which every user on a Linux box
-# shares: whoever made it first would own it). No session_id in stdin, or a marker dir this user can't write: treated
-# as started (fail closed).
+# Started = this session called the cwtfigo skill: a Skill call (PreToolUse, tool_input {"skill":"cwtfigo:cwtfigo"},
+# the name also as cwtfigo, with a / before it or spaces around it) or a prompt beginning /cwtfigo or
+# /cwtfigo:cwtfigo (UserPromptSubmit). Either one leaves a marker file ~/.cache/cwtfigo-visit/<session_id>, the
+# user's own (not /tmp, which every user on a Linux box shares: whoever made it first would own it) and on disk on
+# every OS. It used to be under XDG_RUNTIME_DIR where that is set: gone at logout on Linux, so a session resumed
+# after one (claude -c, the same session_id) came back ungated. A marker still there counts, so a session started
+# before the move stays gated.
+# No marker: the session's transcript (the input's transcript_path) is read, once per session, for a Skill call of
+# cwtfigo or a /cwtfigo prompt as Claude Code records them, and either one counts as started. That is for a session
+# that carries an earlier one's history under a new session_id (claude --fork-session) and for a marker that got
+# deleted. A transcript read and found without one leaves <session_id>.no beside the markers, so it isn't read again
+# on every call (a long session's is hundreds of MB); those older than 30 days are cleared.
+# No session_id in stdin, or a marker dir this user can't write: treated as started (fail closed).
 # Residual risk, accepted by the owner: in a session that never started the plugin, the model can write approved.sha256
 # directly without being asked.
 #
-# Once started, PreToolUse (Bash, Write, Edit): approval is the human's. A call that looks like it approves a script
+# Once started, PreToolUse (Bash, PowerShell, Write, Edit): approval is the human's. A PowerShell call (on Windows
+# Claude Code can send every shell command through that tool, and without Git Bash has no Bash tool) is read like a
+# Bash one for every ask below, and never gets allow: the allow reads a command the way sh does, not PowerShell.
+# A call that looks like it approves a script
 # (`cw approve`, approved.sha256), turns on YOLO (`cw yolo`, yolo.on, which skips approval for a visit) or touches the
-# marker (cwtfigo-visit, which switches the gate off) goes to a permission prompt, and so does `cw mode <anything>` (plain
-# `cw mode` only prints it). These asks come first and win over the allow below.
+# marker (cwtfigo-visit, which switches the gate off) goes to a permission prompt, and so does `cw mode <anything>`
+# (plain `cw mode` only prints it). So does a Write/Edit of the record's mode or self file: what cw mode and cw name
+# write, by another door. These asks come first and win over the allow below.
 # Their prompt names what the yes is for: for cw approve, the scripts and the machine when the command names them
 # plainly, else the general line.
 # Then, in every mode, what changes a machine or who may change it asks too, each time, so "anything that changes a
-# computer asks every time" holds: any Bash command with apply anywhere in it, quotes and backslashes out (cw run ...
-# --apply, or a script run some other way with it; a save or search with the word asks as well: a false positive costs
-# one prompt), cw name (this machine would take a name, and with it the approvals, of a host in the record) and cw join
-# (whoever can save to the shared record can then approve scripts for this machine), cw also as $VAR. Without an ask
+# computer asks every time" holds: any Bash command with --apply in it, quotes and backslashes out (cw run ...
+# --apply, or a script run some other way with it), any with the word apply anywhere when the command also holds cw
+# as a word, a $ or cwtfigo (a save or search with the word asks as well: a false positive costs one prompt; git
+# stash apply or kubectl apply, in a session that went back to other work, is another tool's word and doesn't), cw
+# name (this machine would take a name, and with it the approvals, of a host in the record) and cw join (whoever can
+# save to the shared record can then approve scripts for this machine), cw also as $VAR. The --apply prompt names the
+# machine and the script when the command holds one cw run; with several, the general line (one name would hide the
+# other machines). Without an ask
 # these would get no output, and an allow rule (Bash(sh:*)), an earlier "don't ask again" or auto mode would run them
 # unasked. Claude Code's hook docs: "ask" prompts the user to confirm, and in auto mode it goes to the prompt, not the
 # classifier. Out of this hook's reach: bypassPermissions mode, and a mod's tool.check approval outside managed settings.
@@ -37,21 +53,26 @@
 #   else). Dirs compared by cd and pwd -P, as the shell's own cd would land. The command holds nothing but letters,
 #   digits, spaces, quotes, _ . / , : @ % + = ~ # - and non-ASCII (a save message in the owner's language), the cd
 #   prefix's && aside: no ; & | ` $ ( ) < > \ newline, glob or brace, so no variable. Except inside quotes, for save,
-#   search and miss: there anything but ` $ \ and the closing quote (an error string, a message with "(...)!"), as the
-#   shell reads nothing else inside them. run only without "apply" anywhere in its args, quotes taken out (--app''ly
-#   is --apply): --apply changes the machine, and that is the owner's OK moment. SKILL makes every script that changes
-#   a machine a dry run without --apply, like maintain, so a rerun of an approved fix only shows what it would do. And
-#   only with a script name, unquoted, no / or ~ in it: given a path, cw would show that file.
+#   search and miss: inside '' anything, inside "" anything but ` $ \ (an error string, a message with "(...)!"), as
+#   the shell reads nothing else inside them. Quotes are paired the way the shell pairs them, so an apostrophe inside
+#   "" is a letter ("didn't"), and a command with a quote left open gets no allow. A ` $ or \ outside quotes or inside
+#   "" means no allow, wherever it is. So does a # that starts a word outside quotes: it opens a comment, and a ''
+#   string after it is then no string to the shell. run only without "apply" anywhere in its args, quotes taken out
+#   (--app''ly is --apply): --apply changes the machine, and that is the owner's OK moment. SKILL makes every script
+#   that changes a machine a dry run without --apply, like maintain, so a rerun of an approved fix only shows what it
+#   would do. And only with a script name, unquoted, no / or ~ in it: given a path, cw would show that file.
 # - Write/Edit of a file in the record, but not approved.sha256, yolo.on, mode, self or .git* anywhere in it (any case),
-#   no . .. or // in the path, nothing but ASCII (a Mac folds U+017F, the long s, to s: approved.sha256 spelled with
-#   it is the same file) and no symlink on the way (Write follows one out of the record). A host script written there
-#   still can't run until approved: cw checks its hash, on a private copy it then runs, so rewriting the file while it
-#   runs changes nothing. Except under YOLO, when cw runs it unapproved: while any yolo.on exists, a .sh or .ps1 there
-#   gets no allow.
+#   no . .. or // in the path, no name ending in a dot or a space, no :: and no ~ (Windows drops a trailing dot or
+#   space, reads ::$DATA as the file itself and may have a short name for it: other spellings of the same file),
+#   nothing but ASCII (a Mac folds U+017F, the long s, to s: approved.sha256 spelled with it is the same file) and no
+#   symlink on the way (Write follows one out of the record). A host script written there still can't run until
+#   approved: cw checks its hash, on a private copy it then runs, so rewriting the file while it runs changes nothing.
+#   Except under YOLO, when cw runs it unapproved: while any yolo.on exists, a .sh or .ps1 there gets no allow.
 # The rest gets no output. YOLO (cw yolo) is the third level: cw's, not this hook's.
 # What it is: a string match that stops the model approving by habit or by mistake. What it is not: a wall. A model set
 # on getting around it can: build the words at run time (eval, base64, printf), write a script with Write and run it
-# (Write content isn't read), use a glob or a copy of the host dir it doesn't name, or clear the marker dir as a whole.
+# (Write content isn't read), use a glob or a copy of the host dir it doesn't name, run a copy of cw under another
+# name, or clear the marker dir as a whole.
 # Limits of the allow itself, known: an approved script's args aren't hashed (wifi --test runs as freely as wifi); a
 # host script edited between the run that showed it and a cw approve by plain name is approved as edited (cw approve
 # <alias> <script>@<hash start>, as run prints it, refuses that); and cw run and cw status pull the shared record
@@ -59,14 +80,18 @@
 # Matches the raw stdin JSON, no jq: a false positive costs one extra prompt. Bash: the whole command (cwd and
 # transcript_path are dropped first, a checkout path may hold cwtfigo-visit); [^a-z]* lets quotes and extra spaces
 # through: cw" approve, cw  approve. Also asked: cw with a variable for its subcommand (cw ${X}ove), a variable just
-# before approve or yolo ($C approve), and the file names in a glob (approved.sha25?, yolo.*, cwtfigo-v*).
-# Write/Edit: only the file_path, so editing a file that merely mentions them doesn't ask.
+# before approve or yolo ($C approve), and the file names in a glob (approved.sha25?, yolo.*, cwtfigo-v*). And approve
+# or yolo as a whole word with cw's name hidden (c''w, c\w), when the command still holds cw as a word once quotes
+# and backslashes are out, a $ or cwtfigo: without one of those the word is another tool's (gh pr review --approve,
+# --grep yolo), and a copy of cw under another name, run with none of them in the command, is not asked.
+# Write/Edit: only the file_path, so editing a file that merely mentions them doesn't ask. There the name anywhere
+# in the path asks, whatever follows it (approved.sha256/. , yolo.on/ , approved.sha256::$DATA are the file itself).
 # -i: macOS and Windows filesystems ignore case. `cw yolo off` only takes a switch away, so it passes (and in normal
 # mode gets allow): the model turns YOLO off when the work is done, with nobody there to answer a prompt. Only as whole
 # words: spaces between yolo and off (`cw yolo "" off` is YOLO on), then a space, ; & | ), the end of the command or a
 # newline after off.
 in=$(cat)
-d=${XDG_RUNTIME_DIR:-$HOME/.cache}/cwtfigo-visit
+d=$HOME/.cache/cwtfigo-visit
 sid=$(printf '%s' "$in" | sed -nE 's/.*"session_id" *: *"([^"]*)".*/\1/p' | head -n 1 | tr -cd 'A-Za-z0-9_-')
 # Quiet on failure: a UserPromptSubmit hook's error lands in the owner's prompt. A marker it couldn't write leaves the
 # gate on: below, a dir it can't write counts as started. (true, not :, whose failed redirect ends dash.)
@@ -77,37 +102,56 @@ if printf '%s' "$in" | grep -Eq '"hook_event_name" *: *"UserPromptSubmit"'; then
   exit 0
 fi
 if printf '%s' "$in" | grep -Eq '"tool_name" *: *"Skill"'; then
-  printf '%s' "$in" | grep -Eq '"skill" *: *"(cwtfigo:)?cwtfigo"' && mark
+  printf '%s' "$in" | grep -Eq '"skill" *: *" */?(cwtfigo:)?cwtfigo *"' && mark
   exit 0
 fi
-[ -n "$sid" ] && [ ! -e "$d/$sid" ] && mkd && exit 0
+if [ -n "$sid" ] && [ ! -e "$d/$sid" ] && ! { [ -n "${XDG_RUNTIME_DIR:-}" ] && [ -e "$XDG_RUNTIME_DIR/cwtfigo-visit/$sid" ]; } && mkd; then
+  [ -e "$d/$sid.no" ] && exit 0
+  tp=$(printf '%s' "$in" | sed -nE 's/.*"transcript_path" *: *"(([^"\\]|\\.)*)".*/\1/p' | head -n 1 | sed 's/\\\\/\\/g')
+  [ -f "$tp" ] && [ -r "$tp" ] || exit 0
+  # .no first: a read that runs into the hook's timeout is not tried again on every call.
+  find "$d" -name '*.no' -mtime +30 -exec rm -f {} + 2>/dev/null; { true > "$d/$sid.no"; } 2>/dev/null
+  # As JSON.stringify writes them, no spaces. Inside a tool's output or a message the quotes are \", so a file or a
+  # command that only mentions the skill doesn't match.
+  LC_ALL=C grep -F -q -e '"name":"Skill","input":{"skill":"cwtfigo' -e '":"<command-message>cwtfigo' "$tp" 2>/dev/null || exit 0
+  { true > "$d/$sid"; } 2>/dev/null
+fi
 # The command as typed, still JSON-escaped (\" for ", \n for a newline).
 cmd=$(printf '%s' "$in" | sed -nE 's/.*"command" *: *"(([^"\\]|\\.)*)".*/\1/p' | head -n 1)
 # The same as the shell reads it, near enough: lower case, JSON's \n and \t spaces, quotes and backslashes out (as the
 # shell drops them: --app''ly is --apply). With no " or \ left, a part of it is safe inside a JSON string.
-cl=$(printf '%s' "$cmd" | tr 'A-Z' 'a-z' | sed -E 's/\\[nt]/ /g' | tr -d "'\"\\\\")
+# What the shell drops from a word: quotes and backslashes. In a PowerShell call its own escape character too, the
+# backtick: appr`ove is approve there.
+Q="'\"\\\\"; printf '%s' "$in" | grep -Eq '"tool_name" *: *"PowerShell"' && Q="$Q\`"
+cl=$(printf '%s' "$cmd" | tr 'A-Z' 'a-z' | sed -E 's/\\[nt]/ /g' | tr -d "$Q")
 # Printable ASCII only, at most 80: a part of the command put into a prompt.
 pa() { printf '%s' "$1" | LC_ALL=C tr -cd ' -~' | sed -E 's/[[:space:]]+/ /g; s/^ //; s/ $//' | cut -c1-80; }
 askr() { printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":"%s"}}\n' "$1"; exit 0; }
+# Ours: cw as a word, a $ (cw or the word may be in a variable) or cwtfigo somewhere in the command, lower case,
+# quotes and backslashes out. Without one of them apply, approve and yolo are another tool's words (git stash apply,
+# gh pr review --approve, --grep yolo): a session goes back to other work, and a CWTFIGO prompt there would be false.
+ours() { printf '%s' "$1" | grep -Eq '(^|[^a-z0-9_])cw([^a-z0-9_]|$)|\$|cwtfigo'; }
 # The machine as the owner knows it.
 who() { [ "$1" = local ] && echo "this computer" || echo "$1"; }
-if printf '%s' "$in" | grep -Eq '"tool_name" *: *"Bash"'; then
+if printf '%s' "$in" | grep -Eq '"tool_name" *: *"(Bash|PowerShell)"'; then
   printf '%s' "$in" | sed -E 's/"(cwd|transcript_path)" *: *"[^"]*"//g' | tr 'A-Z' 'a-z' \
     | sed -E 's/cw[^a-z]*yolo[[:space:]]+off([[:space:];&|)"]|\\n|$)/\1/g' \
     | grep -Eq 'cw[^a-z]*(approve|yolo|[$`])|\$[{a-z_][a-z0-9_}]*[^a-z]*(approve|yolo)|approved(\.sha|\.?[?*[])|yolo\.|yolo[?*[]|cwtfigo(-v|-?[?*[])' || {
-    # cw's name hidden from the match above (c''w, c\w, a copy under another name): approve or yolo as a whole word in
-    # the command asks too, a plain yolo off aside. Only the command, not its description ("Switch off YOLO"), else
-    # the model turning YOLO off with nobody there would stop at a prompt. JSON's \n and \t are spaces here. Quotes
-    # and backslashes go after that, as the shell drops them: appr''ove and approv\e are approve.
-    printf '%s' "${cmd:-$in}" | tr 'A-Z' 'a-z' | sed -E 's/\\[nt]/ /g; s/(^|[^a-z0-9_])yolo[[:space:]]+off([[:space:];&|)"]|$)/\1\2/g' \
-      | tr -d "'\"\\\\" | grep -Eq '(^|[^a-z0-9_])(approve|yolo)([^a-z0-9_]|$)'
-  } || printf '%s' "$cmd" | tr 'A-Z' 'a-z' | tr -d "'\"\\\\" | grep -Eq 'cw[^a-z]*mode[[:space:]]*[^[:space:]]'
+    # cw's name hidden from the match above (c''w, c\w): approve or yolo as a whole word in the command asks too, a
+    # plain yolo off aside, when the command is ours (below). Only the command, not its description ("Switch off
+    # YOLO"), else the model turning YOLO off with nobody there would stop at a prompt. JSON's \n and \t are spaces
+    # here. Quotes and backslashes go after that, as the shell drops them: appr''ove and approv\e are approve.
+    x=$(printf '%s' "${cmd:-$in}" | tr 'A-Z' 'a-z' | sed -E 's/\\[nt]/ /g; s/(^|[^a-z0-9_])yolo[[:space:]]+off([[:space:];&|)"]|$)/\1\2/g' | tr -d "$Q")
+    printf '%s' "$x" | grep -Eq '(^|[^a-z0-9_])(approve|yolo)([^a-z0-9_]|$)' && { [ -z "$cmd" ] || ours "$x"; }
+  } || printf '%s' "$cmd" | tr 'A-Z' 'a-z' | tr -d "$Q" | grep -Eq 'cw[^a-z]*mode[[:space:]]*[^[:space:]]'
 else
-  printf '%s' "$in" | grep -Eiq '"file_path" *: *"[^"]*((approved\.sha256|yolo\.on)"|cwtfigo-visit)'
+  # The name anywhere in the path, whatever follows: approved.sha256/. and yolo.on/ are the file itself to Write, and
+  # so are approved.sha256. and approved.sha256::$DATA on Windows.
+  printf '%s' "$in" | grep -Eiq '"file_path" *: *"([^"\\]|\\.)*(approved\.sha256|yolo\.on|cwtfigo-visit)'
 fi && {
   # What the yes is for, in the owner's words: the prompt is the question, and a newcomer reads it.
   t=${cmd:-$(printf '%s' "$in" | sed -nE 's/.*"file_path" *: *"([^"]*)".*/\1/p')}
-  case $(printf '%s' "$t" | tr 'A-Z' 'a-z' | tr -d "'\"\\\\") in
+  case $(printf '%s' "$t" | tr 'A-Z' 'a-z' | tr -d "$Q") in
     *approve*) r="CWTFIGO: your yes lets this run from now on without asking again, until it changes"
       # Which scripts on which machine, when the command says so plainly: cw approve <alias> <script>[@hash]...
       a=$(printf '%s' "$cl" | sed -nE 's/.*cw[[:space:]]+approve[[:space:]]+([a-z0-9._-]+)[[:space:]]+([a-z0-9._@ -]*[a-z0-9._@-]).*/\1|\2/p' | head -n 1)
@@ -128,14 +172,29 @@ fi && {
 REC=${CWTFIGO_HOME:-$HOME/.cwtfigo}
 # Strict unless there is no mode file or it says normal: a hand-edited Strict, or strict with a CR, must not fail open.
 st=; [ -e "$REC/mode" ] && [ "$(tr -d ' \t\r\n' 2>/dev/null < "$REC/mode" | tr 'A-Z' 'a-z')" != normal ] && st=1
+# Write/Edit of the record's mode or self file is cw mode <level> or cw name by another door: the same asks. The
+# record by $REC or a .cwtfigo dir, any case, \ as /; the name alone or with what can follow it and still be the file
+# (mode/. , mode. , mode::$DATA). A mode.md there asks as well: one prompt.
+if printf '%s' "$in" | grep -Eq '"tool_name" *: *"(Write|Edit)"'; then
+  n=$(printf '%s' "$in" | sed -nE 's/.*"file_path" *: *"(([^"\\]|\\.)*)".*/\1/p' | head -n 1 | tr 'A-Z\\' 'a-z/' | tr -s /)
+  lr=$(printf '%s' "$REC" | tr 'A-Z\\' 'a-z/' | tr -s /)
+  case $n in "$lr"/mode|"$lr"/mode[./:\ ]*|*/.cwtfigo/mode|*/.cwtfigo/mode[./:\ ]*)
+    askr "CWTFIGO: your yes changes how often I ask you before doing things on this computer" ;;
+  "$lr"/self|"$lr"/self[./:\ ]*|*/.cwtfigo/self|*/.cwtfigo/self[./:\ ]*)
+    askr "CWTFIGO: this calls this computer by a new name in your notes. If they already have a computer by that name, this one takes its place, and the scripts you said yes to there run here without asking" ;;
+  esac
+fi
 # In every mode: what changes a machine, or who may change it, asks each time (the header says which and why).
-if printf '%s' "$in" | grep -Eq '"tool_name" *: *"Bash"'; then
-  case $cl in *apply*)
+if printf '%s' "$in" | grep -Eq '"tool_name" *: *"(Bash|PowerShell)"'; then
+  # --apply as a flag wherever it is; the bare word only in a command that is ours.
+  if case $cl in *--apply*) true ;; *apply*) ours "$cl" ;; *) false ;; esac; then
     a=$(printf '%s' "$cl" | sed -nE 's/.*cw[[:space:]]+run[[:space:]]+([a-z0-9._-]+)[[:space:]]+([^;&|<>]*).*/\1|\2/p' | head -n 1)
     s=$(pa "${a#*|}")
+    # More than one cw run in the command: naming one machine would hide the others.
+    printf '%s' "$cl" | grep -Eq 'cw[[:space:]]+run[[:space:]].*cw[[:space:]]+run[[:space:]]' && a=
     [ -n "$a" ] && [ -n "$s" ] && askr "CWTFIGO: this changes $(who "${a%%|*}") ($s), this time only"
-    askr "CWTFIGO: this changes a computer (it runs with --apply), this time only" ;;
-  esac
+    askr "CWTFIGO: this changes a computer (it runs with --apply), this time only"
+  fi
   if printf '%s' "$cl" | grep -Eq '(cw|\$[{a-z_][a-z0-9_}]*)[^a-z]*name([^a-z0-9_]|$)'; then
     n=$(pa "$(printf '%s' "$cl" | sed -nE 's/.*cw[[:space:]]+name[[:space:]]+([a-z0-9._-]+).*/\1/p' | head -n 1)")
     askr "CWTFIGO: this calls this computer ${n:-by a new name} in your notes. If they already have a computer by that name, this one takes its place, and the scripts you said yes to there run here without asking"
@@ -157,8 +216,20 @@ fi
 safe() { printf '%s' "$1" | LC_ALL=C tr -d '\200-\377' | LC_ALL=C grep -Eq "^[A-Za-z0-9 _./,:@%+=~#'\"-]*\$"; }
 # safe, with its quoted strings taken out first: inside '' the shell reads nothing but the closing ', inside "" only
 # $ ` \ and the closing ", so "fixed wifi (iwlwifi)!" is as plain as fixed wifi. Left to right, as the shell pairs
-# them: the leftmost match is where the shell's own quote opens. One it can't pair stays and is checked as by safe.
-qsafe() { safe "$(printf '%s' "$1" | sed -E "s/'[^']*'|\"[^\"\$\`\\\\]*\"//g")"; }
+# them: each kind is matched wherever its quote opens, whatever is inside, so an apostrophe inside "" opens nothing
+# ("didn't need `x`, user's call" is one "" string with a live `x` in it, not a '' string from n't to user').
+# First the '' strings go, "" left in their place, and the "" strings stay whole: a $ ` or \ still there is outside
+# quotes or inside "", live either way, so no allow. Then the "" strings go. A quote left after that has no partner.
+# By bytes (LC_ALL=C): in a locale the input isn't valid in, sed would stop and leave nothing to check.
+qsafe() {
+  q=$(printf '%s' "$1" | LC_ALL=C sed -E "s/'[^']*'|\"([^\"]*)\"/\"\\1\"/g") || return 1
+  case $q in *[\$\`\\]*) return 1 ;; esac
+  q=$(printf '%s' "$q" | LC_ALL=C sed -E 's/"[^"]*"//g') || return 1
+  # A # that starts a word outside quotes opens a comment: the shell drops the rest of the line, a ' with it, and
+  # reads what comes after a newline in that '' string as the next command.
+  case $q in *[\"\']*|'#'*|*' #'*) return 1 ;; esac
+  safe "$q"
+}
 # The physical dir an absolute path lands in, by the shell's own (logical) cd. Git Bash on Windows: C:/... or C:\...
 # as Claude Code shows it, by cygpath (only Git Bash has it).
 phys() (
@@ -220,7 +291,9 @@ pathok() (
   # ASCII only: a Mac's filesystem folds case beyond ASCII (approved.sha256 with a long s, U+017F, is the same file).
   printf '%s' "$f" | LC_ALL=C grep -q '[^ -~]' && exit 1
   r=${f#"$REC"/}
-  case /$r/ in *\\*|*//*|*/./*|*/../*) exit 1 ;; esac
+  # A name ending in a dot or a space, a :: or a ~: Windows drops the first two, reads ::$DATA as the file itself and
+  # may know a file by a short name too (APPROV~1.SHA), so mode. or self::$DATA could be mode or self there.
+  case /$r/ in *\\*|*//*|*./*|*' /'*|*::*|*'~'*) exit 1 ;; esac
   case $(printf '%s' "/$r" | tr 'A-Z' 'a-z') in */.git*|*/approved.sha256|*/yolo.on|*/mode|*/self) exit 1 ;; esac
   # Under YOLO cw runs a script it has never seen: written then, it takes Claude Code's own prompt.
   case $(printf '%s' "$r" | tr 'A-Z' 'a-z') in *.sh|*.ps1)
