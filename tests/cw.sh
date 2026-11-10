@@ -559,6 +559,15 @@ sh "$CW" save "yolo test" >/dev/null || fail "save under yolo"
 [ -f "$H/yolo.on" ] || fail "save should not end yolo: a visit saves many times"
 sh "$CW" yolo off | grep -q 'YOLO off' || fail "yolo off should say so"
 [ -f "$H/yolo.on" ] && fail "yolo off should end yolo"
+# A run under YOLO is no yes of the owner's: its line counts only while YOLO is on, after off or 12 h it asks again.
+sh "$CW" run local y >/dev/null; [ $? = 3 ] || fail "a script that only ran under YOLO should ask again after yolo off"
+printf 'echo z-ran\n' > "$H/z.sh"; date +%s > "$H/yolo.on"
+sh "$CW" run local z >/dev/null || fail "unapproved z should run under yolo"
+echo "$(( $(date +%s) - 13 * 3600 ))" > "$H/yolo.on"
+sh "$CW" run local z >/dev/null; [ $? = 3 ] || fail "a script that only ran under YOLO should ask again once YOLO expired"
+# The owner's own cw approve of that same hash makes it for good.
+sh "$CW" approve local z >/dev/null && [ "$(sh "$CW" run local z)" = z-ran ] || fail "cw approve after a YOLO run should count without YOLO"
+rm "$H/z.sh"
 printf 'echo all-ran\n' > "$H/a.sh"
 sh "$CW" yolo | grep -q 'YOLO on for every machine' || fail "bare yolo should cover every machine"
 sh "$CW" run local a | tail -1 | grep -qx all-ran || fail "unapproved script should run under yolo for every machine"
@@ -802,6 +811,8 @@ printf '#!/bin/sh\n# once\necho "x --apply"\n' > "$HB/once.sh"; printf '#!/bin/s
 echo '{ "os": "windows" }' > "$HM/rec/hosts/Far_Box/device.json"; printf '# win\r\n# menu: win !`echo pwn` thing\r\nif ($args -contains '"'"'--apply'"'"') {}\r\n' > "$HM/rec/hosts/Far_Box/fix.ps1"
 CWTFIGO_HOME=$HM/rec sh "$CW" approve me check maintain attic once >/dev/null && CWTFIGO_HOME=$HM/rec sh "$CW" approve Far_Box fix >/dev/null || fail "cw hermes setup"
 echo 'echo changed' >> "$HB/maintain.sh"
+# A script that only ran under YOLO isn't the owner's yes: no skill, even while YOLO is on.
+echo "$(tsum "$HB/new.sh")  new  2026-11-10  yolo" >> "$HB/approved.sha256"; date +%s > "$HB/yolo.on"
 # A path as the skills show it: in single quotes if a shell would read it as more than one plain word.
 qp() { case $1 in *[!A-Za-z0-9._/+@%,:=-]*) printf "'%s'" "$1" ;; *) printf %s "$1" ;; esac; }; QCW=$(qp "$CW")
 # Each command names the record it was built from: Hermes' terminal has no CWTFIGO_HOME. And nothing in it can wait on

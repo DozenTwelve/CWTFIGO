@@ -284,7 +284,14 @@ unsaved() {
     echo "$p"
   done
 }
-approved() { h=$(sha "$F") && [ -n "$h" ] && grep -qs "^$h " "$H/approved.sha256"; }
+# A line ending in yolo is a run under YOLO, not the owner's yes: it counts only while YOLO is on for this host, and
+# never with the arg own (the owner's yes only: cw approve, cw hermes). So a cw approve of the same hash adds a plain
+# line, which counts for good.
+approved() {
+  h=$(sha "$F") && [ -n "$h" ] || return 1
+  grep -s "^$h " "$H/approved.sha256" | grep -qv '[[:space:]]yolo[[:space:]]*$' ||
+    { [ -z "$1" ] && grep -qs "^$h .*[[:space:]]yolo[[:space:]]*$" "$H/approved.sha256" && yolo; }
+}
 unadapted() { ! grep -q '^# CWTFIGO-FOUNDATION' "$F" || die "$name on $alias is the unadapted foundation ($F): first adapt it to this machine from its record and delete the CWTFIGO-FOUNDATION line. Don't show it to the human or ask for approval before that."; }
 
 # YOLO is on while $REC/yolo.on (every machine) or $H/yolo.on (one host) holds an epoch less than 12 h old.
@@ -312,7 +319,7 @@ run)
   O=$F; F=$(mktemp) && cp "$O" "$F" || die "cannot copy $O"
   trap 'rm -f "$F"' EXIT; trap 'exit 1' INT TERM HUP
   if ! approved; then
-    grep -qs "  $name  " "$H/approved.sha256" && why="changed since it was last approved (plugin update or edit)" || why="never approved here"
+    grep -s "  $name  " "$H/approved.sha256" | grep -qv '[[:space:]]yolo[[:space:]]*$' && why="changed since it was last approved (plugin update or edit)" || why="never approved here"
     # The plugin's own collect and probes (plug, from resolve): their header says what they read, the rest stays at the path.
     if yolo; then
       y=1
@@ -361,7 +368,7 @@ approve)
       p=$(basename "$F" .$X)
       probe "$p" || continue
       [ "$p" != smart ] && [ ! -f "$H/$p.$X" ] || continue
-      approved || echo "$(sha "$F")  $p  $(date +%F)" >> "$H/approved.sha256"; n="$n $p"
+      approved own || echo "$(sha "$F")  $p  $(date +%F)" >> "$H/approved.sha256"; n="$n $p"
     done
     echo "approved on $alias:${n:- no read-only probes for this OS}"; exit 0
   fi
@@ -378,7 +385,7 @@ approve)
         die "$name changed since cw run showed it (or $w isn't the start of its sha256): run it again, so the human sees what they say yes to" ) || bad="$bad $name"
   done
   [ -z "$bad" ] || die "approved none: refused$bad"
-  mkh; for a; do name=${a%@*}; resolve "$name"; approved || echo "$(sha "$F")  $name  $(date +%F)" >> "$H/approved.sha256"; done
+  mkh; for a; do name=${a%@*}; resolve "$name"; approved own || echo "$(sha "$F")  $name  $(date +%F)" >> "$H/approved.sha256"; done
   echo "approved: $* on $alias" ;;
 name)
   { badname "$2" || [ "$2" = local ]; } && die "usage: cw name <name>: this machine's SSH alias as the other machines use it, not local, no / \\ * ? [ or spaces, not starting with -"
@@ -605,7 +612,8 @@ hermes)
     # The extension run would pick, without its ssh: another machine before its first collect gets both, as in the TUI.
     if [ -f "$H/device.json" ] || [ -n "$here" ]; then windows && X=ps1 || X=sh; else X='sh ps1'; fi
     for x in $X; do for F in "$H"/*."$x"; do
-      [ -f "$F" ] && approved || continue
+      # The owner's own yes only: a script that ran under YOLO isn't one, even while YOLO is on.
+      [ -f "$F" ] && approved own || continue
       name=$(basename "$F" ".$x")
       # Hermes' skill names: [a-z0-9._-], 64 at most; its slash commands keep only [a-z0-9-], Discord their first 32.
       n=$(printf 'cw-%s-%s' "$alias" "$name" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' - | tr -s - | cut -c1-64 | sed 's/-$//')
