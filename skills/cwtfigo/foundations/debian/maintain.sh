@@ -22,7 +22,8 @@ JOURNAL_MAX=200M
 # Items the dry run knows (on = in CLEAN):
 #   aptcache    downloaded .deb files in /var/cache/apt/archives (apt-get clean)
 #   journal     systemd journal, vacuumed to JOURNAL_MAX
-#   snaprev     disabled snap revisions, kept for snap revert (snapd keeps 2 or 3 per snap)
+#   snaprev     old snap revisions, kept for snap revert (snapd keeps 2 or 3 per snap). A snap the owner turned
+#               off (snap disable) is left alone.
 #   usercache   ~/.cache: all app caches. Apps rebuild them, some log you out. Opt-in.
 #   trash       empty the Trash. User data, irreversible. Only when the owner said yes in chat, and only
 #               when named after --apply (--apply trash): never from CLEAN.
@@ -116,9 +117,11 @@ item aptcache "$(mb /var/cache/apt/archives)" "$S apt-get clean"
 j=; [ "$(id -u)" != 0 ] && ! id -Gn | grep -qwE 'adm|systemd-journal|wheel' && j=" (this user's only: not in adm/systemd-journal)"
 has journalctl && item journal "$(journalctl --disk-usage | grep -o '[0-9.]*[KMGT]' | head -1)$j, to $JOURNAL_MAX" "$S journalctl --vacuum-size=$JOURNAL_MAX"
 if has snap; then
-  rev=$(snap list --all | awk '$NF ~ /disabled/{print $1 "_" $3}')
+  # Only disabled revisions of a snap that also has an active one. A snap whose only revision is disabled is one the
+  # owner turned off with snap disable: snap remove --revision of a snap's only revision removes the whole snap.
+  rev=$(snap list --all | awk '$NF ~ /disabled/{d[++n]=$1 "_" $3; s[n]=$1; next} {a[$1]=1} END{for (i=1; i<=n; i++) if (a[s[i]]) print d[i]}')
   snaprev() { for r in $rev; do $S snap remove "${r%_*}" --revision="${r##*_}" || return; done; }
-  [ -n "$rev" ] && item snaprev "$(cd /var/lib/snapd/snaps && mb $(echo "$rev" | sed 's/$/.snap/')), $(echo "$rev" | wc -l | tr -d ' ') revisions" snaprev
+  [ -n "$rev" ] && item snaprev "$(cd /var/lib/snapd/snaps && mb $(echo "$rev" | sed 's/$/.snap/')), $(echo "$rev" | wc -l | tr -d ' ') revisions: $(echo "$rev" | awk -F_ '{printf "%s%s %s", (NR>1 ? ", " : ""), $1, $2}')" snaprev
 fi
 item usercache "$(mb "${XDG_CACHE_HOME:-$HOME/.cache}")" "rm -rf \"${XDG_CACHE_HOME:-$HOME/.cache}/\"*"
 item trash "$(mb "$HOME/.local/share/Trash")" "rm -rf \"$HOME/.local/share/Trash/\"*"

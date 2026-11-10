@@ -57,6 +57,24 @@ echo "$out" | grep -q '0 pending\|all current\|(none)' && fail "debian maintain:
 fresh; stub id 'echo 1000'
 { echo APPLY=1; sed -n '/^has()/p; /^S=sudo/,/^before=/p' "$F/debian/maintain.sh"; } > "$D/apply-start.sh"
 run "$D/apply-start.sh" 2>&1 | grep -q 'no sudo here: run it as root' || fail "debian maintain --apply without sudo: $(run "$D/apply-start.sh" 2>&1)"
+# snaprev takes only the disabled revisions of a snap that also has an active one: `snap remove --revision` of a snap's
+# only revision (one the owner turned off with snap disable) removes the whole snap. The dry run names what would go.
+fresh; stub id 'echo 1000'; stub apt-get 'exit 0'; mkdir -p "$D/var/lib/snapd/snaps"
+stub snap 'case "$*" in "list --all") cat <<EOF
+Name    Version  Rev    Tracking       Publisher   Notes
+core20  2023a    2015   latest/stable  canonical   base,disabled
+core20  2023b    2105   latest/stable  canonical   base,disabled
+core20  2024a    2200   latest/stable  canonical   base
+hello   2.10     42     latest/stable  canonical   disabled
+EOF
+;; refresh*) ;; *) echo "$*" >> "$0.log" ;; esac'
+out=$(run "$F/debian/maintain.sh" 2>/dev/null | grep '^snaprev')
+echo "$out" | grep -Eq '^snaprev +on .*, 2 revisions: core20 2015, core20 2105$' || fail "debian maintain: snaprev should name core20's two old revisions and leave the disabled snap hello: $out"
+# The apply path: only the snaprev lines, cut out of the script; snap is the stub.
+{ echo 'APPLY=1; S=; CLEAN=snaprev'; sed -n '/^has()/p; /^on()/p; /^mb()/p; /^item()/,/^}/p; /^if has snap; then/,/^fi/p' "$F/debian/maintain.sh"; } > "$D/snaprev.sh"
+run "$D/snaprev.sh" >/dev/null 2>&1
+[ "$(cat "$D/bin/snap.log" 2>/dev/null)" = "remove core20 --revision=2015
+remove core20 --revision=2105" ] || fail "debian maintain --apply snaprev should remove core20's two old revisions only: $(cat "$D/bin/snap.log" 2>&1)"
 # Its --apply ends on a test that is false when no reboot is pending: the script must still exit 0 (not run here).
 [ "$(tail -1 "$F/debian/maintain.sh")" = "exit 0" ] || fail "debian maintain should end with exit 0"
 
