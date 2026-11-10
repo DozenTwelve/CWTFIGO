@@ -457,6 +457,16 @@ sh "$CW" approve local maintain@zzzzzzzzzzzz >/dev/null 2>&1 && fail "approve wi
 sh "$CW" approve local "$(echo "$a" | cut -c1-15)" >/dev/null 2>&1 && fail "approve with a sha256 start under 8 should be refused"
 sh "$CW" approve local "$a" >/dev/null || fail "approve with the sha256 start run printed"
 sh "$CW" run local maintain >/dev/null || fail "maintain approved by its sha256 start should run"
+# The diff is against the last save, and a save commits edits nobody approved: after one, the next change would show
+# the unapproved lines as unchanged. Then the whole script prints, as for a new one; a diff only against a saved
+# version the owner approved.
+sh "$CW" save "approved maintain" >/dev/null; echo '# saved unseen' >> "$H/maintain.sh"; sh "$CW" save "an edit nobody approved" >/dev/null
+echo '# newest' >> "$H/maintain.sh"; out=$(sh "$CW" run local maintain); [ $? = 3 ] || fail "maintain edited twice should exit 3"
+echo "$out" | grep -qx '# saved unseen' && echo "$out" | grep -qx '# newest' && echo "$out" | grep -qxF "$(sed -n 2p "$H/maintain.sh")" && ! echo "$out" | grep -q '^@@ ' ||
+  fail "after a save nobody approved the whole script should print, not a diff: $out"
+sh "$CW" approve local maintain >/dev/null; sh "$CW" save "approved again" >/dev/null; echo '# third' >> "$H/maintain.sh"
+out=$(sh "$CW" run local maintain); echo "$out" | grep -qx '+# third' && ! echo "$out" | grep -qx '# newest' || fail "against an approved save a diff again: $out"
+sh "$CW" approve local maintain >/dev/null
 
 sh "$CW" status 2>/dev/null | grep -q '^  box (this machine) .*macos.*  0 open$' || fail "status should list and mark this machine"
 sh "$CW" status 2>/dev/null | grep -qx '  Another machine? Tell me its SSH alias.' || fail "status should not offer local once this machine is in the record"

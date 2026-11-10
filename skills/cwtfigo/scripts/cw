@@ -30,7 +30,8 @@ PJ="$SKILL/../../.claude-plugin/plugin.json"
 VERSION=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' "$PJ" 2>/dev/null)
 
 die() { echo "cw: $*" >&2; exit 1; }
-sha() { if command -v sha256sum >/dev/null; then sha256sum "$1"; else shasum -a 256 "$1"; fi | cut -d' ' -f1; }
+# A file's sha256, or stdin's with no file.
+sha() { if command -v sha256sum >/dev/null; then sha256sum "$@"; else shasum -a 256 "$@"; fi | cut -d' ' -f1; }
 git_rec() { git -C "$REC" "$@"; }
 # Every ssh cw runs: a dead link or a hung machine drops within a minute. No overall timeout: maintain --apply can be long.
 SSHO='-o ServerAliveInterval=15 -o ServerAliveCountMax=4'
@@ -297,11 +298,14 @@ unsaved() {
 # A line ending in yolo is a run under YOLO, not the owner's yes: it counts only while YOLO is on for this host, and
 # never with the arg own (the owner's yes only: cw approve, cw hermes). So a cw approve of the same hash adds a plain
 # line, which counts for good.
+owner() { [ -n "$1" ] && grep -s "^$1 " "$H/approved.sha256" | grep -qv '[[:space:]]yolo[[:space:]]*$'; }
 approved() {
   h=$(sha "$F") && [ -n "$h" ] || return 1
-  grep -s "^$h " "$H/approved.sha256" | grep -qv '[[:space:]]yolo[[:space:]]*$' ||
-    { [ -z "$1" ] && grep -qs "^$h .*[[:space:]]yolo[[:space:]]*$" "$H/approved.sha256" && yolo; }
+  owner "$h" || { [ -z "$1" ] && grep -qs "^$h .*[[:space:]]yolo[[:space:]]*$" "$H/approved.sha256" && yolo; }
 }
+# The version of the script in the record's last commit is one the owner said yes to. Read by object id, not
+# <rev>:<path>, which Git Bash rewrites into a Windows path.
+headok() { b=$(git_rec ls-tree HEAD -- "${O#"$REC"/}" 2>/dev/null | awk '{ print $3 }'); [ -n "$b" ] && owner "$(git_rec cat-file blob "$b" | sha)"; }
 unadapted() { ! grep -q '^# CWTFIGO-FOUNDATION' "$F" || die "$name on $alias is the unadapted foundation ($F): first adapt it to this machine from its record and delete the CWTFIGO-FOUNDATION line. Don't show it to the human or ask for approval before that."; }
 
 # YOLO is on while $REC/yolo.on (every machine) or $H/yolo.on (one host) holds an epoch less than 12 h old.
@@ -342,7 +346,10 @@ run)
       case $why$plug in never*|*1) echo "Tell the human in one line what it reads or changes, then run $a right away: the permission prompt they get is the question, don't also ask in chat and wait. About to run other scripts here that need approval too (a first visit's check and maintain)? Run them first, then approve all of them in that one call: one prompt" ;;
                         *) echo "Show the human what changed, then run $a right away: the permission prompt they get is the question, don't also ask in chat and wait. About to run other scripts here that need approval too (a first visit's check and maintain)? Run them first, then approve all of them in that one call: one prompt" ;; esac
     fi
-    if git_rec ls-files --error-unmatch "$O" >/dev/null 2>&1 && ! git_rec diff --quiet HEAD -- "$O"; then
+    # A diff against the record's last commit, but only if that version was approved: cw save commits edits nobody
+    # approved too, and against one of those the unapproved lines would show as unchanged, the yes covering more than
+    # the + lines. Then the whole file, as for a script never approved.
+    if git_rec ls-files --error-unmatch "$O" >/dev/null 2>&1 && ! git_rec diff --quiet HEAD -- "$O" && headok; then
       git_rec --no-pager diff HEAD -- "$O"
     elif [ -n "$plug" ]; then
       awk 'NR == 1 && /^#!/ { next } !/^#/ { exit } { print }' "$F"; echo "full script: $O"
