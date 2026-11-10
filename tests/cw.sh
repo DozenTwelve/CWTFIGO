@@ -510,6 +510,18 @@ git -C "$I.git" cat-file -e "$(git -C "$I" rev-parse HEAD)" && [ "$(git -C "$I" 
 git -C "$I" remote set-url origin "$I.missing"; touch "$I/d"
 out=$(CWTFIGO_HOME=$I sh "$CW" save d 2>&1) && fail "save to a missing remote should fail"
 echo "$out" | grep -q "$I.missing" && echo "$out" | grep -q 'push failed' || fail "failed push should show git's error: $out"
+# git's own ssh, when the owner set none for it: 10 s to connect and cw's keepalives, so a shared record that's away
+# costs a run, a status or a save seconds, not the OS's connect timeout. No BatchMode: a save typed in a terminal may
+# need a key's passphrase. An ssh the owner set for git (GIT_SSH_COMMAND, GIT_SSH, core.sshCommand) stays as it is.
+GT=$(mktemp -d); mkdir "$GT/bin"; printf '#!/bin/sh\necho "$*" >> "%s/args"; exit 255\n' "$GT" > "$GT/bin/ssh"; cp "$GT/bin/ssh" "$GT/bin/myssh"; chmod +x "$GT/bin/ssh" "$GT/bin/myssh"
+git init -q "$GT/rec"; git -C "$GT/rec" remote add origin nohost:rec.git
+gt() { rm -f "$GT/args"; (unset GIT_SSH_COMMAND GIT_SSH; [ -z "${1-}" ] || export "$1"; GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 PATH=$GT/bin:$PATH CWTFIGO_HOME=$GT/rec sh "$CW" status >/dev/null 2>&1); cat "$GT/args"; }
+out=$(gt); echo "$out" | grep -q -- '-o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 .*nohost' && ! echo "$out" | grep -q BatchMode || fail "git's ssh should get a connect timeout and the keepalives, no BatchMode: $out"
+for e in "GIT_SSH_COMMAND=$GT/bin/myssh" "GIT_SSH=$GT/bin/myssh"; do
+  out=$(gt "$e"); echo "$out" | grep -q nohost && ! echo "$out" | grep -q ConnectTimeout || fail "the owner's ${e%%=*} should stay as it is: $out"
+done
+git -C "$GT/rec" config core.sshCommand "$GT/bin/myssh"; out=$(gt); echo "$out" | grep -q nohost && ! echo "$out" | grep -q ConnectTimeout || fail "the owner's core.sshCommand should stay as it is: $out"
+rm -rf "$GT"
 printf '## Open items\n- a\n- b\n  - detail\n## Parked\n- 2026-10-31 c\n  - stone: x\n  - recheck: y\n## Gotchas\n- d\n' > "$H/notes.md"
 sh "$CW" status 2>/dev/null | grep -q '^  box .*  2 open, 1 parked$' || fail "status should count open and parked issues"
 printf '## Open items\n- (none)\n## Parked\n- 2026-10-31 c\n' > "$H/notes.md"
@@ -1083,7 +1095,7 @@ out=$(HOME=$S XDG_DATA_HOME=$S/share HERMES_HOME=$S/hx PATH=$PYB:$PATH CWTFIGO_H
 # Another sync on it: skipped (2), not queued; no pull, the lock left to its owner.
 printf '#!/bin/sh\n# menu: more\necho more\n' > "$S/a/hosts/a/more.sh"; { sw a approve a more && sw a save three; } >/dev/null 2>&1 || fail "cw hermes --sync setup: another script"
 mkdir "$SD.lock"; out=$(sw b hermes --sync 2>&1); [ $? = 2 ] && [ -d "$SD.lock" ] && [ ! -e "$SD/cwtfigo/cw-a-more" ] || fail "cw hermes --sync under a lock: $out"; rmdir "$SD.lock"
-# A remote that can't be reached, through the owner's own core.sshCommand (cw sets no ssh of its own): exit 1, nothing
+# A remote that can't be reached, through the owner's own core.sshCommand (cw sets one only when they set none): exit 1, nothing
 # rebuilt. No prompt: the hook runs cw in a session of its own (no terminal for ssh to ask on), stdin /dev/null.
 mkdir "$S/bin"; printf '#!/bin/sh\necho "$*" > %s/ssh.args; exit 255\n' "$S" > "$S/bin/myssh"; chmod +x "$S/bin/myssh"
 git -C "$S/b" config core.sshCommand "$S/bin/myssh"; git -C "$S/b" remote set-url origin fake:r.git; out=$(sw b hermes --sync 2>&1); [ $? = 1 ] && grep -q 'fake' "$S/ssh.args" && [ ! -e "$SD/cwtfigo/cw-a-more" ] && [ ! -e "$SD.lock" ] || fail "cw hermes --sync, remote gone: $out"

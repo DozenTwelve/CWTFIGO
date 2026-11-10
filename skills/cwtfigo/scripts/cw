@@ -33,10 +33,14 @@ VERSION=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' "$PJ" 2>/dev/null)
 die() { echo "cw: $*" >&2; exit 1; }
 # A file's sha256, or stdin's with no file.
 sha() { if command -v sha256sum >/dev/null; then sha256sum "$@"; else shasum -a 256 "$@"; fi | cut -d' ' -f1; }
-git_rec() { git -C "$REC" "$@"; }
 # Every ssh cw runs: a dead link or a hung machine drops within a minute. No overall timeout: maintain --apply can be long.
 SSHO='-o ServerAliveInterval=15 -o ServerAliveCountMax=4'
 ssh() { command ssh $SSHO "$@"; }
+# git's own ssh, for a record shared over ssh (GS, set once the record is there): 10 s to connect and the same
+# keepalives, so with the shared record away a run, a status or a save waits seconds, not the OS's connect timeout.
+# No BatchMode: a save typed in a terminal may need to ask for a key's passphrase.
+GS=
+git_rec() { git -C "$REC" ${GS:+-c "core.sshCommand=$GS"} "$@"; }
 remote() { [ -n "$(git_rec remote 2>/dev/null)" ]; }
 # What other operators saved since: fast-forward only. A failed one says so and returns 1; the caller goes on or not.
 pull() { git_rec pull -q --ff-only --no-rebase || { echo "cw: pull failed, using local record" >&2; return 1; }; }
@@ -94,6 +98,8 @@ fi
 # Without git, git init below would fail as "cannot create $REC", which reads like a permissions problem.
 command -v git >/dev/null || die "CWTFIGO keeps its notes in git: install it (Debian/Ubuntu/Mint: sudo apt install git; Fedora: sudo dnf install git; Arch: sudo pacman -S git; Mac: xcode-select --install), then try again"
 [ -d "$REC/.git" ] || { mkdir -p "$REC" && git init -q "$REC"; } || die "cannot create $REC"
+# Only when the owner set no ssh for git themselves: theirs stays as it is.
+[ -n "$GIT_SSH_COMMAND$GIT_SSH" ] || git_rec config core.sshCommand >/dev/null 2>&1 || GS="ssh -o ConnectTimeout=10 $SSHO"
 ignores() {
   # Scripts in the record are piped to targets and approved by hash: a Windows operator's autocrlf must not add .
   # self names this operator machine and differs per machine, and so do mode (how much Claude Code asks) and hermes.on
@@ -624,7 +630,7 @@ hermes)
   mk() { git_rec rev-parse -q --verify HEAD; sha "$SKILL/scripts/cw"; }
   T=; trap '[ -z "$T" ] || { rm -rf "$T"; { [ -e "$D" ] || mv "$T.old" "$D"; } 2>/dev/null && rm -rf "$T.old"; }; rmdir "$D.lock"' EXIT; trap 'exit 1' INT TERM HUP
   if [ -n "$sync" ]; then
-    # The owner's own ssh (core.sshCommand, GIT_SSH), as for any pull. It can't ask: the hook runs this in a session of
+    # The owner's own ssh if they set one (core.sshCommand, GIT_SSH), as for any pull. It can't ask: the hook runs this in a session of
     # its own (no terminal) with stdin /dev/null, and its timeout ends a hung remote.
     export GIT_TERMINAL_PROMPT=0
     # Nothing new is what the skills were built from (their marker holds mk), not HEAD before the pull: a
