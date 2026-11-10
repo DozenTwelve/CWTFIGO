@@ -190,11 +190,18 @@ if command -v pwsh >/dev/null; then
     echo "$out" | grep -q '^b ' && fail "space.ps1: a link was walked: $out" ;;
   esac
   # env.ps1 never prints a secret: hidden by name or by value, the rest shown.
-  { grep -E '^(\$byname|\$byvalue) = |^function (ex|secret)\(' "$(dirname "$CW")/probes/env.ps1"; cat <<'EOF'
+  # Also a short name (DB_PASS), a secret inside a value under a plain name (a connection string, a URL query), and
+  # Slack and Discord webhook URLs.
+  { grep -E '^(\$byname|\$byvalue) \+?= |^function (ex|secret)\(' "$(dirname "$CW")/probes/env.ps1"; cat <<'EOF'
 $hide = @{ OPENAI_API_KEY = 'x'; DB_PASSWORD = 'x'; GH = 'ghp_abcdefghijklmnopqrstu'; ANTHROPIC = 'sk-ant-abc'
-  DATABASE_URL = 'postgres://u:p@db/x'; JWT = 'eyJhbGciOi.x.y'; RANDOM_X = 'AbCdEf0123456789AbCdEf0123' }
+  DATABASE_URL = 'postgres://u:p@db/x'; JWT = 'eyJhbGciOi.x.y'; RANDOM_X = 'AbCdEf0123456789AbCdEf0123'
+  DB_PASS = 'x'; BORG_PASSPHRASE = 'x'; SENTRY_DSN = 'x'; MYDB = 'Server=x;Password=y'; ODBC = 'Driver=x;PWD=y'
+  ALERTS = 'https://hooks.slack.com/services/T0/B0/abc'; PING = 'https://discord.com/api/webhooks/1/abc'
+  PING2 = 'https://discordapp.com/api/webhooks/1/abc'; FEED = 'https://h/x?token=abc'; BLOB = 'https://h/c?sv=1&sig=abc'
+  STORE = 'DefaultEndpointsProtocol=https;AccountName=a;AccountKey=abc' }
 $show = @{ JAVA_HOME = 'C:\Program Files\Java\jdk-21'; PYTHONIOENCODING = 'utf-8'; GOPATH = '%USERPROFILE%\go'
-  HTTPS_PROXY = 'http://proxy:8080'; ChocolateyLastPathUpdate = '134385134163149238' }
+  HTTPS_PROXY = 'http://proxy:8080'; ChocolateyLastPathUpdate = '134385134163149238'; EDITOR = 'code --wait'
+  HOMEPAGE = 'https://example.com/docs?page=2'; TOOLS = 'C:\Tools\bin' }
 foreach ($k in $hide.Keys) { if (-not (secret $k $hide[$k])) { "leaks $k" } }
 foreach ($k in $show.Keys) { if (secret $k $show[$k]) { "hides $k" } }
 EOF
