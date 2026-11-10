@@ -28,6 +28,8 @@ Then run `/reload-plugins` (or restart Claude Code) and type `cwtfigo`. If it of
 
 It needs `git` (on a Mac: `xcode-select --install`; on Windows it runs in Git Bash, which Claude Code needs there anyway) and `python3` to search past fixes. The first visit goes best on Opus (`/model opus`).
 
+A machine's checkup and upkeep start from a ready-made script on macOS, Windows, Arch, Debian and its relatives (Ubuntu, Mint, Pop!_OS, Raspberry Pi OS and a few more) and OpenWrt routers. Other systems, like Fedora or the Steam Deck, work too: Claude writes their scripts from less.
+
 ## How it works
 
 You say the name and what's wrong:
