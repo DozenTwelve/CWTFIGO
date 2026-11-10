@@ -45,7 +45,10 @@ GS=
 git_rec() { git -C "$REC" -c commit.gpgsign=false ${GS:+-c "core.sshCommand=$GS"} "$@"; }
 remote() { [ -n "$(git_rec remote 2>/dev/null)" ]; }
 # What other operators saved since: fast-forward only. A failed one says so and returns 1; the caller goes on or not.
-pull() { git_rec pull -q --ff-only --no-rebase || { echo "cw: pull failed, using local record" >&2; return 1; }; }
+# No upstream yet (an empty shared copy just joined, a remote just added: the first cw save sets it): nothing to pull,
+# and git's own "no tracking information" would come on every command until then.
+pull() { git_rec rev-parse -q --verify '@{upstream}' >/dev/null 2>&1 || return 0
+         git_rec pull -q --ff-only --no-rebase || { echo "cw: pull failed, using local record" >&2; return 1; }; }
 # No git identity on a fresh machine: fall back to one, never over the user's own. Used unquoted: no spaces in it.
 ident() { git_rec config user.email >/dev/null || { git_rec config user.name >/dev/null || printf '%s ' -c user.name=cwtfigo; printf '%s ' -c user.email=cwtfigo@localhost; }; }
 # On Windows python3 is often the Microsoft Store stub: it exists but runs nothing.

@@ -522,7 +522,9 @@ echo "$out" | grep -q "$I.missing" && echo "$out" | grep -q 'push failed' || fai
 # costs a run, a status or a save seconds, not the OS's connect timeout. No BatchMode: a save typed in a terminal may
 # need a key's passphrase. An ssh the owner set for git (GIT_SSH_COMMAND, GIT_SSH, core.sshCommand) stays as it is.
 GT=$(mktemp -d); mkdir "$GT/bin"; printf '#!/bin/sh\necho "$*" >> "%s/args"; exit 255\n' "$GT" > "$GT/bin/ssh"; cp "$GT/bin/ssh" "$GT/bin/myssh"; chmod +x "$GT/bin/ssh" "$GT/bin/myssh"
-git init -q "$GT/rec"; git -C "$GT/rec" remote add origin nohost:rec.git
+# A record that has pushed once (cw pulls only with an upstream), its remote then moved to a host over ssh.
+git init -q --bare "$GT/r.git"; git init -q "$GT/rec"; git -C "$GT/rec" remote add origin "$GT/r.git"
+CWTFIGO_HOME=$GT/rec sh "$CW" save first >/dev/null 2>&1 || fail "git's ssh: setup"; git -C "$GT/rec" remote set-url origin nohost:rec.git
 gt() { rm -f "$GT/args"; (unset GIT_SSH_COMMAND GIT_SSH; [ -z "${1-}" ] || export "$1"; GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 PATH=$GT/bin:$PATH CWTFIGO_HOME=$GT/rec sh "$CW" status >/dev/null 2>&1); cat "$GT/args"; }
 out=$(gt); echo "$out" | grep -q -- '-o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 .*nohost' && ! echo "$out" | grep -q BatchMode || fail "git's ssh should get a connect timeout and the keepalives, no BatchMode: $out"
 for e in "GIT_SSH_COMMAND=$GT/bin/myssh" "GIT_SSH=$GT/bin/myssh"; do
@@ -1166,6 +1168,8 @@ echo "$out" | grep -q '^hint: this record is new and not shared: this owner is n
 mkdir -p "$J/h/hosts/box"; jw h status 2>&1 >/dev/null | grep -q 'owner is new\|another computer' && fail "a record with a host is not a new owner"
 out=$(jw a join "$J/shared.git" 2>&1) || fail "join to an empty shared record: $out"
 echo "$out" | grep -q 'empty: the next cw save' || fail "an empty shared record should say cw save fills it: $out"
+# Until that save the branch has no upstream: nothing to pull, and no error of git's on every command meanwhile.
+out=$(jw a status 2>&1 >/dev/null); echo "$out" | grep -q 'pull failed\|tracking information\|fatal:' && fail "no pull, and no error, before the first save to an empty shared record: $out"
 mkdir -p "$J/a/hosts/home" "$J/a/hosts/desk"; echo 'id: home-id' > "$J/a/hosts/home/facts.md"; echo 'id: desk-id' > "$J/a/hosts/desk/facts.md"
 printf '%s\n' '- likes it quiet' '- shared bullet' > "$J/a/operator.md"; echo '- home: NAS mounts' > "$J/a/topology.md"
 jw a save first >/dev/null 2>&1 || fail "save after joining an empty shared record"
@@ -1294,7 +1298,8 @@ printf '# CWTFIGO-FOUNDATION\n' > "$B/maintain.sh"   # cw refuses to run it: tha
 un >/dev/null || fail "run with an unadapted maintain"
 tail -1 "$U/posted" | jq -r .content | grep -q 'maintain: failed (exit 1)' || fail "cw refusing should be reported as failed: $(tail -1 "$U/posted")"
 # cw status's pull goes through the BatchMode ssh too (a record with no hosts: no cw run pulls).
-N=$(mktemp -d)/rec; git init -q "$N"; git -C "$N" remote add origin nohost:rec.git
+N=$(mktemp -d)/rec; git init -q --bare "$N.git"; git init -q "$N"; git -C "$N" remote add origin "$N.git"   # pushed once: an upstream to pull from
+CWTFIGO_HOME=$N sh "$CW" save first >/dev/null 2>&1; git -C "$N" remote set-url origin nohost:rec.git
 PATH=$U/bin:$PATH CWTFIGO_HOME=$N CWTFIGO_NOTIFY=/nonexistent sh "$UN" >/dev/null 2>&1
 grep -q 'BatchMode=yes.*git-upload-pack' "$U/ssh.args" || fail "cw status's pull should use the BatchMode ssh: $(cat "$U/ssh.args")"
 # Write-back with a remote: pull before the commit, commit only the log.md written, a failed save is in the message.
