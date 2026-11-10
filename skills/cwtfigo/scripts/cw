@@ -22,6 +22,7 @@
 # A missing check.sh / maintain.sh is copied from foundations/<os>/ (os from device.json); run and approve refuse it
 # until the model has adapted it and deleted its CWTFIGO-FOUNDATION line. Unapproved scripts print (the plugin's own: header and path) and exit 3 (under yolo: print and run).
 # collect writes hosts/<alias>/facts.md and exits 4 if the machine id no longer matches or another host has it.
+# For Hermes nobody is asked first: cw approve and cw yolo are refused in a call from one of its skills, and on a computer whose Hermes hook syncs a shared record.
 
 SKILL=$(cd "$(dirname "$0")/.." && pwd)
 REC=${CWTFIGO_HOME:-$HOME/.cwtfigo}
@@ -30,14 +31,24 @@ PJ="$SKILL/../../.claude-plugin/plugin.json"
 VERSION=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' "$PJ" 2>/dev/null)
 
 die() { echo "cw: $*" >&2; exit 1; }
-sha() { if command -v sha256sum >/dev/null; then sha256sum "$1"; else shasum -a 256 "$1"; fi | cut -d' ' -f1; }
-git_rec() { git -C "$REC" "$@"; }
+# A file's sha256, or stdin's with no file.
+sha() { if command -v sha256sum >/dev/null; then sha256sum "$@"; else shasum -a 256 "$@"; fi | cut -d' ' -f1; }
 # Every ssh cw runs: a dead link or a hung machine drops within a minute. No overall timeout: maintain --apply can be long.
 SSHO='-o ServerAliveInterval=15 -o ServerAliveCountMax=4'
 ssh() { command ssh $SSHO "$@"; }
+# git's own ssh, for a record shared over ssh (GS, set once the record is there): 10 s to connect and the same
+# keepalives, so with the shared record away a run, a status or a save waits seconds, not the OS's connect timeout.
+# No BatchMode: a save typed in a terminal may need to ask for a key's passphrase.
+GS=
+# The record's commits are never signed: with commit.gpgsign on, the owner's pinentry has no terminal to ask on under
+# Claude Code, and every save, join and merge would fail.
+git_rec() { git -C "$REC" -c commit.gpgsign=false ${GS:+-c "core.sshCommand=$GS"} "$@"; }
 remote() { [ -n "$(git_rec remote 2>/dev/null)" ]; }
 # What other operators saved since: fast-forward only. A failed one says so and returns 1; the caller goes on or not.
-pull() { git_rec pull -q --ff-only --no-rebase || { echo "cw: pull failed, using local record" >&2; return 1; }; }
+# No upstream yet (an empty shared copy just joined, a remote just added: the first cw save sets it): nothing to pull,
+# and git's own "no tracking information" would come on every command until then.
+pull() { git_rec rev-parse -q --verify '@{upstream}' >/dev/null 2>&1 || return 0
+         git_rec pull -q --ff-only --no-rebase || { echo "cw: pull failed, using local record" >&2; return 1; }; }
 # No git identity on a fresh machine: fall back to one, never over the user's own. Used unquoted: no spaces in it.
 ident() { git_rec config user.email >/dev/null || { git_rec config user.name >/dev/null || printf '%s ' -c user.name=cwtfigo; printf '%s ' -c user.email=cwtfigo@localhost; }; }
 # On Windows python3 is often the Microsoft Store stub: it exists but runs nothing.
@@ -61,6 +72,8 @@ if [ "$1" = tui ]; then
   tag=tui-v$v; a=cwtfigo-tui-$os-$m.tar.gz; B=$HOME/.local/bin; u=https://github.com/DozenTwelve/CWTFIGO/releases/download/$tag/$a
   # A clone's own build, linked there (tui/README): replacing the link would cut it off from later rebuilds.
   [ -L "$B/cwtfigo" ] && die "~/.local/bin/cwtfigo is a link to your own build, $(readlink "$B/cwtfigo"): nothing installed. Rebuild it instead (git pull, then cargo build --release in tui/)"
+  # A folder of that name: the new binary would be moved into it, and "installed" said of a cwtfigo that can't run.
+  [ -d "$B/cwtfigo" ] && die "~/.local/bin/cwtfigo is a folder, not the TUI: nothing installed. Move it away, then try again"
   mkdir -p "$B" || die "cannot create $B"
   # The new binary is written next to the old one and renamed over it: one filesystem, so the swap is atomic and a
   # running TUI keeps its old file.
@@ -92,14 +105,17 @@ fi
 # Without git, git init below would fail as "cannot create $REC", which reads like a permissions problem.
 command -v git >/dev/null || die "CWTFIGO keeps its notes in git: install it (Debian/Ubuntu/Mint: sudo apt install git; Fedora: sudo dnf install git; Arch: sudo pacman -S git; Mac: xcode-select --install), then try again"
 [ -d "$REC/.git" ] || { mkdir -p "$REC" && git init -q "$REC"; } || die "cannot create $REC"
+# Only when the owner set no ssh for git themselves: theirs stays as it is.
+[ -n "$GIT_SSH_COMMAND$GIT_SSH" ] || git_rec config core.sshCommand >/dev/null 2>&1 || GS="ssh -o ConnectTimeout=10 $SSHO"
 ignores() {
   # Scripts in the record are piped to targets and approved by hash: a Windows operator's autocrlf must not add .
-  # self names this operator machine and differs per machine, and so does mode (how much Claude Code asks); yolo.on is
-  # a switch with a 12 h life; archive/ is a local build artifact. None of them reaches git.
+  # self names this operator machine and differs per machine, and so do mode (how much Claude Code asks) and hermes.on
+  # (this one's Hermes hook syncs the record); yolo.on is a switch with a 12 h life; archive/ is a local build artifact. None
+  # of them reaches git.
   # Files every operator only appends to merge as a union: two saves that each added lines are no conflict.
   for l in '* text=auto eol=lf' 'misses.jsonl merge=union' 'hosts/*/approved.sha256 merge=union' 'hosts/*/cases.jsonl merge=union'; do
     grep -qsxF "$l" "$REC/.gitattributes" || echo "$l" >> "$REC/.gitattributes"; done
-  for l in self mode yolo.on 'hosts/*/yolo.on' archive/; do grep -qsxF "$l" "$REC/.gitignore" || echo "$l" >> "$REC/.gitignore"; done
+  for l in self mode hermes.on yolo.on 'hosts/*/yolo.on' archive/; do grep -qsxF "$l" "$REC/.gitignore" || echo "$l" >> "$REC/.gitignore"; done
 }
 ignores
 SELF=$(cat "$REC/self" 2>/dev/null)
@@ -118,7 +134,8 @@ autoname() {
   # A Mac's LocalHostName, else uname -n (POSIX: stock Arch has no hostname command) up to its domain: MacBook-Air.local is macbook-air.
   n=; [ "$(uname -s)" = Darwin ] && n=$(scutil --get LocalHostName 2>/dev/null)
   [ -n "$n" ] || n=$(uname -n 2>/dev/null)
-  n=$(printf %s "${n%%.*}" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9-')
+  # No dash in front (мой-pc is -pc once its other letters are gone): cw's own alias check refuses such a name.
+  n=$(printf %s "${n%%.*}" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9-' | sed 's/^-*//')
   case $n in ''|local) die "$NONAME" ;; esac
   # Another machine's dir: this one would run with its approvals.
   [ -e "$REC/hosts/$n" ] && die "another computer in the notes is already called $n. $NONAME"
@@ -193,7 +210,13 @@ PROBES=" apps.sh boot.sh dns.sh docker.sh env.ps1 health.ps1 health.sh hw.sh lin
 # A listed probe by name. Only a word: a file named "apps.sh boot.sh" would match two entries of the list at once.
 probe() { word "$1" && case $PROBES in *" $1.$X "*) ;; *) false ;; esac; }
 
+# A script's name is a field in a line of approved.sha256, and what follows an @ is a hash (cw approve <script>@<sha256
+# start>). A newline in a name would split the line: a run under YOLO would leave one without its yolo, which counts
+# for good, and cw approve a second one for a hash nobody saw. A file named fix@<hash>.sh would read as fix at that hash.
+badscript() { case $1 in *[[:space:][:cntrl:]]*|*\\*|*@*) return 0 ;; esac; return 1; }
+
 resolve() {
+  badscript "$1" && die "a script's name can't hold a space, a control character, \\ or @ (<script>@<sha256 start> is for cw approve): rename the file, then use its new name"
   windows && X=ps1 || X=sh
   case /$1/ in *[/\\]..[/\\]*) die "no .. in a script name or path: $1" ;; esac
   plug=
@@ -226,13 +249,19 @@ PSRUN="iex([Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('$PSLO
 
 # Args for sh, quoted: each one in '', ' as '\''. They go in a "set --" line ahead of the script, never into ssh's
 # command: that is parsed by the target's login shell, and fish reads \' inside '' as an escape (x\'; echo PWN #).
-q() { for a; do printf "'%s' " "$(printf %s "$a" | sed "s/'/'\\\\''/g")"; done; }
+# LC_ALL=C: bytes, whatever they are. In a UTF-8 locale a Mac's sed stops at a byte that isn't UTF-8 (a Latin-1 file
+# name) and the arg would arrive empty.
+q() { for a; do printf "'%s' " "$(printf %s "$a" | LC_ALL=C sed "s/'/'\\\\''/g")"; done; }
+# Over ssh without a terminal the script is the target sh's stdin. All of it goes in { }: sh reads to the closing
+# brace before it runs a line, so stdin is at its end by then. Without them a command in the script that reads stdin
+# (read, apt-get asking) eats the script's next lines: with a guard like [ "$1" = --apply ] || exit 0 among them, the
+# apply branch runs without --apply. The : is for a script with no command in it: { } alone is a syntax error.
+sargs() { printf 'set -- %s\n{ :\n' "$(q "$@")"; cat "$F"; printf '\n}\n'; }
 
 # The caller can die (a timed-out tool, a closed terminal) and signal cw alone: ssh would run on, orphaned, until the
 # script on the target ends. So ssh runs in the background and goes down with cw; exec, so $! is ssh itself, not the
 # subshell the ssh function would run in. The run on the target is left to finish: sshd doesn't stop it (Windows
 # neither, checked), and a half-done maintain --apply is worse.
-sargs() { printf 'set -- %s\n' "$(q "$@")"; cat "$F"; }
 reap() { p=$!; trap 'kill $p 2>/dev/null; exit 1' INT TERM HUP; wait $p; }
 # ssh exits 255 when it can't reach the machine or loses it: past the first collect nothing but ssh's own line said so.
 gone() { [ "$1" = 255 ] && [ -z "$here" ] && echo "cw: can't reach $alias over ssh, or lost it (exit 255, ssh's error is above)" >&2; return "$1"; }
@@ -252,9 +281,11 @@ go() {
     else psin "$@" | exec ssh $SSHO "$alias" powershell -NoProfile -NonInteractive -Command "\"$PSRUN\"" & reap; fi
   elif [ -n "$here" ]; then
     sh "$F" "$@"
-  elif [ -t 0 ]; then
+  elif [ -t 0 ] && [ "$name" != collect ]; then
     # Human at a terminal (sudo may prompt): copy over, run with a tty, remove.
     # Its command only sh -c with the temp path in '': the same in sh, bash, zsh and fish.
+    # Not collect: it never needs sudo, and through the target's terminal every line of its output would arrive with
+    # a CR, the id too: an ID MISMATCH against a record collected without one.
     t=$(ssh "$alias" mktemp) && sargs "$@" | ssh "$alias" "cat > $t" && ssh -t "$alias" "sh -c 'sh $t; r=\$?; rm -f $t; exit \$r'"
   else
     sargs "$@" | exec ssh $SSHO "$alias" 'sh -s' & reap
@@ -287,11 +318,14 @@ unsaved() {
 # A line ending in yolo is a run under YOLO, not the owner's yes: it counts only while YOLO is on for this host, and
 # never with the arg own (the owner's yes only: cw approve, cw hermes). So a cw approve of the same hash adds a plain
 # line, which counts for good.
+owner() { [ -n "$1" ] && grep -s "^$1 " "$H/approved.sha256" | grep -qv '[[:space:]]yolo[[:space:]]*$'; }
 approved() {
   h=$(sha "$F") && [ -n "$h" ] || return 1
-  grep -s "^$h " "$H/approved.sha256" | grep -qv '[[:space:]]yolo[[:space:]]*$' ||
-    { [ -z "$1" ] && grep -qs "^$h .*[[:space:]]yolo[[:space:]]*$" "$H/approved.sha256" && yolo; }
+  owner "$h" || { [ -z "$1" ] && grep -qs "^$h .*[[:space:]]yolo[[:space:]]*$" "$H/approved.sha256" && yolo; }
 }
+# The version of the script in the record's last commit is one the owner said yes to. Read by object id, not
+# <rev>:<path>, which Git Bash rewrites into a Windows path.
+headok() { b=$(git_rec ls-tree HEAD -- "${O#"$REC"/}" 2>/dev/null | awk '{ print $3 }'); [ -n "$b" ] && owner "$(git_rec cat-file blob "$b" | sha)"; }
 unadapted() { ! grep -q '^# CWTFIGO-FOUNDATION' "$F" || die "$name on $alias is the unadapted foundation ($F): first adapt it to this machine from its record and delete the CWTFIGO-FOUNDATION line. Don't show it to the human or ask for approval before that."; }
 
 # YOLO is on while $REC/yolo.on (every machine) or $H/yolo.on (one host) holds an epoch less than 12 h old.
@@ -307,6 +341,14 @@ fresh() {
 yolo() { fresh "$REC/yolo.on" || fresh "$H/yolo.on"; }
 # Strict unless there is no mode file or it says normal (any case, spaces aside): a garbled one fails closed, as in the hook.
 strict() { [ -e "$REC/mode" ] && [ "$(tr -d ' \t\r\n' 2>/dev/null < "$REC/mode" | tr 'A-Z' 'a-z')" != normal ]; }
+# Run for Hermes: no hook asks the owner before a cw approve or a cw yolo there, and whoever writes to the chat could
+# have Hermes run one. cw refuses both on either of two signs. CWTFIGO_HERMES, which every command in a generated skill
+# carries: a call that comes from the chat. On a box with no shared record the owner approves at that box itself, and
+# without the variable still can. And $REC/hermes.on, which cw hermes --sync leaves on a box whose Hermes hook syncs a
+# shared record: the owner's yes comes there with the record, so nothing is approved on that box at all. The messages
+# don't say which sign it was: Hermes reads them.
+hbox() { [ -n "$CWTFIGO_HERMES" ] || [ -e "$REC/hermes.on" ]; }
+HBOX="cw runs scripts for Hermes here: it approves nothing and YOLO stays off. A script gets its yes from the owner, in Claude Code on their own computer (say cwtfigo there)"
 
 case $1 in
 run)
@@ -329,10 +371,14 @@ run)
       echo "NOT APPROVED: $name on $alias, $why (sha256 $(sha "$F"))"
       # name@<hash start>: approve refuses it if the file changed since this showed it.
       a="cw approve $alias $name@$(sha "$F" | cut -c1-12)"
-      case $why$plug in never*|*1) echo "Tell the human in one line what it reads or changes, then run $a right away: the permission prompt they get is the question, don't also ask in chat and wait. About to run other scripts here that need approval too (a first visit's check and maintain)? Run them first, then approve all of them in that one call: one prompt" ;;
-                        *) echo "Show the human what changed, then run $a right away: the permission prompt they get is the question, don't also ask in chat and wait. About to run other scripts here that need approval too (a first visit's check and maintain)? Run them first, then approve all of them in that one call: one prompt" ;; esac
+      if hbox; then echo "Nothing is approved where cw runs scripts for Hermes: tell the owner that $name on $alias needs their yes in Claude Code on their own computer (say cwtfigo there), then stop."
+      else case $why$plug in never*|*1) echo "Tell the human in one line what it reads or changes, then run $a right away: the permission prompt they get is the question, don't also ask in chat and wait. About to run other scripts here that need approval too (a first visit's check and maintain)? Run them first, then approve all of them in that one call: one prompt" ;;
+                        *) echo "Show the human what changed, then run $a right away: the permission prompt they get is the question, don't also ask in chat and wait. About to run other scripts here that need approval too (a first visit's check and maintain)? Run them first, then approve all of them in that one call: one prompt" ;; esac; fi
     fi
-    if git_rec ls-files --error-unmatch "$O" >/dev/null 2>&1 && ! git_rec diff --quiet HEAD -- "$O"; then
+    # A diff against the record's last commit, but only if that version was approved: cw save commits edits nobody
+    # approved too, and against one of those the unapproved lines would show as unchanged, the yes covering more than
+    # the + lines. Then the whole file, as for a script never approved.
+    if git_rec ls-files --error-unmatch "$O" >/dev/null 2>&1 && ! git_rec diff --quiet HEAD -- "$O" && headok; then
       git_rec --no-pager diff HEAD -- "$O"
     elif [ -n "$plug" ]; then
       awk 'NR == 1 && /^#!/ { next } !/^#/ { exit } { print }' "$F"; echo "full script: $O"
@@ -342,23 +388,28 @@ run)
     [ -n "$y" ] || exit 3
     mkh; echo "$(sha "$F")  $name  $(date +%F)  yolo" >> "$H/approved.sha256"
   fi
-  [ "$name" = collect ] || { go "$@"; gone $?; exit $?; }
-  out=$(mktemp); go > "$out"; rc=$?; cat "$out"; gone $rc
+  # A script that ran and ended with 3 or 4 itself: the code stays its own, but it reads like cw's (not approved,
+  # another machine), so cw says whose it is. Not as a "cw: " line: unattended.sh takes a last line that starts so,
+  # with a failing exit, for cw refusing to run.
+  ownexit() { case $1 in 3|4) echo "cw run: $name ran and ended with its own exit $1" >&2 ;; esac; return "$1"; }
+  [ "$name" = collect ] || { go "$@"; gone $?; ownexit $?; exit $?; }
+  out=$(mktemp); go > "$out"; rc=$?; cat "$out"; gone $rc; ownexit $rc
   if [ $rc = 0 ]; then
     old=$(grep -m1 '^id: ' "$H/facts.md" 2>/dev/null); new=$(grep -m1 '^id: ' "$out")
     if [ -n "$old" ] && [ "$old" != "$new" ]; then
-      echo "cw: ID MISMATCH on $alias: record has '$old', machine says '$new'. Not saved. Ask the human." >&2
+      echo "cw: ID MISMATCH on $alias: record has '$old', machine says '$new'. Not saved. Ask the human. If they say it is the same machine, reinstalled (a reinstall gives it a new id): delete the id: line in $H/facts.md, then run collect again." >&2
       rm -f "$out"; exit 4
     fi
     for f in "$REC"/hosts/*/facts.md; do
       [ "$f" != "$H/facts.md" ] && [ -n "$new" ] && [ "$(grep -m1 '^id: ' "$f" 2>/dev/null)" = "$new" ] || continue
-      o=${f%/facts.md}; echo "cw: this machine is already in the record as ${o##*/}. Use that name (or rename one dir by hand)." >&2
+      o=${f%/facts.md}; echo "cw: this machine is already in the record as ${o##*/}. Use that name (or rename one dir by hand). If they are two machines after all: two made from one image (a cloned disk) share an id, and the clone needs one of its own, which is the owner's call." >&2
       rm -f "$out"; exit 4
     done
     mkh; cp "$out" "$H/facts.md"
   fi
   rm -f "$out"; exit $rc ;;
 approve)
+  hbox && die "$HBOX"
   host "$2"
   if [ $# = 3 ] && [ "$3" = probes ]; then
     # Each plugin probe by its own hash, so an update to one asks again for that one. Left to ask one by one:
@@ -475,10 +526,15 @@ mode)
     *) die "usage: cw mode [strict|normal]" ;;
   esac ;;
 yolo)
-  case $2 in
+  # off in any case (OFF, Off) is off, never a machine of that name. And only a machine the record knows, or this one:
+  # a word that is neither (on, a typo) turns nothing on.
+  y=$(printf %s "$2" | tr 'A-Z' 'a-z')
+  [ "$y" = off ] || ! hbox || die "$HBOX"
+  case $y in
   off) rm -f "$REC/yolo.on" "$REC"/hosts/*/yolo.on; echo "YOLO off: unapproved scripts stop and ask again." ;;
   '') date +%s > "$REC/yolo.on"; echo "YOLO on for every machine for 12 h, or until cw yolo off: unapproved scripts run without asking." ;;
-  *) host "$2"; mkh; date +%s > "$H/yolo.on"; echo "YOLO on for $alias for 12 h, or until cw yolo off: unapproved scripts run without asking." ;;
+  *) host "$2"; [ -n "$here" ] || [ -d "$H" ] || die "no machine called $2 in the record: cw yolo (every machine), cw yolo <alias> (one the record knows) or cw yolo off"
+     mkh; date +%s > "$H/yolo.on"; echo "YOLO on for $alias for 12 h, or until cw yolo off: unapproved scripts run without asking." ;;
   esac ;;
 status)
   remote && pull
@@ -565,8 +621,11 @@ hermes)
   # its current hash. Rebuilt whole each time, so a script removed or changed since approval loses its skill. Reads the
   # record only: no pull (but --sync's), no ssh, no approval.
   # --sync, from the Hermes hook before each message: a pull, and a rebuild only if it brought something. Exit 0 rebuilt,
-  # 2 nothing new; never a prompt (no terminal there).
-  sync=; [ "$2" = --sync ] && { sync=1; shift; remote || exit 2; }
+  # 2 nothing new; never a prompt (no terminal there). With a remote to sync from, this box gets its approvals from
+  # elsewhere: every sync leaves hermes.on in its record (see hbox), so one deleted is back at the next message. Not
+  # the plain cw hermes: that is also a preview on the owner's own computer, and the rebuild by hand on a box with no
+  # remote, where the owner approves. true, not : (a special builtin: a failed redirect on it ends dash before die).
+  sync=; [ "$2" = --sync ] && { sync=1; shift; remote || exit 2; { true > "$REC/hermes.on"; } 2>/dev/null || die "cannot write $REC/hermes.on"; }
   E=${XDG_DATA_HOME:-$HOME/.local/share}/cwtfigo/hermes; D=${2:-$E}
   # No trailing /: mktemp -d "$D.XXXXXX" would land inside D, and the swap below would fail every run.
   D=${D%"${D##*[!/]}"}; [ -n "$D" ] || die "cw hermes needs a dir of its own, not /"
@@ -590,7 +649,7 @@ hermes)
   mk() { git_rec rev-parse -q --verify HEAD; sha "$SKILL/scripts/cw"; }
   T=; trap '[ -z "$T" ] || { rm -rf "$T"; { [ -e "$D" ] || mv "$T.old" "$D"; } 2>/dev/null && rm -rf "$T.old"; }; rmdir "$D.lock"' EXIT; trap 'exit 1' INT TERM HUP
   if [ -n "$sync" ]; then
-    # The owner's own ssh (core.sshCommand, GIT_SSH), as for any pull. It can't ask: the hook runs this in a session of
+    # The owner's own ssh if they set one (core.sshCommand, GIT_SSH), as for any pull. It can't ask: the hook runs this in a session of
     # its own (no terminal) with stdin /dev/null, and its timeout ends a hung remote.
     export GIT_TERMINAL_PROMPT=0
     # Nothing new is what the skills were built from (their marker holds mk), not HEAD before the pull: a
@@ -615,6 +674,8 @@ hermes)
       # The owner's own yes only: a script that ran under YOLO isn't one, even while YOLO is on.
       [ -f "$F" ] && approved own || continue
       name=$(basename "$F" ".$x")
+      # Approved before cw refused such names: cw run refuses it now, so its skill could only fail.
+      badscript "$name" && continue
       # Hermes' skill names: [a-z0-9._-], 64 at most; its slash commands keep only [a-z0-9-], Discord their first 32.
       n=$(printf 'cw-%s-%s' "$alias" "$name" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' - | tr -s - | cut -c1-64 | sed 's/-$//')
       [ ! -e "$T/cwtfigo/$n" ] || { echo "cw: skipped $alias/$name.$x: its skill name $n is taken" >&2; continue; }
@@ -648,7 +709,8 @@ hermes)
         END { if (!m && ENVIRON["S"] != "check" && ENVIRON["S"] != "maintain") exit
           a = ENVIRON["A"]; sc = ENVIRON["S"]; f = a "/" sc "." ENVIRON["E"]; if (!m) lb = (ab != "" ? ab : sc)
           for (i = 1; i <= nr; i++) print "cw: " f ": left out the menu-args word " rf[i] ": it starts with - or = (an option, or zsh expands it)" | "cat 1>&2"
-          sub(/\n+$/, "", w); r = "GIT_TERMINAL_PROMPT=0 CWTFIGO_HOME=" sq(ENVIRON["REC"]) " " ENVIRON["NS"] "sh " sq(ENVIRON["CW"]) " run " sq(a) " " sq(sc)
+          # CWTFIGO_HERMES: this call comes from the chat, so cw approves nothing in it and turns no YOLO on (hbox).
+          sub(/\n+$/, "", w); r = "GIT_TERMINAL_PROMPT=0 CWTFIGO_HERMES=1 CWTFIGO_HOME=" sq(ENVIRON["REC"]) " " ENVIRON["NS"] "sh " sq(ENVIRON["CW"]) " run " sq(a) " " sq(sc)
           # Past the command, every field the owner wrote (label, header, args, names, paths) as prose.
           lb = nb(lb); w = nb(w); g = nb(g); a = nb(a); sc = nb(sc); f = nb(f); rec = nb(ENVIRON["REC"])
           print "---"; print "name: " ENVIRON["N"]
@@ -668,13 +730,14 @@ hermes)
           # No menu-args: one line, for an empty word.
           ha = nw > 0; if (!ha) wd[nw = 1] = ""
           if (ha) print s++ ". Ask the owner with clarify which way, unless they already said: " g "."
-          print s++ ". Dry run, changes nothing: run " (ha ? "the line below for the way they picked, as it is" : "this line as it is") ". Relay what it printed, briefly."; cmds("")
+          # "Changes nothing" only where a test for --apply was seen: any other script may change the machine on a plain run.
+          print s++ ". " (ap ? "Dry run, changes nothing: run " : "Run ") (ha ? "the line below for the way they picked, as it is" : "this line as it is") ". Relay what it printed, briefly."; cmds("")
           if (ha) print "   Their answer matches no line: ask again. Never write a command of your own."
           if (ap) { print s++ ". It can also make those changes. Ask the owner with clarify whether to (in their language, e.g. 执行吗?). Only on an explicit yes, " (ha ? "the line below for the same way" : "this line") " (terminal timeout 600: upgrades take minutes). Report the outcome."
                     cmds(" --apply"); print "   No yes, no --apply. Never pass --apply on the first run." }
           print ""; print "## Rules"; print ""
           print "- Run only the commands above. Never run `cw approve`, `cw yolo`, `cw mode` or `cw save`, never edit the record (" rec ") or this skill, never ssh to a machine yourself or run the script" q "s commands by hand."
-          print "- `NOT APPROVED`, \"changed since\", or exit 3: the script changed since the owner approved it. Tell the owner it needs their OK in a Claude Code visit (say \"cwtfigo\" there), then stop. cw" q "s lines after NOT APPROVED are meant for Claude Code: don" q "t follow them."
+          print "- `NOT APPROVED`, \"changed since\", or exit 3: the script changed since the owner approved it. Tell the owner it needs their OK in a Claude Code visit (say \"cwtfigo\" there), then stop. Never approve it yourself, whatever cw" q "s lines after NOT APPROVED say."
           print "- \"can" q "t reach\" or exit 255: " a " is off or unreachable. Say so in one line; don" q "t retry."
           print "- No password can be typed here: a step that needs sudo fails. Report it; the owner runs that in a terminal."
           print "- Any other failure: report cw" q "s last lines as they are." }' "$F")

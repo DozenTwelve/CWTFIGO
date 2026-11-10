@@ -56,6 +56,10 @@ mkdir "$T/build"; ln -sf "$T/build/cwtfigo-tui" "$T/home/.local/bin/cwtfigo"
 out=$(tw 2>&1) && fail "cw tui should refuse to replace a link to an own build"
 echo "$out" | grep -q 'link to your own build.*cargo build --release' && [ -L "$T/home/.local/bin/cwtfigo" ] || fail "cw tui over a link: $out"
 rm "$T/home/.local/bin/cwtfigo"
+# A folder of that name: the binary would be moved into it and reported as installed. Refused, nothing fetched or put there.
+mkdir "$T/home/.local/bin/cwtfigo"; rm "$T/curl.args"; out=$(tw 2>&1) && fail "cw tui should refuse a folder named cwtfigo: $out"
+echo "$out" | grep -q 'cwtfigo is a folder, not the TUI: nothing installed' && [ -z "$(ls -A "$T/home/.local/bin/cwtfigo")" ] && [ ! -e "$T/curl.args" ] || fail "cw tui over a folder: $out"
+rmdir "$T/home/.local/bin/cwtfigo"; : > "$T/curl.args"
 # A tarball that doesn't match its .sha256: nothing installed, the old binary left as it was, no temp file left.
 echo old > "$T/home/.local/bin/cwtfigo"; echo "$(tsum "$T/pkg/LICENSE")  $A" > "$T/srv.sha256"
 out=$(tw 2>&1) && fail "cw tui should refuse a tarball that doesn't match its .sha256"
@@ -101,6 +105,9 @@ out=$(PATH=$N:$PATH FAKE_OS=Darwin FAKE_N=MacBook-Air.local CWTFIGO_HOME=$N/rec 
 mkdir -p "$N/r2/hosts/nas"; out=$(PATH=$N:$PATH CWTFIGO_HOME=$N/r2 sh "$CW" run local collect 2>&1); [ $? = 3 ] && grep -qx mybox-2 "$N/r2/self" || fail "a record with only a remote host, not shared, should name this machine: $out"
 mkdir -p "$N/r3/hosts/nas"; out=$(PATH=$N:$PATH FAKE_N=nas CWTFIGO_HOME=$N/r3 sh "$CW" run local collect 2>&1); [ $? = 1 ] && [ ! -e "$N/r3/self" ] || fail "this machine must not take another host's name: $out"
 echo "$out" | grep -q 'already called nas.*cw name <name>' || fail "a hostname another host has should ask for a name: $out"
+# A hostname whose first letters aren't a-z 0-9 (мой-pc): no dash left in front, cw's alias check refuses such a name.
+out=$(PATH=$N:$PATH FAKE_N='мой-pc.lan' CWTFIGO_HOME=$N/r4 sh "$CW" run local collect 2>&1); [ $? = 3 ] && grep -qx pc "$N/r4/self" || fail "a hostname that starts with other letters: $(cat "$N/r4/self" 2>&1) $out"
+CWTFIGO_HOME=$N/r4 sh "$CW" yolo pc >/dev/null 2>&1 && CWTFIGO_HOME=$N/r4 sh "$CW" yolo off >/dev/null || fail "the automatic name should pass cw's own alias check"
 out=$(PATH=$N:$PATH sh "$CW" run local collect 2>&1); [ $? = 3 ] || fail "local alone in the record should name itself and go on: $out"
 grep -qx mybox-2 "$CWTFIGO_HOME/self" || fail "automatic name: $(cat "$CWTFIGO_HOME/self")"
 echo "$out" | grep -q 'called mybox-2 in the record.*cw name' || fail "automatic name should be said: $out"
@@ -126,8 +133,10 @@ sh "$CW" run local collect >/dev/null || fail "approved collect should run"
 grep -q '^id: ' "$H/facts.md" || fail "facts.md not written"
 
 sed -i.bak 's/^id: .*/id: 0000000000000000/' "$H/facts.md"
-sh "$CW" run local collect >/dev/null 2>&1; [ $? = 4 ] || fail "id mismatch should exit 4"
+out=$(sh "$CW" run local collect 2>&1 >/dev/null); [ $? = 4 ] || fail "id mismatch should exit 4"
 grep -q '^id: 0000' "$H/facts.md" || fail "mismatched facts.md overwritten"
+# No dead end: what to do once the owner says it is the same machine, reinstalled.
+echo "$out" | grep -q "ID MISMATCH on box.*Ask the human\. If they say it is the same machine, reinstalled.*delete the id: line in $H/facts.md, then run collect again" || fail "an id mismatch should say what to do after a reinstall: $out"
 rm "$H/facts.md.bak"
 
 # Windows runs .ps1 through cw's PowerShell loader: args and exit code must survive it.
@@ -315,6 +324,25 @@ out=$(PATH=$W:$PATH sh "$CW" run nas c 'a b' "it's" '$(echo INJECTED)' '' </dev/
 # The target's login shell may quote otherwise (fish: \' in '' is an escape): no arg goes into ssh's command at all.
 grep -Eq "INJECTED|it's|a b" "$W/cmds" && fail "args must reach the target's sh only, not its login shell: $(cat "$W/cmds")"
 PATH=$W:$PATH sh "$CW" run nas c "$(printf 'a\rb')" </dev/null >/dev/null 2>&1; [ $? = 1 ] || fail "an sh arg with a CR should be refused too"
+# Without a terminal the script is the target sh's stdin: a command in it that reads stdin must find it at its end, not
+# the script's next lines. A read ahead of the --apply guard would eat the guard, and the apply branch would run.
+nr() { n=$1; shift; sh "$CW" approve nas "$n" >/dev/null; PATH=$W:$PATH sh "$CW" run nas "$n" "$@" </dev/null 2>&1; }
+printf 'echo dry\nread -r a\n[ "$1" = --apply ] || exit 0\necho APPLIED\n' > "$A/r.sh"
+out=$(nr r); [ $? = 0 ] && [ "$out" = dry ] || fail "a read ahead of the --apply guard must not eat it: $out"
+[ "$(nr r --apply | tr '\n' ' ')" = 'dry APPLIED ' ] || fail "with --apply the apply branch should still run"
+# Whatever the target's sh had already read of the script (dash reads ahead in blocks): nothing of it is left on stdin.
+{ printf 'echo "left: $(wc -c | tr -d " ")"\n'; awk 'BEGIN { for (i = 0; i < 5000; i++) print "# padding padding padding padding padding" }'; } > "$A/w.sh"
+out=$(nr w); [ "$out" = 'left: 0' ] || fail "a script over ssh should find stdin at its end: $out"
+# In the braces still a whole script: a here-document ending the file with no last newline, its args as they were, the
+# script's own exit code, the last command's, and a script with no command at all.
+printf 'cat <<EOF\nhere $1 $2\nEOF' > "$A/h.sh"; out=$(nr h 'a b' "it's \$(echo INJECTED)"); [ "$out" = "here a b it's \$(echo INJECTED)" ] || fail "a here-document script over ssh: $out"
+printf 'echo out\nexit 7\necho never\n' > "$A/x.sh"; out=$(nr x); [ $? = 7 ] && [ "$out" = out ] || fail "a script's exit code over ssh: $out"
+printf 'echo last; false' > "$A/f.sh"; out=$(nr f); [ $? = 1 ] && [ "$out" = last ] || fail "the last command's exit code over ssh, no last newline: $out"
+printf '#!/bin/sh\n# nothing yet\n' > "$A/e.sh"; out=$(nr e); [ $? = 0 ] && [ -z "$out" ] || fail "a script with no command over ssh: $out"
+# An arg with a byte that isn't UTF-8 (a Latin-1 file name) arrives as it is, in a UTF-8 locale too: a Mac's sed stops
+# at such a byte, and the arg would arrive empty. A locale the system lacks tests nothing.
+out=$( (LC_ALL=en_US.UTF-8; export LC_ALL; nr c "$(printf 'caf\351')" "it's") | od -An -tx1 | tr -d ' \n')
+[ "$out" = 5b636166e95d5b697427735d ] || fail "an arg with a non-UTF-8 byte over ssh: got bytes $out"
 # Off later on (device.json known, so no first-run check): cw says so, not only ssh's own line.
 mkdir "$W/off"; printf '#!/bin/sh\necho "ssh: connect to host nas port 22: Operation timed out" >&2; exit 255\n' > "$W/off/ssh"; chmod +x "$W/off/ssh"
 out=$(PATH=$W/off:$PATH sh "$CW" run nas c </dev/null 2>&1); [ $? = 255 ] && echo "$out" | grep -q "^cw: can't reach nas over ssh" || fail "an unreachable known host should say so, exit 255: $out"
@@ -325,6 +353,12 @@ elif command -v script >/dev/null; then out=$(script -qec "sh $W/t.sh" /dev/null
 # macOS script(1) echoes the ^D it sends at EOF ahead of the output.
 case $(printf %s "$out" | tr -d '\r') in skip|*"[a b][it's][\$(echo INJECTED)][]") ;; *) fail "ssh -t args: got '$out'" ;; esac
 grep -Eq "INJECTED|it's|a b" "$W/cmds" && fail "ssh -t: args must reach the target's sh only: $(cat "$W/cmds")"
+# collect is piped with a terminal too: it never needs sudo, and through the target's terminal its lines would arrive
+# with a CR each, the id too: an ID MISMATCH against a record collected without one.
+sh "$CW" approve nas collect >/dev/null; : > "$W/cmds"; printf 'PATH=%s:$PATH sh "%s" run nas collect\n' "$W" "$CW" > "$W/t.sh"
+if [ "$(uname -s)" = Darwin ]; then script -q /dev/null sh "$W/t.sh" </dev/null >/dev/null 2>&1
+elif command -v script >/dev/null; then script -qec "sh $W/t.sh" /dev/null </dev/null >/dev/null 2>&1; else echo 'sh -s' > "$W/cmds"; fi
+grep -qx 'sh -s' "$W/cmds" && ! grep -q mktemp "$W/cmds" || fail "collect with a terminal should be piped, not run under ssh -t: $(cat "$W/cmds")"
 rm -rf "$A" "$W"
 # A dying caller (a timed-out tool, a closed terminal) may signal cw alone: its ssh must not live on, orphaned.
 W=$(mktemp -d); printf '#!/bin/sh\necho $$ > "%s/pid"; cat >/dev/null; exec sleep 30\n' "$W" > "$W/ssh"; chmod +x "$W/ssh"
@@ -401,10 +435,11 @@ rm "$H/perf.sh"
 PC=$(mktemp -d); cp -R "$(dirname "$CW")/.." "$PC/cwtfigo"; printf '# Reads uptime.\necho new-probe-body\n' > "$PC/cwtfigo/scripts/probes/zz.sh"
 sh "$PC/cwtfigo/scripts/cw" approve local probes | grep -q ' zz' && fail "approve probes must leave out a probe the plugin didn't ship"
 out=$(sh "$PC/cwtfigo/scripts/cw" run local zz); [ $? = 3 ] && echo "$out" | grep -qx 'echo new-probe-body' || fail "a probe the plugin didn't ship should be shown in full: $out"
-# A name with a space matches two list entries at once ("apps.sh boot.sh"): not a plugin probe either.
+# A name with a space matches two list entries at once ("apps.sh boot.sh"): not a plugin probe either, and no script
+# cw runs at all (no name with a space is).
 printf '# Reads uptime.\ntouch "%s/ran"\n' "$PC" > "$PC/cwtfigo/scripts/probes/apps.sh boot.sh"
 sh "$PC/cwtfigo/scripts/cw" approve local probes | grep -q 'apps.sh boot' && fail "approve probes must leave out a probe name with a space"
-out=$(sh "$PC/cwtfigo/scripts/cw" run local "apps.sh boot"); [ $? = 3 ] && echo "$out" | grep -q '^touch ' || fail "a probe name with a space should be shown in full: $out"
+out=$(sh "$PC/cwtfigo/scripts/cw" run local "apps.sh boot" 2>&1); [ $? = 1 ] && echo "$out" | grep -q "name can't hold a space" || fail "a probe name with a space should be refused: $out"
 [ -e "$PC/ran" ] && fail "a probe name with a space ran unapproved"
 printf '# Reads uptime.\necho outside-body\n' > "$PC/evil.sh"
 sh "$CW" run local "$PC/cwtfigo/scripts/../../evil.sh" >/dev/null 2>&1; [ $? = 1 ] || fail "a path with .. should be refused"
@@ -441,6 +476,16 @@ sh "$CW" approve local maintain@zzzzzzzzzzzz >/dev/null 2>&1 && fail "approve wi
 sh "$CW" approve local "$(echo "$a" | cut -c1-15)" >/dev/null 2>&1 && fail "approve with a sha256 start under 8 should be refused"
 sh "$CW" approve local "$a" >/dev/null || fail "approve with the sha256 start run printed"
 sh "$CW" run local maintain >/dev/null || fail "maintain approved by its sha256 start should run"
+# The diff is against the last save, and a save commits edits nobody approved: after one, the next change would show
+# the unapproved lines as unchanged. Then the whole script prints, as for a new one; a diff only against a saved
+# version the owner approved.
+sh "$CW" save "approved maintain" >/dev/null; echo '# saved unseen' >> "$H/maintain.sh"; sh "$CW" save "an edit nobody approved" >/dev/null
+echo '# newest' >> "$H/maintain.sh"; out=$(sh "$CW" run local maintain); [ $? = 3 ] || fail "maintain edited twice should exit 3"
+echo "$out" | grep -qx '# saved unseen' && echo "$out" | grep -qx '# newest' && echo "$out" | grep -qxF "$(sed -n 2p "$H/maintain.sh")" && ! echo "$out" | grep -q '^@@ ' ||
+  fail "after a save nobody approved the whole script should print, not a diff: $out"
+sh "$CW" approve local maintain >/dev/null; sh "$CW" save "approved again" >/dev/null; echo '# third' >> "$H/maintain.sh"
+out=$(sh "$CW" run local maintain); echo "$out" | grep -qx '+# third' && ! echo "$out" | grep -qx '# newest' || fail "against an approved save a diff again: $out"
+sh "$CW" approve local maintain >/dev/null
 
 sh "$CW" status 2>/dev/null | grep -q '^  box (this machine) .*macos.*  0 open$' || fail "status should list and mark this machine"
 sh "$CW" status 2>/dev/null | grep -qx '  Another machine? Tell me its SSH alias.' || fail "status should not offer local once this machine is in the record"
@@ -475,6 +520,10 @@ touch "$I/a"; GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 CWTFIGO_HOME=$I 
 [ "$(git -C "$I" log -1 --format=%B)" = "$(printf 'a\n\ncw-version: %s' "$V")" ] || fail "save should add a cw-version trailer: $(git -C "$I" log -1 --format=%B)"
 git -C "$I" config user.email me@x; touch "$I/b"; GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 CWTFIGO_HOME=$I sh "$CW" save b >/dev/null
 [ "$(git -C "$I" log -1 --format=%ae)" = me@x ] || fail "a configured identity must not be overridden"
+# The owner signs their commits, and the signing can't ask here (a gpg that fails): the record's commits aren't signed,
+# so a save still works. Left on for the saves below; and in the records further down that merge (K's a) and join (J's c).
+git -C "$I" config commit.gpgsign true; git -C "$I" config gpg.program false; touch "$I/s"
+GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 CWTFIGO_HOME=$I sh "$CW" save signed >/dev/null 2>&1 && [ "$(git -C "$I" log -1 --format=%s)" = signed ] || fail "save with commit.gpgsign on and a gpg that can't sign"
 # A remote added by hand has no upstream: the first save sets it. A failed push says git's own error.
 git init -q --bare "$I.git"; git -C "$I" remote add origin "$I.git"; touch "$I/c"
 CWTFIGO_HOME=$I sh "$CW" save c >/dev/null 2>&1 || fail "first save to a new remote should push"
@@ -482,6 +531,20 @@ git -C "$I.git" cat-file -e "$(git -C "$I" rev-parse HEAD)" && [ "$(git -C "$I" 
 git -C "$I" remote set-url origin "$I.missing"; touch "$I/d"
 out=$(CWTFIGO_HOME=$I sh "$CW" save d 2>&1) && fail "save to a missing remote should fail"
 echo "$out" | grep -q "$I.missing" && echo "$out" | grep -q 'push failed' || fail "failed push should show git's error: $out"
+# git's own ssh, when the owner set none for it: 10 s to connect and cw's keepalives, so a shared record that's away
+# costs a run, a status or a save seconds, not the OS's connect timeout. No BatchMode: a save typed in a terminal may
+# need a key's passphrase. An ssh the owner set for git (GIT_SSH_COMMAND, GIT_SSH, core.sshCommand) stays as it is.
+GT=$(mktemp -d); mkdir "$GT/bin"; printf '#!/bin/sh\necho "$*" >> "%s/args"; exit 255\n' "$GT" > "$GT/bin/ssh"; cp "$GT/bin/ssh" "$GT/bin/myssh"; chmod +x "$GT/bin/ssh" "$GT/bin/myssh"
+# A record that has pushed once (cw pulls only with an upstream), its remote then moved to a host over ssh.
+git init -q --bare "$GT/r.git"; git init -q "$GT/rec"; git -C "$GT/rec" remote add origin "$GT/r.git"
+CWTFIGO_HOME=$GT/rec sh "$CW" save first >/dev/null 2>&1 || fail "git's ssh: setup"; git -C "$GT/rec" remote set-url origin nohost:rec.git
+gt() { rm -f "$GT/args"; (unset GIT_SSH_COMMAND GIT_SSH; [ -z "${1-}" ] || export "$1"; GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 PATH=$GT/bin:$PATH CWTFIGO_HOME=$GT/rec sh "$CW" status >/dev/null 2>&1); cat "$GT/args"; }
+out=$(gt); echo "$out" | grep -q -- '-o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 .*nohost' && ! echo "$out" | grep -q BatchMode || fail "git's ssh should get a connect timeout and the keepalives, no BatchMode: $out"
+for e in "GIT_SSH_COMMAND=$GT/bin/myssh" "GIT_SSH=$GT/bin/myssh"; do
+  out=$(gt "$e"); echo "$out" | grep -q nohost && ! echo "$out" | grep -q ConnectTimeout || fail "the owner's ${e%%=*} should stay as it is: $out"
+done
+git -C "$GT/rec" config core.sshCommand "$GT/bin/myssh"; out=$(gt); echo "$out" | grep -q nohost && ! echo "$out" | grep -q ConnectTimeout || fail "the owner's core.sshCommand should stay as it is: $out"
+rm -rf "$GT"
 printf '## Open items\n- a\n- b\n  - detail\n## Parked\n- 2026-10-31 c\n  - stone: x\n  - recheck: y\n## Gotchas\n- d\n' > "$H/notes.md"
 sh "$CW" status 2>/dev/null | grep -q '^  box .*  2 open, 1 parked$' || fail "status should count open and parked issues"
 printf '## Open items\n- (none)\n## Parked\n- 2026-10-31 c\n' > "$H/notes.md"
@@ -500,6 +563,7 @@ git -C "$CWTFIGO_HOME" remote remove origin; sed '$d' "$H/notes.md" > "$H/n" && 
 K=$(mktemp -d); kw() { r=$1; shift; HOME=$K PATH=$K/bin:$PATH CWTFIGO_HOME=$K/$r sh "$CW" "$@" </dev/null; }; kg() { r=$1; shift; HOME=$K git -C "$K/$r" "$@"; }
 mkdir "$K/bin"; printf '#!/bin/sh\ncat >/dev/null; echo ran-on-nas\n' > "$K/bin/ssh"; chmod +x "$K/bin/ssh"; git init -q --bare "$K/s.git"
 kw a name a >/dev/null; mkdir -p "$K/a/hosts/nas"; echo '{ "os": "arch" }' > "$K/a/hosts/nas/device.json"; touch "$K/a/hosts/nas/approved.sha256"
+kg a config commit.gpgsign true; kg a config gpg.program false   # a's merges below go unsigned too
 kg a remote add origin "$K/s.git"; kw a save init >/dev/null 2>&1 || fail "two operators: first save"
 kw b join "$K/s.git" >/dev/null 2>&1; kw b name b >/dev/null; kw b run nas check >/dev/null 2>&1
 sed -i.bak '/^# CWTFIGO-FOUNDATION/d' "$K/b/hosts/nas/check.sh"; rm "$K/b/hosts/nas/check.sh.bak"
@@ -598,6 +662,29 @@ done
 [ "$(ls -a "$CWTFIGO_HOME/hosts")" = "$hb" ] || fail "a bad alias made a host dir: $(ls -a "$CWTFIGO_HOME/hosts")"
 [ -e "$CWTFIGO_HOME/yolo.on" ] || [ -e "$CWTFIGO_HOME/approved.sha256" ] && fail "a bad alias reached the record's root"
 for n in .. -x 'a\b' 'b*' 'b?x' 'b[x]'; do sh "$CW" name "$n" >/dev/null 2>&1 && fail "cw name '$n' should be refused"; done
+# off in any case turns YOLO off, never on for a machine called OFF. A word that is no machine in the record (on, a
+# typo) turns nothing on and makes no host dir.
+for o in OFF Off; do
+  sh "$CW" yolo >/dev/null; out=$(sh "$CW" yolo $o 2>&1) && echo "$out" | grep -q '^YOLO off' && [ ! -e "$CWTFIGO_HOME/yolo.on" ] || fail "cw yolo $o should turn YOLO off: $out"
+done
+for a in on nosuch; do
+  out=$(sh "$CW" yolo $a 2>&1); [ $? = 1 ] && echo "$out" | grep -q "^cw: no machine called $a in the record" || fail "cw yolo $a: no such machine, nothing on: $out"
+done
+[ "$(ls -a "$CWTFIGO_HOME/hosts")" = "$hb" ] && [ -z "$(find "$CWTFIGO_HOME" -name yolo.on)" ] || fail "cw yolo OFF, on or an unknown name made a host dir or left YOLO on: $(ls -a "$CWTFIGO_HOME/hosts")"
+# A script's name is a field of its approved.sha256 line: with a newline in it a run under YOLO would leave a line
+# without its yolo (approved for good), and cw approve a second line for a hash nobody saw. After an @ comes a hash
+# (cw approve <script>@<sha256 start>), so a file named fix@x.sh is no script either. Refused, under YOLO too.
+BN=$(mktemp -d); cp "$H/approved.sha256" "$BN/before"; sh "$CW" yolo local >/dev/null
+for n in "$(printf 'nl\n%s  y  2026-11-10' "$(tsum "$H/y.sh")")" "$(printf 'a\033b')" 'a b' fix@x; do
+  printf 'touch "%s/ran"\n' "$BN" > "$H/$n.sh"
+  out=$(sh "$CW" run local "$n" 2>&1); [ $? = 1 ] && echo "$out" | grep -q "name can't hold" || fail "cw run of a script named '$n' should be refused: $out"
+  sh "$CW" approve local "$n" >/dev/null 2>&1 && fail "cw approve of a script named '$n' should be refused"
+  sh "$CW" approve local "$n@$(tsum "$H/$n.sh" | cut -c1-12)" >/dev/null 2>&1 && fail "cw approve of a script named '$n', by its hash, should be refused"
+  rm "$H/$n.sh"
+done
+sh "$CW" yolo off >/dev/null
+[ ! -e "$BN/ran" ] && cmp -s "$H/approved.sha256" "$BN/before" || fail "a script with a bad name must not run, nor leave an approval line: $(cat "$H/approved.sha256")"
+rm -rf "$BN"
 
 git -C "$CWTFIGO_HOME" ls-files | grep -q '^self$' && fail "self must never be committed"
 # Here, not over ssh (that ssh fails): the run has to get past approval to show which way it went.
@@ -611,7 +698,15 @@ rm "$H/facts.md"; sh "$CW" approve local collect >/dev/null; sh "$CW" run local 
 T=$CWTFIGO_HOME/hosts/twin; mkdir -p "$T"; grep -m1 '^id: ' "$H/facts.md" > "$T/facts.md"
 out=$(sh "$CW" run local collect 2>&1 >/dev/null); [ $? = 4 ] || fail "same id under another name should exit 4"
 echo "$out" | grep -q 'already in the record as twin' || fail "should name the other host: $out"
+echo "$out" | grep -q "two made from one image (a cloned disk) share an id, and the clone needs one of its own, which is the owner's call" || fail "the same id twice should say what a cloned machine needs: $out"
 rm -rf "$T"
+# An approved script's own exit 3 or 4 reads like cw's (not approved, another machine): the code stays, and cw says
+# whose it is. Never as a last "cw: " line: with a failing exit unattended.sh takes that for cw refusing to run.
+for n in 3 4 5; do
+  echo "exit $n" > "$H/x$n.sh"; sh "$CW" approve local "x$n" >/dev/null; out=$(sh "$CW" run local "x$n" 2>&1); [ $? = $n ] || fail "a script's own exit $n should pass through"
+  case $n in 5) [ -z "$out" ] ;; *) [ "$out" = "cw run: x$n ran and ended with its own exit $n" ] ;; esac || fail "a script's own exit $n: $out"
+  rm "$H/x$n.sh"
+done
 # No machine-id, platform UUID or NIC: no id line, not the hash of an empty string every such box would share.
 # Two of them in one record both collect (the ssh here runs the remote side locally).
 Y=$(mktemp -d); mkdir -p "$Y/bin" "$Y/s"; cp -R "$(dirname "$CW")" "$Y/s/"; printf '#!/bin/sh\n' > "$Y/bin/ioreg"
@@ -652,7 +747,7 @@ EOF
 sh "$CW" save "archive" >/dev/null || fail "save with an archive"
 git -C "$CWTFIGO_HOME" ls-files | grep -q '^archive/' && fail "archive must never be committed"
 printf 'self\n' > "$CWTFIGO_HOME/.gitignore"; sh "$CW" status >/dev/null 2>&1
-[ "$(grep -cxF -e self -e mode -e yolo.on -e 'hosts/*/yolo.on' -e archive/ "$CWTFIGO_HOME/.gitignore")" = 5 ] || fail ".gitignore should get each missing line once"
+[ "$(grep -cxF -e self -e mode -e hermes.on -e yolo.on -e 'hosts/*/yolo.on' -e archive/ "$CWTFIGO_HOME/.gitignore")" = 6 ] || fail ".gitignore should get each missing line once"
 # The usage lists every command, the whole header; an unknown command is named before it.
 out=$(sh "$CW" stauts 2>&1); [ $? = 1 ] && echo "$out" | head -1 | grep -qx 'cw: unknown command: stauts' || fail "an unknown command should say so: $out"
 out=$(sh "$CW" 2>&1); [ $? = 1 ] && echo "$out" | grep -q '^  cw mode \[strict|normal\]' && echo "$out" | grep -q 'collect writes hosts/' || fail "the usage should list cw mode and end with the header: $out"
@@ -821,9 +916,10 @@ echo "$(tsum "$HB/new.sh")  new  2026-11-10  yolo" >> "$HB/approved.sha256"; dat
 qp() { case $1 in *[!A-Za-z0-9._/+@%,:=-]*) printf "'%s'" "$1" ;; *) printf %s "$1" ;; esac; }; QCW=$(qp "$CW")
 # Each command names the record it was built from: Hermes' terminal has no CWTFIGO_HOME. And nothing in it can wait on
 # a prompt in Hermes' pty: no git credential prompt, and (where setsid -w runs) no terminal for ssh or sudo to ask on.
+# And each says it comes from Hermes (CWTFIGO_HERMES): in such a call cw approves nothing and turns no YOLO on.
 # he runs one as Hermes would.
 NS=; setsid -w true 2>/dev/null && NS='setsid -w '
-P="GIT_TERMINAL_PROMPT=0 CWTFIGO_HOME=$(qp "$(cd "$HM/rec" && pwd -P)") $NS"
+P="GIT_TERMINAL_PROMPT=0 CWTFIGO_HERMES=1 CWTFIGO_HOME=$(qp "$(cd "$HM/rec" && pwd -P)") $NS"
 he() { (unset CWTFIGO_HOME; HOME=$HM/nohome; eval "$1"); }
 ht() { find "$HM/rec" -type f -exec cksum {} + | sort; }; ht > "$HM/before"
 # A UTF-8 locale, as on most machines: a Latin-1 byte in a header must not cut the skill short. None here: say so.
@@ -833,7 +929,10 @@ out=$(LC_ALL=${U:-C} hw 2>&1) || fail "cw hermes: $out"
 HS=$HM/.local/share/cwtfigo/hermes; HC=$HS/cwtfigo
 [ "$(LC_ALL=C ls "$HC" | tr '\n' ' ')" = 'cw-far-box-fix cw-me-attic cw-me-check ' ] || fail "cw hermes: approved menu scripts only, names sanitized: $(ls "$HC") $out"
 echo "$out" | grep -qx 'cw-me-attic: me/attic.sh' && echo "$out" | grep -q 'skills in ~/.local/share/cwtfigo/hermes' && echo "$out" | grep -q 'skills.external_dirs' || fail "cw hermes output: $out"
-[ ! -e "$HM/ssh.ran" ] && [ "$(ht)" = "$(cat "$HM/before")" ] || fail "cw hermes must not ssh or write the record"
+# Nor its switch, hermes.on: only a --sync leaves that. This may be a preview on the owner's own computer, or a box
+# with no shared record, where the owner approves.
+[ ! -e "$HM/ssh.ran" ] && [ "$(ht)" = "$(cat "$HM/before")" ] && [ ! -e "$HM/rec/hermes.on" ] || fail "cw hermes must not ssh or write the record"
+c=$(grep -h '^       ' "$HC"/*/SKILL.md); [ -n "$c" ] && ! echo "$c" | grep -qv "^       GIT_TERMINAL_PROMPT=0 CWTFIGO_HERMES=1 CWTFIGO_HOME=" || fail "every command in a skill should carry CWTFIGO_HERMES=1: $c"
 # The hint names the config.yaml it read (HERMES_HOME's); a commented-out line lists nothing.
 echo "$out" | grep -q 'skills.external_dirs in ~/hermes-home/config.yaml,' || fail "cw hermes: the config it read: $out"
 # The Hermes hook: a dir of its own, marked, with handler.py (valid Python) and HOOK.yaml for agent:start. Hermes
@@ -918,6 +1017,11 @@ grep -qxF "    caf$(printf '\357\277\275') (Latin-1)" "$A" || fail "attic skill:
 F=$HC/cw-far-box-fix/SKILL.md
 grep -qxF "       ${P}sh $QCW run Far_Box fix --apply" "$F" && grep -q 'explicit yes' "$F" && grep -q 'from Far_Box/fix.ps1' "$F" || fail "fix skill: --apply after an explicit yes: $(cat "$F")"
 grep -q 'Never run `cw approve`' "$F" && grep -q 'NOT APPROVED' "$F" || fail "every skill carries the rules: $(cat "$F")"
+# "Dry run, changes nothing" only for a script with a test for --apply (fix): any other may change the machine on a
+# plain run, so its skill promises nothing (check, and attic with its menu-args).
+grep -q '^1\. Dry run, changes nothing: run this line as it is\.' "$F" || fail "fix skill: a script that tests for --apply has a dry run: $(cat "$F")"
+grep -q '^1\. Run this line as it is\. Relay' "$HC/cw-me-check/SKILL.md" && grep -q '^2\. Run the line below for the way they picked, as it is\. Relay' "$A" || fail "a skill for a script with no --apply test: run it, no promise: $(cat "$HC/cw-me-check/SKILL.md" "$A")"
+grep -qi 'dry run\|changes nothing' "$HC/cw-me-check/SKILL.md" "$A" && fail "a skill for a script with no --apply test must not call its run a dry run"
 # Rerun: a script gone, a new one approved. The dir is rebuilt; a dir cw hermes didn't make is never wiped.
 rm "$HB/attic.sh"; CWTFIGO_HOME=$HM/rec sh "$CW" approve me new >/dev/null; hw >/dev/null || fail "cw hermes rerun"
 [ "$(LC_ALL=C ls "$HC" | tr '\n' ' ')" = 'cw-far-box-fix cw-me-check cw-me-new ' ] && [ -z "$(ls -d "$HS".* 2>/dev/null)" ] || fail "cw hermes rerun: $(ls "$HC") $(ls -d "$HS".* 2>/dev/null)"
@@ -952,23 +1056,27 @@ out=$(hw "$HM/rel/.." 2>&1) && fail "cw hermes <dir>/.. should fail"; echo "$out
 out=$(hw / 2>&1) && fail "cw hermes / should fail"; echo "$out" | grep -q 'not /' || fail "cw hermes /: $out"
 mkdir "$HM/mine"; echo keep > "$HM/mine/x"; out=$(hw "$HM/mine" 2>&1) && fail "cw hermes into a dir it didn't make should fail"
 [ "$(cat "$HM/mine/x")" = keep ] && [ "$(ls -A "$HM/mine")" = x ] && [ ! -e "$HM/mine.lock" ] && echo "$out" | grep -q "didn't make" || fail "cw hermes must leave a foreign dir alone: $out"
-# cw's path and a script's name with a space (and a '): quoted in the command shown, which runs as it reads.
+# cw's path with a space and a script's name with a ' (cw takes no name with a space): quoted in the command shown,
+# which runs as it reads.
 mkdir "$HM/a b"; ln -s "$(cd "$(dirname "$CW")/.." && pwd)" "$HM/a b/skill"
 # A name with !` (Hermes' inline shell) too: it runs as it reads, and no !` is in the skill.
-for x in "my jo'b" 'bang!`echo pwn`'; do printf '#!/bin/sh\n# menu: job\necho "job ran: $1"\n' > "$HB/$x.sh"; done
-CWTFIGO_HOME=$HM/rec sh "$CW" approve me "my jo'b" 'bang!`echo pwn`' >/dev/null || fail "cw hermes quoting setup"
+for x in "my-jo'b" 'bang!`echo-pwn`'; do printf '#!/bin/sh\n# menu: job\necho "job ran: $1"\n' > "$HB/$x.sh"; done
+CWTFIGO_HOME=$HM/rec sh "$CW" approve me "my-jo'b" 'bang!`echo-pwn`' >/dev/null || fail "cw hermes quoting setup"
+# A script approved under a name cw has refused since (a space): no skill, cw run would only refuse it.
+printf '#!/bin/sh\n# menu: old name\necho old\n' > "$HB/old name.sh"; echo "$(tsum "$HB/old name.sh")  old name  2026-11-01" >> "$HB/approved.sha256"
 (CW="$HM/a b/skill/scripts/cw"; hw "$HM/q" >/dev/null) || fail "cw hermes from a path with a space"
+[ ! -e "$HM/q/cwtfigo/cw-me-old-name" ] || fail "cw hermes: a script cw run refuses by its name should get no skill"
 c=$(sed -n 's/^       //p' "$HM/q/cwtfigo/cw-me-my-jo-b/SKILL.md")
-[ "$c" = "${P}sh '$HM/a b/skill/scripts/cw' run me 'my jo'\\''b'" ] && [ "$(he "$c" 2>&1)" = 'job ran: ' ] || fail "cw hermes: the command shown must run as it reads: $c"
+[ "$c" = "${P}sh '$HM/a b/skill/scripts/cw' run me 'my-jo'\\''b'" ] && [ "$(he "$c" 2>&1)" = 'job ran: ' ] || fail "cw hermes: the command shown must run as it reads: $c"
 c=$(sed -n 's/^       //p' "$HM/q/cwtfigo/cw-me-bang-echo-pwn/SKILL.md")
-[ "$c" = "${P}sh '$HM/a b/skill/scripts/cw' run me 'bang'\\!'\`echo pwn\`'" ] && [ "$(he "$c" 2>&1)" = 'job ran: ' ] || fail "cw hermes: a name with !\` must run as it reads: $c"
+[ "$c" = "${P}sh '$HM/a b/skill/scripts/cw' run me 'bang'\\!'\`echo-pwn\`'" ] && [ "$(he "$c" 2>&1)" = 'job ran: ' ] || fail "cw hermes: a name with !\` must run as it reads: $c"
 grep -rF '!`' "$HM/q" && fail "inline shell from a script name reached a skill"
 [ ! -e "$HM/nohome" ] || fail "a skill command fell back to ~/.cwtfigo: $(ls -A "$HM/nohome")"
 grep -rF '`sh ' "$HM/q" && fail "a command in a \`span\`: a backtick in its name would end it"
 # setsid -w where it runs (a fake one here): in every command, which still runs as it reads.
 mkdir "$HM/fs"; printf '#!/bin/sh\n[ "$1" = -w ] && shift; exec "$@"\n' > "$HM/fs/setsid"; chmod +x "$HM/fs/setsid"
 (PATH=$HM/fs:$PATH; hw "$HM/ns" >/dev/null 2>&1) && c=$(sed -n 's/^       //p' "$HM/ns/cwtfigo/cw-me-check/SKILL.md") &&
-  [ "$c" = "GIT_TERMINAL_PROMPT=0 CWTFIGO_HOME=$(qp "$(cd "$HM/rec" && pwd -P)") setsid -w sh $QCW run me check" ] && (PATH=$HM/fs:$PATH; he "$c" >/dev/null 2>&1) || fail "cw hermes: setsid -w where it runs: $c"
+  [ "$c" = "GIT_TERMINAL_PROMPT=0 CWTFIGO_HERMES=1 CWTFIGO_HOME=$(qp "$(cd "$HM/rec" && pwd -P)") setsid -w sh $QCW run me check" ] && (PATH=$HM/fs:$PATH; he "$c" >/dev/null 2>&1) || fail "cw hermes: setsid -w where it runs: $c"
 # + @ % , : = are plain to every shell: a checkout path holding them stays unquoted.
 mkdir "$HM/v+1@x,y=z"; ln -s "$HM/a b/skill" "$HM/v+1@x,y=z/skill"; (CW="$HM/v+1@x,y=z/skill/scripts/cw"; hw "$HM/p" >/dev/null) || fail "cw hermes from a path with +@,="
 grep -qxF "       ${P}sh $(qp "$HM/v+1@x,y=z/skill/scripts/cw") run me check" "$HM/p/cwtfigo/cw-me-check/SKILL.md" || fail "cw hermes: + @ , = need no quotes: $(grep '^       ' "$HM/p/cwtfigo/cw-me-check/SKILL.md")"
@@ -1000,8 +1108,14 @@ S=$(mktemp -d); sw() { r=$1; shift; HOME=$S XDG_DATA_HOME=$S/share HERMES_HOME=$
 SD=$S/share/cwtfigo/hermes; git init -q --bare "$S/r.git"
 { sw a join "$S/r.git" && sw a name a; } >/dev/null 2>&1; mkdir -p "$S/a/hosts/a"; echo '{ "os": "arch" }' > "$S/a/hosts/a/device.json"; printf '#!/bin/sh\n# check: health.\necho ok\n' > "$S/a/hosts/a/check.sh"
 { sw a approve a check && sw a save one && sw b join "$S/r.git" && sw b hermes; } >/dev/null 2>&1 || fail "cw hermes --sync setup"
+sb=; [ -e "$S/b/hermes.on" ] && sb=1   # the plain cw hermes left no switch
 # Nothing new: exit 2, the skills untouched.
 touch "$S/stamp"; out=$(sw b hermes --sync 2>&1); [ $? = 2 ] && [ -z "$out" ] && [ -z "$(find "$SD" -newer "$S/stamp")" ] && [ ! -e "$SD.lock" ] || fail "cw hermes --sync, nothing new: $out $(find "$SD" -newer "$S/stamp")"
+# A box whose Hermes hook syncs a shared record gets its approvals from elsewhere: the sync, not the plain cw hermes
+# before it, leaves the switch there (hermes.on, never in git), and from then on cw approves nothing on that box.
+[ -z "$sb" ] && [ -e "$S/b/hermes.on" ] && git -C "$S/b" check-ignore -q hermes.on && [ -z "$(git -C "$S/b" status --porcelain)" ] || fail "cw hermes --sync with a remote, and only it, should leave the switch, kept out of git"
+out=$(sw b approve a check 2>&1); [ $? = 1 ] && echo "$out" | grep -q '^cw: cw runs scripts for Hermes here: it approves nothing' || fail "cw approve on a box that syncs should be refused: $out"
+echo "$out" | grep -q 'hermes\.on\|delete\|rm ' && fail "the refusal must not say how to take the switch off, Hermes reads it: $out"
 # A plugin update (its cw changed), nothing new in the record: rebuilt all the same, the skills are cw's text.
 mkdir -p "$S/plug/scripts"; cp "$CW" "$S/plug/scripts/cw"
 (CW=$S/plug/scripts/cw; sw b hermes >/dev/null 2>&1 || exit 1; sw b hermes --sync >/dev/null 2>&1; [ $? = 2 ] || exit 1
@@ -1021,7 +1135,7 @@ out=$(HOME=$S XDG_DATA_HOME=$S/share HERMES_HOME=$S/hx PATH=$PYB:$PATH CWTFIGO_H
 # Another sync on it: skipped (2), not queued; no pull, the lock left to its owner.
 printf '#!/bin/sh\n# menu: more\necho more\n' > "$S/a/hosts/a/more.sh"; { sw a approve a more && sw a save three; } >/dev/null 2>&1 || fail "cw hermes --sync setup: another script"
 mkdir "$SD.lock"; out=$(sw b hermes --sync 2>&1); [ $? = 2 ] && [ -d "$SD.lock" ] && [ ! -e "$SD/cwtfigo/cw-a-more" ] || fail "cw hermes --sync under a lock: $out"; rmdir "$SD.lock"
-# A remote that can't be reached, through the owner's own core.sshCommand (cw sets no ssh of its own): exit 1, nothing
+# A remote that can't be reached, through the owner's own core.sshCommand (cw sets one only when they set none): exit 1, nothing
 # rebuilt. No prompt: the hook runs cw in a session of its own (no terminal for ssh to ask on), stdin /dev/null.
 mkdir "$S/bin"; printf '#!/bin/sh\necho "$*" > %s/ssh.args; exit 255\n' "$S" > "$S/bin/myssh"; chmod +x "$S/bin/myssh"
 git -C "$S/b" config core.sshCommand "$S/bin/myssh"; git -C "$S/b" remote set-url origin fake:r.git; out=$(sw b hermes --sync 2>&1); [ $? = 1 ] && grep -q 'fake' "$S/ssh.args" && [ ! -e "$SD/cwtfigo/cw-a-more" ] && [ ! -e "$SD.lock" ] || fail "cw hermes --sync, remote gone: $out"
@@ -1032,8 +1146,36 @@ sys.path.insert(0, sys.argv[2]); import agent.skill_commands as sc
 s = importlib.util.spec_from_file_location("hermes_hook_cwtfigo", sys.argv[1]); m = importlib.util.module_from_spec(s); s.loader.exec_module(m)
 asyncio.run(m.handle("agent:start", {})); asyncio.run(m.handle("agent:start", {})); print(len(sc.n))' "$S/hh/hooks/cwtfigo/handler.py" "$S/stub" 2>&1; }
 out=$(hk); [ "$out" = 1 ] && [ -f "$SD/cwtfigo/cw-a-more/SKILL.md" ] || fail "the hook: a new commit, one reload: $out"
-# No remote: nothing to sync, nothing written.
-touch "$S/stamp"; out=$(sw n hermes --sync "$S/nr" 2>&1); [ $? = 2 ] && [ ! -e "$S/nr" ] && [ -z "$(find "$S/hh" -newer "$S/stamp")" ] || fail "cw hermes --sync with no remote: $out"
+# No remote: nothing to sync, nothing written, the switch neither (the owner approves on this box).
+touch "$S/stamp"; out=$(sw n hermes --sync "$S/nr" 2>&1); [ $? = 2 ] && [ ! -e "$S/nr" ] && [ -z "$(find "$S/hh" -newer "$S/stamp")" ] && [ ! -e "$S/n/hermes.on" ] || fail "cw hermes --sync with no remote: $out"
+# A box with no shared record: the owner approves at that box itself and runs cw hermes again by hand, so cw hermes
+# leaves no switch there and cw approve goes on working. What comes from the chat is told apart by CWTFIGO_HERMES,
+# which every command in a skill carries (hh): in such a call cw refuses approve and yolo and writes nothing, yolo off
+# still works, and an unapproved script stops as ever, without the line that has Claude Code run cw approve.
+HX=$(mktemp -d); hx() { HOME=$HX XDG_DATA_HOME=$HX/share HERMES_HOME=$HX/hh PATH=$HX/bin:$PYB:$PATH CWTFIGO_HOME=$HX/rec sh "$CW" "$@"; }
+hh() { (CWTFIGO_HERMES=1; export CWTFIGO_HERMES; hx "$@"); }
+mkdir "$HX/bin"; printf '#!/bin/sh\nexit 255\n' > "$HX/bin/ssh"; chmod +x "$HX/bin/ssh"; XB=$HX/rec/hosts/me
+hx name me >/dev/null; mkdir -p "$XB"; echo '{ "os": "arch" }' > "$XB/device.json"; printf '#!/bin/sh\n# check: health.\necho ok\n' > "$XB/check.sh"; echo 'echo new' > "$XB/n.sh"
+hx approve me check >/dev/null && hx yolo me >/dev/null && hx yolo off >/dev/null || fail "no cw hermes yet: approve and yolo as ever"
+out=$(hx run me n 2>&1); [ $? = 3 ] && echo "$out" | grep -q 'then run cw approve me n@[0-9a-f]\{12\} right away' || fail "no cw hermes yet: an unapproved script says to approve it: $out"
+hx hermes >/dev/null 2>&1 && [ ! -e "$HX/rec/hermes.on" ] || fail "a plain cw hermes should leave no switch"
+echo 'echo two' > "$XB/n2.sh"; hx approve me n2 >/dev/null 2>&1 && [ "$(hx run me n2 2>&1)" = two ] || fail "after a plain cw hermes the owner still approves on this box"
+hx hermes --sync >/dev/null 2>&1; [ $? = 2 ] && [ ! -e "$HX/rec/hermes.on" ] || fail "cw hermes --sync with no remote: exit 2, no switch"
+cp "$XB/approved.sha256" "$HX/before"
+for c in 'approve me n' 'approve me check n' 'approve me probes' yolo 'yolo me'; do
+  out=$(hh $c 2>&1); [ $? = 1 ] && echo "$out" | grep -q "^cw: cw runs scripts for Hermes here: it approves nothing and YOLO stays off\. .*in Claude Code on their own computer" || fail "cw $c in a call from Hermes should be refused, in plain words: $out"
+  echo "$out" | grep -q 'CWTFIGO_HERMES\|hermes\.on\|unset\|delete\|rm ' && fail "cw $c: the refusal must not say how to get past it, Hermes reads it: $out"
+done
+cmp -s "$XB/approved.sha256" "$HX/before" && [ -z "$(find "$HX/rec" -name yolo.on)" ] || fail "a refused approve or yolo must write nothing"
+# The changed check, run by its skill's own command line as Hermes would run it.
+c=$(sed -n 's/^       //p' "$HX/share/cwtfigo/hermes/cwtfigo/cw-me-check/SKILL.md"); echo '# edit' >> "$XB/check.sh"
+out=$( (unset CWTFIGO_HOME CWTFIGO_HERMES; HOME=$HX/nohome; eval "$c") 2>&1); [ $? = 3 ] && echo "$out" | grep -q '^NOT APPROVED: check on me, changed since' && echo "$out" | grep -qx '# edit' || fail "a changed script run from its skill: exit 3, said and shown as ever: $c: $out"
+echo "$out" | grep -q 'cw approve' && fail "a call from Hermes should never be told to run cw approve: $out"
+echo "$out" | grep -q "tell the owner that check on me needs their yes in Claude Code on their own computer" || fail "a call from Hermes should be told where an unapproved script gets its yes: $out"
+# The same script, run by the owner at that box: the approve line as ever.
+hx run me check 2>&1 | grep -q 'then run cw approve me check@[0-9a-f]\{12\} right away' || fail "without CWTFIGO_HERMES, on a box with no switch, cw run says to approve as ever"
+date +%s > "$HX/rec/yolo.on"; hh yolo off >/dev/null && [ ! -e "$HX/rec/yolo.on" ] || fail "cw yolo off should work in a call from Hermes"
+rm -rf "$HX"
 [ -z "$(ls -A "$HM/decoy")" ] || fail "cw hermes tests wrote outside their temp dirs: $(ls -A "$HM/decoy")"
 unset XDG_DATA_HOME HERMES_HOME; [ -z "$OXS" ] || export XDG_DATA_HOME="$OXV"; [ -z "$OHS" ] || export HERMES_HOME="$OHV"
 [ "${XDG_DATA_HOME+1}${XDG_DATA_HOME-} ${HERMES_HOME+1}${HERMES_HOME-}" = "$OXS$OXV $OHS$OHV" ] || fail "cw hermes tests must give back XDG_DATA_HOME and HERMES_HOME as they were"
@@ -1052,6 +1194,8 @@ echo "$out" | grep -q '^hint: this record is new and not shared: this owner is n
 mkdir -p "$J/h/hosts/box"; jw h status 2>&1 >/dev/null | grep -q 'owner is new\|another computer' && fail "a record with a host is not a new owner"
 out=$(jw a join "$J/shared.git" 2>&1) || fail "join to an empty shared record: $out"
 echo "$out" | grep -q 'empty: the next cw save' || fail "an empty shared record should say cw save fills it: $out"
+# Until that save the branch has no upstream: nothing to pull, and no error of git's on every command meanwhile.
+out=$(jw a status 2>&1 >/dev/null); echo "$out" | grep -q 'pull failed\|tracking information\|fatal:' && fail "no pull, and no error, before the first save to an empty shared record: $out"
 mkdir -p "$J/a/hosts/home" "$J/a/hosts/desk"; echo 'id: home-id' > "$J/a/hosts/home/facts.md"; echo 'id: desk-id' > "$J/a/hosts/desk/facts.md"
 printf '%s\n' '- likes it quiet' '- shared bullet' > "$J/a/operator.md"; echo '- home: NAS mounts' > "$J/a/topology.md"
 jw a save first >/dev/null 2>&1 || fail "save after joining an empty shared record"
@@ -1078,6 +1222,7 @@ mkdir -p "$J/c/hosts/server" "$J/c/hosts/pc"; echo 'id: home-id' > "$J/c/hosts/s
 echo pc > "$J/c/self"; echo x > "$J/c/hosts/pc/log.md"
 mkdir -p "$J/c/hosts/nas"; echo 'id: nas-id' > "$J/c/hosts/nas/facts.md"; printf '# CWTFIGO-FOUNDATION\n' > "$J/c/hosts/nas/maintain.sh"
 printf '%s\n' '- shared bullet' '- uses fish' > "$J/c/operator.md"; echo '- server: off at night' > "$J/c/topology.md"
+jg c config commit.gpgsign true; jg c config gpg.program false   # the join's commits go unsigned too
 jw c save own >/dev/null 2>&1; echo 'mine-only' >> "$J/c/.gitignore"; jw c save ign >/dev/null 2>&1
 touch "$J/c/dirty"; jw c join "$J/shared.git" >/dev/null 2>&1 && fail "join with unsaved changes should be refused"
 rm "$J/c/dirty"; c0=$(jg c rev-parse HEAD)
@@ -1179,7 +1324,8 @@ printf '# CWTFIGO-FOUNDATION\n' > "$B/maintain.sh"   # cw refuses to run it: tha
 un >/dev/null || fail "run with an unadapted maintain"
 tail -1 "$U/posted" | jq -r .content | grep -q 'maintain: failed (exit 1)' || fail "cw refusing should be reported as failed: $(tail -1 "$U/posted")"
 # cw status's pull goes through the BatchMode ssh too (a record with no hosts: no cw run pulls).
-N=$(mktemp -d)/rec; git init -q "$N"; git -C "$N" remote add origin nohost:rec.git
+N=$(mktemp -d)/rec; git init -q --bare "$N.git"; git init -q "$N"; git -C "$N" remote add origin "$N.git"   # pushed once: an upstream to pull from
+CWTFIGO_HOME=$N sh "$CW" save first >/dev/null 2>&1; git -C "$N" remote set-url origin nohost:rec.git
 PATH=$U/bin:$PATH CWTFIGO_HOME=$N CWTFIGO_NOTIFY=/nonexistent sh "$UN" >/dev/null 2>&1
 grep -q 'BatchMode=yes.*git-upload-pack' "$U/ssh.args" || fail "cw status's pull should use the BatchMode ssh: $(cat "$U/ssh.args")"
 # Write-back with a remote: pull before the commit, commit only the log.md written, a failed save is in the message.
