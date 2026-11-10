@@ -11,7 +11,9 @@
 
 Your computer acts up and you don't know why. Call Claude by name: it looks, tells you in plain words what's wrong, fixes it once you say OK, and remembers that machine for next time.
 
-A plugin for [Claude Code](https://claude.com/claude-code) ([website](https://cwtfigo.diamonddoge.org) · [中文](https://cwtfigo.diamonddoge.org/zh/)). Macs, Linux, Windows, Steam Deck, routers, the one in front of you or others on your network over SSH.
+It asks before it changes anything, and its notes stay on your computer.
+
+A plugin for [Claude Code](https://claude.com/claude-code) ([website](https://cwtfigo.diamonddoge.org) · [中文](https://cwtfigo.diamonddoge.org/zh/)), independent, not made by Anthropic. Macs, Linux, Windows, Steam Deck, routers, the one in front of you or others on your network over SSH.
 
 ![A first checkup: health, what upkeep would do, and a question](assets/report.png)
 
