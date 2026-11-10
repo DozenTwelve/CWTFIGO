@@ -223,6 +223,18 @@ for f in "$REC/hosts/box/approved.sha256" "$REC/hosts/box/yolo.on" "$REC/yolo.on
          "$REC/hosts/box/a\\\\b"; do
   nallow "$(w Write "$f")" "Write $f"
 done
+# Other spellings of the same file. approved.sha256/. and yolo.on/ are the file itself to Write; on Windows so are a
+# trailing dot or space and ::$DATA. With the name in the path: ask, whatever follows. Other files in the record
+# spelled that way (mode. is mode there), or by a short name (APPROV~1.SHA): no allow.
+for f in "$REC/hosts/box/approved.sha256/." "$REC/hosts/box/yolo.on/" "$REC/yolo.on/." "$REC/hosts/box/approved.sha256." \
+         "$REC/hosts/box/approved.sha256::\$DATA" "$REC/hosts/box/APPROVED.SHA256 " "$REC/hosts/box/yolo.on.bak" \
+         "/u/a\\\\\\\"b/.cwtfigo/hosts/box/approved.sha256" "C:\\\\\\\\Users\\\\\\\\u\\\\\\\\.cwtfigo\\\\\\\\yolo.on."; do
+  ask "$(w Write "$f")" "Write $f"; ask "$(w Edit "$f")" "Edit $f"
+done
+for f in "$REC/mode." "$REC/mode " "$REC/self." "$REC/mode::\$DATA" "$REC/hosts/box./notes.md" "$REC/hosts/box /notes.md" \
+         "$REC/hosts/box/notes.md." "$REC/hosts/box/notes.md::\$DATA" "$REC/hosts/box/APPROV~1.SHA" "$REC/.gitignore."; do
+  nallow "$(w Write "$f")" "Write $f"
+done
 # A Mac folds U+017F (long s) to s: approved.ſha256 and ſelf are approved.sha256 and self there.
 for f in "$REC/hosts/box/approved.ſha256" "$REC/ſelf" "$REC/hosts/box/nötes.md"; do nallow "$(w Write "$f")" "Write $f, not ASCII"; done
 ln -s "$TMPDIR/home" "$REC/hosts/ln"; nallow "$(w Write "$REC/hosts/ln/.bashrc")" "Write through a symlink out of the record"

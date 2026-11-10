@@ -46,11 +46,12 @@
 #   that changes a machine a dry run without --apply, like maintain, so a rerun of an approved fix only shows what it
 #   would do. And only with a script name, unquoted, no / or ~ in it: given a path, cw would show that file.
 # - Write/Edit of a file in the record, but not approved.sha256, yolo.on, mode, self or .git* anywhere in it (any case),
-#   no . .. or // in the path, nothing but ASCII (a Mac folds U+017F, the long s, to s: approved.sha256 spelled with
-#   it is the same file) and no symlink on the way (Write follows one out of the record). A host script written there
-#   still can't run until approved: cw checks its hash, on a private copy it then runs, so rewriting the file while it
-#   runs changes nothing. Except under YOLO, when cw runs it unapproved: while any yolo.on exists, a .sh or .ps1 there
-#   gets no allow.
+#   no . .. or // in the path, no name ending in a dot or a space, no :: and no ~ (Windows drops a trailing dot or
+#   space, reads ::$DATA as the file itself and may have a short name for it: other spellings of the same file),
+#   nothing but ASCII (a Mac folds U+017F, the long s, to s: approved.sha256 spelled with it is the same file) and no
+#   symlink on the way (Write follows one out of the record). A host script written there still can't run until
+#   approved: cw checks its hash, on a private copy it then runs, so rewriting the file while it runs changes nothing.
+#   Except under YOLO, when cw runs it unapproved: while any yolo.on exists, a .sh or .ps1 there gets no allow.
 # The rest gets no output. YOLO (cw yolo) is the third level: cw's, not this hook's.
 # What it is: a string match that stops the model approving by habit or by mistake. What it is not: a wall. A model set
 # on getting around it can: build the words at run time (eval, base64, printf), write a script with Write and run it
@@ -63,7 +64,8 @@
 # transcript_path are dropped first, a checkout path may hold cwtfigo-visit); [^a-z]* lets quotes and extra spaces
 # through: cw" approve, cw  approve. Also asked: cw with a variable for its subcommand (cw ${X}ove), a variable just
 # before approve or yolo ($C approve), and the file names in a glob (approved.sha25?, yolo.*, cwtfigo-v*).
-# Write/Edit: only the file_path, so editing a file that merely mentions them doesn't ask.
+# Write/Edit: only the file_path, so editing a file that merely mentions them doesn't ask. There the name anywhere
+# in the path asks, whatever follows it (approved.sha256/. , yolo.on/ , approved.sha256::$DATA are the file itself).
 # -i: macOS and Windows filesystems ignore case. `cw yolo off` only takes a switch away, so it passes (and in normal
 # mode gets allow): the model turns YOLO off when the work is done, with nobody there to answer a prompt. Only as whole
 # words: spaces between yolo and off (`cw yolo "" off` is YOLO on), then a space, ; & | ), the end of the command or a
@@ -106,7 +108,9 @@ if printf '%s' "$in" | grep -Eq '"tool_name" *: *"Bash"'; then
       | tr -d "'\"\\\\" | grep -Eq '(^|[^a-z0-9_])(approve|yolo)([^a-z0-9_]|$)'
   } || printf '%s' "$cmd" | tr 'A-Z' 'a-z' | tr -d "'\"\\\\" | grep -Eq 'cw[^a-z]*mode[[:space:]]*[^[:space:]]'
 else
-  printf '%s' "$in" | grep -Eiq '"file_path" *: *"[^"]*((approved\.sha256|yolo\.on)"|cwtfigo-visit)'
+  # The name anywhere in the path, whatever follows: approved.sha256/. and yolo.on/ are the file itself to Write, and
+  # so are approved.sha256. and approved.sha256::$DATA on Windows.
+  printf '%s' "$in" | grep -Eiq '"file_path" *: *"([^"\\]|\\.)*(approved\.sha256|yolo\.on|cwtfigo-visit)'
 fi && {
   # What the yes is for, in the owner's words: the prompt is the question, and a newcomer reads it.
   t=${cmd:-$(printf '%s' "$in" | sed -nE 's/.*"file_path" *: *"([^"]*)".*/\1/p')}
@@ -235,7 +239,9 @@ pathok() (
   # ASCII only: a Mac's filesystem folds case beyond ASCII (approved.sha256 with a long s, U+017F, is the same file).
   printf '%s' "$f" | LC_ALL=C grep -q '[^ -~]' && exit 1
   r=${f#"$REC"/}
-  case /$r/ in *\\*|*//*|*/./*|*/../*) exit 1 ;; esac
+  # A name ending in a dot or a space, a :: or a ~: Windows drops the first two, reads ::$DATA as the file itself and
+  # may know a file by a short name too (APPROV~1.SHA), so mode. or self::$DATA could be mode or self there.
+  case /$r/ in *\\*|*//*|*./*|*' /'*|*::*|*'~'*) exit 1 ;; esac
   case $(printf '%s' "/$r" | tr 'A-Z' 'a-z') in */.git*|*/approved.sha256|*/yolo.on|*/mode|*/self) exit 1 ;; esac
   # Under YOLO cw runs a script it has never seen: written then, it takes Claude Code's own prompt.
   case $(printf '%s' "$r" | tr 'A-Z' 'a-z') in *.sh|*.ps1)
