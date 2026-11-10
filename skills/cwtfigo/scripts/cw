@@ -368,17 +368,21 @@ run)
     [ -n "$y" ] || exit 3
     mkh; echo "$(sha "$F")  $name  $(date +%F)  yolo" >> "$H/approved.sha256"
   fi
-  [ "$name" = collect ] || { go "$@"; gone $?; exit $?; }
-  out=$(mktemp); go > "$out"; rc=$?; cat "$out"; gone $rc
+  # A script that ran and ended with 3 or 4 itself: the code stays its own, but it reads like cw's (not approved,
+  # another machine), so cw says whose it is. Not as a "cw: " line: unattended.sh takes a last line that starts so,
+  # with a failing exit, for cw refusing to run.
+  ownexit() { case $1 in 3|4) echo "cw run: $name ran and ended with its own exit $1" >&2 ;; esac; return "$1"; }
+  [ "$name" = collect ] || { go "$@"; gone $?; ownexit $?; exit $?; }
+  out=$(mktemp); go > "$out"; rc=$?; cat "$out"; gone $rc; ownexit $rc
   if [ $rc = 0 ]; then
     old=$(grep -m1 '^id: ' "$H/facts.md" 2>/dev/null); new=$(grep -m1 '^id: ' "$out")
     if [ -n "$old" ] && [ "$old" != "$new" ]; then
-      echo "cw: ID MISMATCH on $alias: record has '$old', machine says '$new'. Not saved. Ask the human." >&2
+      echo "cw: ID MISMATCH on $alias: record has '$old', machine says '$new'. Not saved. Ask the human. If they say it is the same machine, reinstalled (a reinstall gives it a new id): delete the id: line in $H/facts.md, then run collect again." >&2
       rm -f "$out"; exit 4
     fi
     for f in "$REC"/hosts/*/facts.md; do
       [ "$f" != "$H/facts.md" ] && [ -n "$new" ] && [ "$(grep -m1 '^id: ' "$f" 2>/dev/null)" = "$new" ] || continue
-      o=${f%/facts.md}; echo "cw: this machine is already in the record as ${o##*/}. Use that name (or rename one dir by hand)." >&2
+      o=${f%/facts.md}; echo "cw: this machine is already in the record as ${o##*/}. Use that name (or rename one dir by hand). If they are two machines after all: two made from one image (a cloned disk) share an id, and the clone needs one of its own, which is the owner's call." >&2
       rm -f "$out"; exit 4
     done
     mkh; cp "$out" "$H/facts.md"

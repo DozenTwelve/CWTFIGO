@@ -126,8 +126,10 @@ sh "$CW" run local collect >/dev/null || fail "approved collect should run"
 grep -q '^id: ' "$H/facts.md" || fail "facts.md not written"
 
 sed -i.bak 's/^id: .*/id: 0000000000000000/' "$H/facts.md"
-sh "$CW" run local collect >/dev/null 2>&1; [ $? = 4 ] || fail "id mismatch should exit 4"
+out=$(sh "$CW" run local collect 2>&1 >/dev/null); [ $? = 4 ] || fail "id mismatch should exit 4"
 grep -q '^id: 0000' "$H/facts.md" || fail "mismatched facts.md overwritten"
+# No dead end: what to do once the owner says it is the same machine, reinstalled.
+echo "$out" | grep -q "ID MISMATCH on box.*Ask the human\. If they say it is the same machine, reinstalled.*delete the id: line in $H/facts.md, then run collect again" || fail "an id mismatch should say what to do after a reinstall: $out"
 rm "$H/facts.md.bak"
 
 # Windows runs .ps1 through cw's PowerShell loader: args and exit code must survive it.
@@ -651,7 +653,15 @@ rm "$H/facts.md"; sh "$CW" approve local collect >/dev/null; sh "$CW" run local 
 T=$CWTFIGO_HOME/hosts/twin; mkdir -p "$T"; grep -m1 '^id: ' "$H/facts.md" > "$T/facts.md"
 out=$(sh "$CW" run local collect 2>&1 >/dev/null); [ $? = 4 ] || fail "same id under another name should exit 4"
 echo "$out" | grep -q 'already in the record as twin' || fail "should name the other host: $out"
+echo "$out" | grep -q "two made from one image (a cloned disk) share an id, and the clone needs one of its own, which is the owner's call" || fail "the same id twice should say what a cloned machine needs: $out"
 rm -rf "$T"
+# An approved script's own exit 3 or 4 reads like cw's (not approved, another machine): the code stays, and cw says
+# whose it is. Never as a last "cw: " line: with a failing exit unattended.sh takes that for cw refusing to run.
+for n in 3 4 5; do
+  echo "exit $n" > "$H/x$n.sh"; sh "$CW" approve local "x$n" >/dev/null; out=$(sh "$CW" run local "x$n" 2>&1); [ $? = $n ] || fail "a script's own exit $n should pass through"
+  case $n in 5) [ -z "$out" ] ;; *) [ "$out" = "cw run: x$n ran and ended with its own exit $n" ] ;; esac || fail "a script's own exit $n: $out"
+  rm "$H/x$n.sh"
+done
 # No machine-id, platform UUID or NIC: no id line, not the hash of an empty string every such box would share.
 # Two of them in one record both collect (the ssh here runs the remote side locally).
 Y=$(mktemp -d); mkdir -p "$Y/bin" "$Y/s"; cp -R "$(dirname "$CW")" "$Y/s/"; printf '#!/bin/sh\n' > "$Y/bin/ioreg"
