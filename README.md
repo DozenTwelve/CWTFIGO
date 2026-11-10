@@ -42,7 +42,7 @@ Or just `cwtfigo`, and it offers a checkup: disk, memory, battery, heat, failed 
 
 There's no fixed script library. Claude writes each machine's scripts on the spot, for that machine: its OS, what's installed, what you told it not to touch. It starts from a short template per OS and, where open-source projects already keep the data (which files an app leaves behind, where games keep saves, how each package manager upgrades), it reads theirs instead of guessing. It reads them; it never downloads and runs their code.
 
-Before a script reads anything new, Claude Code asks you. Say yes once, and that script runs from then on without asking, until it changes. Anything that would change your computer (an update, a cleanup, a fix) asks every time, and shows you first what it would do.
+Before a new script runs, Claude Code asks you. One yes covers the plugin's own read-only checks; the scripts Claude writes for your machine need their own yes. Once approved, a script runs from then on without asking, until it changes. Anything that would change your computer (an update, a cleanup, a fix) asks every time, and shows you first what it would do.
 
 What it learns goes into notes on your computer, one folder per machine: what it is, what went wrong, what fixed it, a health check that grows with every fix. The next visit starts from there, so the same question costs less, and a fix that quietly comes undone shows up in the next check.
 
@@ -51,7 +51,7 @@ What it learns goes into notes on your computer, one folder per machine: what it
 ## Why not just ask Claude?
 
 - **It remembers.** Without notes, every chat starts from zero: what this machine is, what you tried last month.
-- **It asks before it reads.** A script runs only after your yes, checked by its fingerprint: if it changes, it asks again.
+- **It asks first.** A script runs only after your yes (one yes covers the plugin's read-only checks), checked by its fingerprint: if it changes, it asks again.
 - **Scripts written for your machine, kept.** Each machine gets its own health check and upkeep script, written by Claude for that machine and approved by you, then rerun every visit and rewritten when something new is learned.
 - **Many machines.** Your laptop can look after your server, your NAS and your router over SSH, with the notes for all of them in one place.
 - **No AI needed afterwards.** A small terminal menu runs your approved checks and upkeep without Claude.
