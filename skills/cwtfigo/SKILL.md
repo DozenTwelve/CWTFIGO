@@ -17,7 +17,7 @@ Plain words for a new owner: don't say record, operator machine, foundation, pro
 
 On a first visit, if you aren't the strongest model tier available (Opus class), say once in plain words that this visit writes this computer's own check scripts and goes best on Opus (`/model opus`), then carry on either way.
 
-When the panel says another computer uses a newer CWTFIGO, say in one line that this one is older, run the update command the panel prints (its prompt is the yes), then ask the owner to restart Claude Code and say the name again.
+When the panel says another computer uses a newer CWTFIGO, say in one line that this one is older, run the update command the panel prints (its prompt is the yes), then ask the owner to restart Claude Code and say the name again. That comes before anything else in the first reply: what they named waits for the restarted visit.
 
 ## A visit
 
