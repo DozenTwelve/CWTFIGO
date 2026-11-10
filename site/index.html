@@ -111,6 +111,10 @@ Debian file server. Backups only.
       <p>Claude Code doesn’t update this plugin by itself: it does that only for Anthropic’s own marketplaces. To update now, run <code>/plugin</code>, open the <strong>Marketplaces</strong> tab, pick <code>cwtfigo</code>, choose <strong>Update marketplace</strong>, then run <code>/reload-plugins</code>. Choose <strong>Enable auto-update</strong> in the same place to have it done each time Claude Code starts.</p>
     </details>
     <details>
+      <summary>How do I uninstall it?</summary>
+      <p>In Claude Code, <code>/plugin marketplace remove cwtfigo</code> uninstalls the plugin with its marketplace. In a terminal, <code>rm -rf ~/.local/bin/cwtfigo "${XDG_RUNTIME_DIR:-$HOME/.cache}/cwtfigo-visit"</code> deletes the menu and the small markers it keeps of past visits. Then take out the <code>PATH</code> line if you added it for the menu, and Hermes as <a href="https://github.com/DozenTwelve/CWTFIGO/blob/main/HERMES.md#taking-it-off">HERMES.md</a> says if you set it up. Your notes stay in <code>~/.cwtfigo</code>: delete that folder only if you want them gone for good.</p>
+    </details>
+    <details>
       <summary>Which computers does it work on?</summary>
       <p>Macs, Linux, Windows, Steam Deck and routers: the one in front of you, or others on your network over SSH. Your laptop can look after your server, your NAS and your router, with the notes for all of them in one place.</p>
     </details>

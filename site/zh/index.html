@@ -111,6 +111,10 @@ Debian 文件服务器，只做备份。
       <p>Claude Code 不会自己更新这个插件：它只自动更新 Anthropic 自己的插件市场。要现在更新，运行 <code>/plugin</code>，打开 <strong>Marketplaces</strong> 标签页，选 <code>cwtfigo</code>，选 <strong>Update marketplace</strong>，再运行 <code>/reload-plugins</code>。在同一个地方选 <strong>Enable auto-update</strong>，以后每次 Claude Code 启动时都会自己更新。</p>
     </details>
     <details>
+      <summary>怎么卸载？</summary>
+      <p>在 Claude Code 里，<code>/plugin marketplace remove cwtfigo</code> 会连同插件市场一起卸掉插件。在终端里，<code>rm -rf ~/.local/bin/cwtfigo "${XDG_RUNTIME_DIR:-$HOME/.cache}/cwtfigo-visit"</code> 删掉菜单和它记录过往访问的小标记。如果你为菜单加过 <code>PATH</code> 那一行，把它删掉；装过 Hermes 的话，照 <a href="https://github.com/DozenTwelve/CWTFIGO/blob/main/HERMES.md#taking-it-off">HERMES.md</a> 说的去掉。你的笔记还在 <code>~/.cwtfigo</code>：只有想彻底删掉时才删这个文件夹。</p>
+    </details>
+    <details>
       <summary>能管哪些电脑？</summary>
       <p>Mac、Linux、Windows、Steam Deck 和路由器：你面前这台，或者同一网络里经 SSH 连到的其他机器。你的笔记本可以照看服务器、NAS 和路由器，所有机器的笔记放在一处。</p>
     </details>

@@ -112,6 +112,16 @@ Then `/reload-plugins`.
 
 Claude Code doesn't update this plugin by itself: it does that only for Anthropic's own marketplaces. To update now, run `/plugin`, open the **Marketplaces** tab, pick `cwtfigo`, choose **Update marketplace**, then run `/reload-plugins`. Choose **Enable auto-update** in the same place to have it done each time Claude Code starts.
 
+## Uninstall
+
+In Claude Code, `/plugin marketplace remove cwtfigo` uninstalls the plugin with its marketplace. In a terminal, this deletes the menu and the small markers it keeps of past visits:
+
+```
+rm -rf ~/.local/bin/cwtfigo "${XDG_RUNTIME_DIR:-$HOME/.cache}/cwtfigo-visit"
+```
+
+Then take out the `PATH` line if you added it for the menu, and Hermes as [`HERMES.md`](HERMES.md#taking-it-off) says if you set it up. Your notes stay in `~/.cwtfigo`: delete that folder only if you want them gone for good.
+
 ## License
 
 MIT ([LICENSE](LICENSE)). How it behaves, for the curious: [`skills/cwtfigo/SKILL.md`](skills/cwtfigo/SKILL.md).
