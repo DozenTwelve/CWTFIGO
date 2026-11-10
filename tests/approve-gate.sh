@@ -6,11 +6,11 @@ set -u
 R=$(cd "$(dirname "$0")/.." && pwd); G=$R/hooks/approve-gate.sh; CW=$R/skills/cwtfigo/scripts/cw
 fail() { echo "FAIL: $*"; exit 1; }
 TMPDIR=$(mktemp -d) || exit 1; export TMPDIR; trap 'chmod -R u+w "$TMPDIR"; rm -rf "$TMPDIR"' EXIT
-# The marker dir: $XDG_RUNTIME_DIR/cwtfigo-visit, here the temp dir.
-XDG_RUNTIME_DIR=$TMPDIR; export XDG_RUNTIME_DIR
 # The hook reads the mode from the record: a temp one, never the real ~/.cwtfigo.
 HOME=$TMPDIR/home; REC=$TMPDIR/rec; export HOME CWTFIGO_HOME=$REC; mkdir -p "$HOME" "$REC/hosts/box"
-mkdir "$TMPDIR/cwtfigo-visit" && : > "$TMPDIR/cwtfigo-visit/on"
+# The marker dir: ~/.cache/cwtfigo-visit, also with XDG_RUNTIME_DIR set (Linux), where markers were kept before.
+XDG_RUNTIME_DIR=$TMPDIR/run; export XDG_RUNTIME_DIR; V=$HOME/.cache/cwtfigo-visit
+mkdir -p "$V" "$XDG_RUNTIME_DIR" && : > "$V/on"
 S=on   # session the calls below come from; "on" has a marker
 hook() { printf '{"session_id":"%s",%s}' "$S" "$1" | ${SH:-sh} "$G"; }
 bash() { hook "$(printf '"tool_name":"Bash","tool_input":{"command":"%s"}' "$1")"; }
@@ -298,6 +298,7 @@ S=a
 [ -z "$(bash 'cw approve local x')" ] || fail "other Skill shouldn't start"
 [ -z "$(hook '"tool_name":"Skill","tool_input":{"skill":"cwtfigo:cwtfigo","args":"slow"}')" ] || fail "Skill call should print nothing"
 ask "$(bash 'cw approve local x')" "after Skill cwtfigo:cwtfigo"
+[ -e "$V/a" ] && [ ! -e "$XDG_RUNTIME_DIR/cwtfigo-visit" ] || fail "the marker belongs in ~/.cache/cwtfigo-visit, not under XDG_RUNTIME_DIR (gone at logout)"
 S=b
 [ -z "$(bash 'cw approve local x')" ] || fail "other session should stay silent"
 S=c
@@ -308,17 +309,46 @@ up() { hook "$(printf '"hook_event_name":"UserPromptSubmit","prompt":"%s"' "$1")
 ask "$(bash 'cw approve local x')" "after /cwtfigo prompt"
 S=d; up '/cwtfigo:cwtfigo' >/dev/null
 ask "$(bash 'cw yolo local')" "after /cwtfigo:cwtfigo prompt"
-# A marker dir this user can't write (another user's /tmp dir, a read-only disk): fail closed, never off, and quiet.
-for x in ro/cwtfigo-visit ro2; do mkdir -p "$TMPDIR/$x"; chmod 555 "$TMPDIR/$x"; done
-S=e; XDG_RUNTIME_DIR=$TMPDIR/ro
+# A marker where they were kept before, under XDG_RUNTIME_DIR: a session started before the update stays gated.
+S=old; [ -z "$(bash 'cw approve local x')" ] || fail "no marker in either place should pass silently"
+mkdir "$XDG_RUNTIME_DIR/cwtfigo-visit" && : > "$XDG_RUNTIME_DIR/cwtfigo-visit/old"
+ask "$(bash 'cw approve local x')" "a marker in the old place"
+# No marker, but the session's transcript holds a Skill call of cwtfigo or a /cwtfigo prompt, as Claude Code records
+# them (a fork carries the old session's history under a new session_id; a marker got deleted): started.
+tp() { hook "$(printf '"transcript_path":"%s","tool_name":"Bash","tool_input":{"command":"cw approve local x"}' "$1")"; }
+J=$TMPDIR/t; mkdir "$J"
+printf '%s\n' '{"type":"user","message":{"role":"user","content":"my mac is hot, CWTFIGO"}}' \
+  '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_01","name":"Skill","input":{"skill":"cwtfigo:cwtfigo"},"caller":{"type":"direct"}}]}}' > "$J/skill.jsonl"
+printf '%s\n' '{"type":"user","message":{"role":"user","content":"<command-message>cwtfigo:cwtfigo</command-message>\n<command-name>/cwtfigo:cwtfigo</command-name>\n<command-args>slow</command-args>"}}' > "$J/prompt.jsonl"
+# Only mentions of it: in a tool's output and in a message the quotes are escaped. And another skill's real call.
+printf '%s\n' '{"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":"{\"type\":\"tool_use\",\"name\":\"Skill\",\"input\":{\"skill\":\"cwtfigo:cwtfigo\"}} \"content\":\"<command-message>cwtfigo"}]}}' \
+  '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_02","name":"Skill","input":{"skill":"caveman:caveman"}}]}}' > "$J/mention.jsonl"
+S=t1; ask "$(tp "$J/skill.jsonl")" "transcript with a Skill call of cwtfigo"
+[ -e "$V/t1" ] || fail "a session started by its transcript should get its marker"
+S=t2; ask "$(tp "$J/prompt.jsonl")" "transcript with a /cwtfigo prompt"
+S=t3; [ -z "$(tp "$J/mention.jsonl")" ] || fail "a transcript that only mentions the skill should pass silently"
+[ -e "$V/t3.no" ] && [ ! -e "$V/t3" ] || fail "a transcript read and found without the skill should leave t3.no"
+# Read once per session: a long transcript is not read again on every call. A Skill call still starts the session.
+cat "$J/skill.jsonl" >> "$J/mention.jsonl"; [ -z "$(tp "$J/mention.jsonl")" ] || fail "the transcript should be read once per session"
+hook '"tool_name":"Skill","tool_input":{"skill":"cwtfigo:cwtfigo"}' >/dev/null; ask "$(tp "$J/mention.jsonl")" "after Skill, with a .no file"
+S=t4; [ -z "$(tp "$J/none.jsonl")" ] && [ -z "$(bash 'cw approve local x')" ] && [ ! -e "$V/t4.no" ] || fail "no transcript to read: silent, and no .no"
+cp "$J/skill.jsonl" "$J/none.jsonl"; ask "$(tp "$J/none.jsonl")" "the transcript is there on a later call"
+# .no files older than 30 days are cleared when a new one is written; markers stay.
+touch -t 202001010000 "$V/t3.no" "$V/t1"; S=t5; tp "$J/mention.jsonl" >/dev/null; S=t6; : > "$J/empty.jsonl"; tp "$J/empty.jsonl" >/dev/null
+[ ! -e "$V/t3.no" ] && [ -e "$V/t6.no" ] && [ -e "$V/t1" ] || fail "old .no files should be cleared, markers and new .no files kept"
+# A marker dir this user can't write (another user's dir, a read-only disk): fail closed, never off, and quiet.
+H=$HOME; mkdir -p "$TMPDIR/ro/.cache/cwtfigo-visit" "$TMPDIR/ro2/.cache"; chmod 555 "$TMPDIR/ro/.cache/cwtfigo-visit" "$TMPDIR/ro2/.cache"
+S=e; HOME=$TMPDIR/ro
 o=$(up '/cwtfigo my mac is hot' 2>&1) && [ -z "$o" ] || fail "unwritable marker dir: UserPromptSubmit should exit 0 and print nothing: $o"
 ask "$(bash 'cw approve local x')" "unwritable marker dir, after /cwtfigo prompt"
 S=f; ask "$(bash 'cw approve local x')" "unwritable marker dir, never started"
-XDG_RUNTIME_DIR=$TMPDIR/ro2; ask "$(bash 'cw approve local x')" "marker dir can't be made"
-# No XDG_RUNTIME_DIR (macOS): ~/.cache/cwtfigo-visit, only the user's.
-unset XDG_RUNTIME_DIR; S=g
+ask "$(tp "$J/mention.jsonl")" "unwritable marker dir, never started, with a transcript"
+HOME=$TMPDIR/ro2; ask "$(bash 'cw approve local x')" "marker dir can't be made"
+HOME=; ask "$(bash 'cw approve local x')" "no HOME"
+HOME=$H
+# No XDG_RUNTIME_DIR (macOS): the same dir, only the user's.
+unset XDG_RUNTIME_DIR; S=g; HOME=$TMPDIR/home2; mkdir "$HOME"; V=$HOME/.cache/cwtfigo-visit
 [ -z "$(bash 'cw approve local x')" ] || fail "no XDG_RUNTIME_DIR, not started, should pass silently"
 up '/cwtfigo' >/dev/null; ask "$(bash 'cw approve local x')" "no XDG_RUNTIME_DIR, after /cwtfigo prompt"
-[ -e "$HOME/.cache/cwtfigo-visit/g" ] && [ "$(ls -ld "$HOME/.cache/cwtfigo-visit" | cut -c1-10)" = drwx------ ] \
-  || fail "marker should be in ~/.cache/cwtfigo-visit, mode 700"
+[ -e "$V/g" ] && [ "$(ls -ld "$V" | cut -c1-10)" = drwx------ ] || fail "marker should be in ~/.cache/cwtfigo-visit, mode 700"
 echo "ok"

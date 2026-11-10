@@ -3,9 +3,16 @@
 # different things. Before that (working on the plugin, running its tests, a contributor's PR) nothing here asks.
 # Started = this session called the cwtfigo skill: a Skill call (PreToolUse, tool_input {"skill":"cwtfigo:cwtfigo"})
 # or a prompt beginning /cwtfigo or /cwtfigo:cwtfigo (UserPromptSubmit). Either one leaves a marker file
-# ${XDG_RUNTIME_DIR:-~/.cache}/cwtfigo-visit/<session_id>, the user's own (not /tmp, which every user on a Linux box
-# shares: whoever made it first would own it). No session_id in stdin, or a marker dir this user can't write: treated
-# as started (fail closed).
+# ~/.cache/cwtfigo-visit/<session_id>, the user's own (not /tmp, which every user on a Linux box shares: whoever made
+# it first would own it) and on disk on every OS. It used to be under XDG_RUNTIME_DIR where that is set: gone at
+# logout on Linux, so a session resumed after one (claude -c, the same session_id) came back ungated. A marker still
+# there counts, so a session started before the move stays gated.
+# No marker: the session's transcript (the input's transcript_path) is read, once per session, for a Skill call of
+# cwtfigo or a /cwtfigo prompt as Claude Code records them, and either one counts as started. That is for a session
+# that carries an earlier one's history under a new session_id (claude --fork-session) and for a marker that got
+# deleted. A transcript read and found without one leaves <session_id>.no beside the markers, so it isn't read again
+# on every call (a long session's is hundreds of MB); those older than 30 days are cleared.
+# No session_id in stdin, or a marker dir this user can't write: treated as started (fail closed).
 # Residual risk, accepted by the owner: in a session that never started the plugin, the model can write approved.sha256
 # directly without being asked.
 #
@@ -75,7 +82,7 @@
 # words: spaces between yolo and off (`cw yolo "" off` is YOLO on), then a space, ; & | ), the end of the command or a
 # newline after off.
 in=$(cat)
-d=${XDG_RUNTIME_DIR:-$HOME/.cache}/cwtfigo-visit
+d=$HOME/.cache/cwtfigo-visit
 sid=$(printf '%s' "$in" | sed -nE 's/.*"session_id" *: *"([^"]*)".*/\1/p' | head -n 1 | tr -cd 'A-Za-z0-9_-')
 # Quiet on failure: a UserPromptSubmit hook's error lands in the owner's prompt. A marker it couldn't write leaves the
 # gate on: below, a dir it can't write counts as started. (true, not :, whose failed redirect ends dash.)
@@ -89,7 +96,17 @@ if printf '%s' "$in" | grep -Eq '"tool_name" *: *"Skill"'; then
   printf '%s' "$in" | grep -Eq '"skill" *: *"(cwtfigo:)?cwtfigo"' && mark
   exit 0
 fi
-[ -n "$sid" ] && [ ! -e "$d/$sid" ] && mkd && exit 0
+if [ -n "$sid" ] && [ ! -e "$d/$sid" ] && ! { [ -n "${XDG_RUNTIME_DIR:-}" ] && [ -e "$XDG_RUNTIME_DIR/cwtfigo-visit/$sid" ]; } && mkd; then
+  [ -e "$d/$sid.no" ] && exit 0
+  tp=$(printf '%s' "$in" | sed -nE 's/.*"transcript_path" *: *"(([^"\\]|\\.)*)".*/\1/p' | head -n 1 | sed 's/\\\\/\\/g')
+  [ -f "$tp" ] && [ -r "$tp" ] || exit 0
+  # .no first: a read that runs into the hook's timeout is not tried again on every call.
+  find "$d" -name '*.no' -mtime +30 -exec rm -f {} + 2>/dev/null; { true > "$d/$sid.no"; } 2>/dev/null
+  # As JSON.stringify writes them, no spaces. Inside a tool's output or a message the quotes are \", so a file or a
+  # command that only mentions the skill doesn't match.
+  LC_ALL=C grep -F -q -e '"name":"Skill","input":{"skill":"cwtfigo' -e '":"<command-message>cwtfigo' "$tp" 2>/dev/null || exit 0
+  { true > "$d/$sid"; } 2>/dev/null
+fi
 # The command as typed, still JSON-escaped (\" for ", \n for a newline).
 cmd=$(printf '%s' "$in" | sed -nE 's/.*"command" *: *"(([^"\\]|\\.)*)".*/\1/p' | head -n 1)
 # The same as the shell reads it, near enough: lower case, JSON's \n and \t spaces, quotes and backslashes out (as the
