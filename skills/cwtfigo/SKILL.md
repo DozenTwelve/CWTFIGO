@@ -87,7 +87,7 @@ Upgrading for fun, "why is it so hot", and "it's broken" differ only in how deep
     - recheck: linux-firmware newer than 20261010 (check.sh line), or the upstream issue closes
   ```
 
-  The recheck is what would make it worth another look: a package version, an upstream fix landing, hardware arriving, the user having time. One a script can see becomes a read-only line in `check.sh`, silent until it holds, then `WARN parked <issue>: <what changed>`. In `notes.md` it stays prose: `cw` never runs anything written there.
+  The recheck is what would make it worth another look: a package version, an upstream issue closing, hardware arriving. One a script can see (a version) becomes a read-only line in `check.sh`, silent until it holds, then `WARN parked <issue>: <what changed>`; the rest you check yourself on the next visit (A visit, step 2). In `notes.md` it stays prose: `cw` never runs anything written there.
 - baseline numbers (boot time, temps, power, fans), measured the first time a request needed them
 
 Preferences the user reveals ("too loud", "no, compiles got slower") go to `operator.md`, or to the host's notes if machine-specific.
@@ -95,10 +95,10 @@ Preferences the user reveals ("too loud", "no, compiles got slower") go to `oper
 **Cases.** `cases.jsonl` is how `cw search` finds this owner's past. Append one JSON line per visit that dealt with a real problem (fixed, worked around or parked; routine upkeep writes none), shaped like an archive line, in English whatever the visit's language (search matches English words):
 
 ```json
-{"source":"cwtfigo:laptop/2026-11-02-lid-no-wake","title":"Lid-open sometimes doesn't wake from S3","created":"2026-11-02","closed":"","state":"parked","items":[{"label":"symptom","text":"Opening the lid sometimes leaves the laptop asleep; Fn or power wakes it.","anchor":"","from":"log.md 2026-11-02","kind":"symptom"},{"label":"root cause","text":"The EC reports a spurious lid-open right after lid-close, so the real opening is no wake edge.","anchor":"ACPI: button: [Firmware Bug]: Unexpected lid state reported by firmware","from":"notes.md Parked","kind":"root cause"}]}
+{"source":"cwtfigo:laptop/2026-11-02-lid-no-wake","title":"Lid-open sometimes doesn't wake from S3","created":"2026-11-02","closed":"","state":"parked","items":[{"label":"symptom","text":"Opening the lid sometimes leaves the laptop asleep; Fn or power wakes it.","anchor":"","from":"log.md 2026-11-02","kind":"symptom"},{"label":"root cause","text":"The EC reports a spurious lid-open right after lid-close, so the real opening is no wake edge.","anchor":"ACPI: button: [Firmware Bug]: Unexpected lid state reported by firmware","from":"notes.md Parked","kind":"root cause"},{"label":"recheck","text":"Worth another look once a BIOS newer than 1.24 ships; check.sh warns when it is installed.","anchor":"","from":"notes.md Parked","kind":"fix status"}]}
 ```
 
-- `source`: `cwtfigo:<alias>/<date first seen>-<slug>`, never changes; `created`: that date. `state`: `fixed`, `worked around` or `parked` (step 5); `closed`: the date it got fixed or worked around, empty while parked or fixed but unverified. A parked case carries its recheck as an item (`label` `recheck`, `kind` `fix status`) naming what a script can check: an issue URL that should close, or a version to wait for (`noctalia > 5.4.1-1`).
+- `source`: `cwtfigo:<alias>/<date first seen>-<slug>`, never changes; `created`: that date. `state`: `fixed`, `worked around` or `parked` (step 5); `closed`: the date it got fixed or worked around, empty while parked or fixed but unverified. A parked case carries its recheck as an item (`label` `recheck`, `kind` `fix status`) naming the same recheck as `notes.md`: a version to wait for (`noctalia > 5.4.1-1`), which `check.sh` watches, or an issue URL that should close, which you check.
 - `items`: one plain sentence each, every fact the next visit would want, failures included; `kind` from `knowledge/kinds.json`; `anchor`: the exact error line, version or output that identifies the problem, as printed; `from`: where in the record it comes from.
 - Changed later (a parked issue gets fixed): append the whole case again with the same `source` (search keeps the last line); never edit old lines.
 
