@@ -22,7 +22,7 @@
 # A missing check.sh / maintain.sh is copied from foundations/<os>/ (os from device.json); run and approve refuse it
 # until the model has adapted it and deleted its CWTFIGO-FOUNDATION line. Unapproved scripts print (the plugin's own: header and path) and exit 3 (under yolo: print and run).
 # collect writes hosts/<alias>/facts.md and exits 4 if the machine id no longer matches or another host has it.
-# On a computer where cw hermes has run (it runs scripts for Hermes, nobody is asked first) cw approve and cw yolo are refused.
+# For Hermes nobody is asked first: cw approve and cw yolo are refused in a call from one of its skills, and on a computer whose Hermes hook syncs a shared record.
 
 SKILL=$(cd "$(dirname "$0")/.." && pwd)
 REC=${CWTFIGO_HOME:-$HOME/.cwtfigo}
@@ -110,7 +110,7 @@ command -v git >/dev/null || die "CWTFIGO keeps its notes in git: install it (De
 ignores() {
   # Scripts in the record are piped to targets and approved by hash: a Windows operator's autocrlf must not add .
   # self names this operator machine and differs per machine, and so do mode (how much Claude Code asks) and hermes.on
-  # (this one runs scripts for Hermes); yolo.on is a switch with a 12 h life; archive/ is a local build artifact. None
+  # (this one's Hermes hook syncs the record); yolo.on is a switch with a 12 h life; archive/ is a local build artifact. None
   # of them reaches git.
   # Files every operator only appends to merge as a union: two saves that each added lines are no conflict.
   for l in '* text=auto eol=lf' 'misses.jsonl merge=union' 'hosts/*/approved.sha256 merge=union' 'hosts/*/cases.jsonl merge=union'; do
@@ -341,12 +341,14 @@ fresh() {
 yolo() { fresh "$REC/yolo.on" || fresh "$H/yolo.on"; }
 # Strict unless there is no mode file or it says normal (any case, spaces aside): a garbled one fails closed, as in the hook.
 strict() { [ -e "$REC/mode" ] && [ "$(tr -d ' \t\r\n' 2>/dev/null < "$REC/mode" | tr 'A-Z' 'a-z')" != normal ]; }
-# The computer Hermes runs scripts on: cw hermes leaves $REC/hermes.on there. It has no Claude Code, so no hook asks
-# the owner before a cw approve or a cw yolo, and whoever writes to the chat could have Hermes run one. While the file
-# is there cw refuses both: the owner's yes is given on their own computer and comes here with the record. The
-# messages don't say which file it is: Hermes reads them.
-hbox() { [ -e "$REC/hermes.on" ]; }
-HBOX="this computer runs scripts for Hermes: nothing is approved here and YOLO stays off. A script gets its yes in Claude Code on the owner's own computer (say cwtfigo there), and the yes comes here with the shared notes"
+# Run for Hermes: no hook asks the owner before a cw approve or a cw yolo there, and whoever writes to the chat could
+# have Hermes run one. cw refuses both on either of two signs. CWTFIGO_HERMES, which every command in a generated skill
+# carries: a call that comes from the chat. On a box with no shared record the owner approves at that box itself, and
+# without the variable still can. And $REC/hermes.on, which cw hermes --sync leaves on a box whose Hermes hook syncs a
+# shared record: the owner's yes comes there with the record, so nothing is approved on that box at all. The messages
+# don't say which sign it was: Hermes reads them.
+hbox() { [ -n "$CWTFIGO_HERMES" ] || [ -e "$REC/hermes.on" ]; }
+HBOX="cw runs scripts for Hermes here: it approves nothing and YOLO stays off. A script gets its yes from the owner, in Claude Code on their own computer (say cwtfigo there)"
 
 case $1 in
 run)
@@ -369,7 +371,7 @@ run)
       echo "NOT APPROVED: $name on $alias, $why (sha256 $(sha "$F"))"
       # name@<hash start>: approve refuses it if the file changed since this showed it.
       a="cw approve $alias $name@$(sha "$F" | cut -c1-12)"
-      if hbox; then echo "Nothing is approved on this computer, it runs scripts for Hermes: tell the owner that $name on $alias needs their yes in Claude Code on their own computer (say cwtfigo there), then stop."
+      if hbox; then echo "Nothing is approved where cw runs scripts for Hermes: tell the owner that $name on $alias needs their yes in Claude Code on their own computer (say cwtfigo there), then stop."
       else case $why$plug in never*|*1) echo "Tell the human in one line what it reads or changes, then run $a right away: the permission prompt they get is the question, don't also ask in chat and wait. About to run other scripts here that need approval too (a first visit's check and maintain)? Run them first, then approve all of them in that one call: one prompt" ;;
                         *) echo "Show the human what changed, then run $a right away: the permission prompt they get is the question, don't also ask in chat and wait. About to run other scripts here that need approval too (a first visit's check and maintain)? Run them first, then approve all of them in that one call: one prompt" ;; esac; fi
     fi
@@ -616,13 +618,14 @@ hermes)
   # tests/menu-headers.txt (read by tests/cw.sh and header.rs' tests) holds the headers both must read alike.
   # The TUI's menu (tui/src/main.rs items, header.rs parse) as Hermes skills, for an always-on box where Hermes runs
   # them without Claude Code (HERMES.md at the repo root): check, maintain and each script with a # menu: line, approved at
-  # its current hash. Rebuilt whole each time, so a script removed or changed since approval loses its skill. Of the
-  # record it writes only hermes.on (see hbox): no pull (but --sync's), no ssh, no approval.
+  # its current hash. Rebuilt whole each time, so a script removed or changed since approval loses its skill. Reads the
+  # record only: no pull (but --sync's), no ssh, no approval.
   # --sync, from the Hermes hook before each message: a pull, and a rebuild only if it brought something. Exit 0 rebuilt,
-  # 2 nothing new; never a prompt (no terminal there).
-  # First of all, on every run and every sync: deleted while Hermes' hook is still there, it is back at the next message.
-  : > "$REC/hermes.on" || die "cannot write $REC/hermes.on"
-  sync=; [ "$2" = --sync ] && { sync=1; shift; remote || exit 2; }
+  # 2 nothing new; never a prompt (no terminal there). With a remote to sync from, this box gets its approvals from
+  # elsewhere: every sync leaves hermes.on in its record (see hbox), so one deleted is back at the next message. Not
+  # the plain cw hermes: that is also a preview on the owner's own computer, and the rebuild by hand on a box with no
+  # remote, where the owner approves. true, not : (a special builtin: a failed redirect on it ends dash before die).
+  sync=; [ "$2" = --sync ] && { sync=1; shift; remote || exit 2; { true > "$REC/hermes.on"; } 2>/dev/null || die "cannot write $REC/hermes.on"; }
   E=${XDG_DATA_HOME:-$HOME/.local/share}/cwtfigo/hermes; D=${2:-$E}
   # No trailing /: mktemp -d "$D.XXXXXX" would land inside D, and the swap below would fail every run.
   D=${D%"${D##*[!/]}"}; [ -n "$D" ] || die "cw hermes needs a dir of its own, not /"
@@ -706,7 +709,8 @@ hermes)
         END { if (!m && ENVIRON["S"] != "check" && ENVIRON["S"] != "maintain") exit
           a = ENVIRON["A"]; sc = ENVIRON["S"]; f = a "/" sc "." ENVIRON["E"]; if (!m) lb = (ab != "" ? ab : sc)
           for (i = 1; i <= nr; i++) print "cw: " f ": left out the menu-args word " rf[i] ": it starts with - or = (an option, or zsh expands it)" | "cat 1>&2"
-          sub(/\n+$/, "", w); r = "GIT_TERMINAL_PROMPT=0 CWTFIGO_HOME=" sq(ENVIRON["REC"]) " " ENVIRON["NS"] "sh " sq(ENVIRON["CW"]) " run " sq(a) " " sq(sc)
+          # CWTFIGO_HERMES: this call comes from the chat, so cw approves nothing in it and turns no YOLO on (hbox).
+          sub(/\n+$/, "", w); r = "GIT_TERMINAL_PROMPT=0 CWTFIGO_HERMES=1 CWTFIGO_HOME=" sq(ENVIRON["REC"]) " " ENVIRON["NS"] "sh " sq(ENVIRON["CW"]) " run " sq(a) " " sq(sc)
           # Past the command, every field the owner wrote (label, header, args, names, paths) as prose.
           lb = nb(lb); w = nb(w); g = nb(g); a = nb(a); sc = nb(sc); f = nb(f); rec = nb(ENVIRON["REC"])
           print "---"; print "name: " ENVIRON["N"]
