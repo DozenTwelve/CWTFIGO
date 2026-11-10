@@ -8,7 +8,7 @@ It only runs what cw runs: scripts you approved, through cw's own approval check
 
 In Claude Code, say "CWTFIGO install the TUI": it runs `cw tui`, which installs the TUI of your plugin's version. That is the rule: the TUI runs the same version as the plugin, the one that fits its cw.
 
-Without Claude Code at hand, this gets the newest release; if the plugin is a different version, the TUI then offers `u` to switch to the plugin's:
+Plugin installed but no Claude Code at hand right now? This gets the newest release (the TUI always needs the installed plugin: it finds cw through it, see below); if the plugin is a different version, the TUI then offers `u` to switch to the plugin's:
 
 ```sh
 mkdir -p ~/.local/bin && curl -fsSL https://github.com/DozenTwelve/CWTFIGO/releases/latest/download/cwtfigo-tui-$(uname -s)-$(uname -m).tar.gz | tar -xz -C ~/.local/bin cwtfigo
@@ -29,10 +29,10 @@ curl -fsSLO https://github.com/DozenTwelve/CWTFIGO/releases/latest/download/$f.s
 
 ```sh
 cd tui && cargo build --release
-ln -s "$PWD/target/release/cwtfigo-tui" ~/.local/bin/cwtfigo
+mkdir -p ~/.local/bin && ln -sf "$PWD/target/release/cwtfigo-tui" ~/.local/bin/cwtfigo
 ```
 
-The link follows rebuilds: after a `git pull`, `cargo build --release` again.
+The link follows rebuilds (`-f` replaces a prebuilt binary already there): after a `git pull`, `cargo build --release` again. That is how a clone build updates: it never offers `u`, and neither does a debug build.
 
 ## Where it finds cw
 
@@ -40,6 +40,6 @@ The link follows rebuilds: after a `git pull`, `cargo build --release` again.
 2. The plugin Claude Code installed: the `cwtfigo@cwtfigo` entry in `~/.claude/plugins/installed_plugins.json` (or under `$CLAUDE_CONFIG_DIR`): the one installed for every project first, else the one for the folder you start the TUI in, else the newest; plus `skills/cwtfigo/scripts/cw`.
 3. A debug build only: the checkout it was built from (`../skills/cwtfigo/scripts/cw`), if it exists. A release build has no such fallback.
 
-So install the plugin in Claude Code (`/plugin install cwtfigo@cwtfigo`) and the binary finds it, and keeps up when the plugin updates. When the plugin is a different version than the TUI, the bottom row offers `u`: "update TUI to <version>" when the plugin's is newer, "switch TUI to <version>" when it's older. Either way it runs `cw tui`, which installs the plugin's version, and restarts into it. If cw warns about your `PATH` (`~/.local/bin` missing from it, or another `cwtfigo` before it), or this TUI wasn't started from `~/.local/bin/cwtfigo`, it stops to show that first: otherwise the next `cwtfigo` you type starts the old one again.
+So install the plugin in Claude Code (`/plugin install cwtfigo@cwtfigo`) and the binary finds it, and keeps up when the plugin updates. When the plugin is a different version than a prebuilt TUI, the bottom row offers `u`: "update TUI to <version>" when the plugin's is newer, "switch TUI to <version>" when it's older. Either way it runs `cw tui`, which installs the plugin's version, and restarts into it. If cw warns about your `PATH` (`~/.local/bin` missing from it, or another `cwtfigo` before it), or this TUI wasn't started from `~/.local/bin/cwtfigo`, it stops to show that first: otherwise the next `cwtfigo` you type starts the old one again.
 
 Keys: j/k or up/down, tab (or h/l, left/right) between panes, PgUp/PgDn scroll the preview, r refresh (probes again and, when the record has a remote, pulls it through `cw status`, as it does at start: the TUI creates nothing; the bar says if the pull failed), q, Esc or Ctrl-C quit. The bottom row shows the keys that work right now.

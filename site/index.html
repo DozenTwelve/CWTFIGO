@@ -66,8 +66,8 @@
       <figure class="walk__pic"><a href="report.png"><img src="report.png" width="1080" height="450" alt="The top of a first checkup of a MacBook Air: it is in good shape; disk, memory, heat and background services are fine; the battery is at 79% of its original capacity; some Homebrew packages are no longer maintained."></a></figure>
     </details>
     <details name="walk">
-      <summary>It asks before it reads</summary>
-      <p>Claude Code asks before each new script runs. Anything that would change your computer asks every time.</p>
+      <summary>It asks first</summary>
+      <p>One yes covers the plugin’s own read-only checks. Each script Claude writes for your machine asks before its first run, and again if it changes. Anything that would change your computer asks every time.</p>
       <figure class="walk__pic"><a href="approve.png"><img src="approve.png" width="1180" height="585" loading="lazy" alt="Claude Code asking “Do you want to proceed?” before a read-only script that describes the machine, noting that a yes lets it run without asking again until it changes."></a></figure>
     </details>
     <details name="walk">
@@ -104,11 +104,19 @@ Debian file server. Backups only.
   <div class="faq">
     <details>
       <summary>What do I need?</summary>
-      <p>Claude Code, <code>git</code> and <code>python3</code>, which it uses to search past fixes. On a Mac, get <code>git</code> with <code>xcode-select --install</code>. On Windows it runs in Git Bash, which Claude Code needs there anyway. The first visit goes best on Opus: <code>/model opus</code>.</p>
+      <p>Claude Code, <code>git</code> and <code>python3</code>, which it uses to search past fixes. On a Mac, get <code>git</code> with <code>xcode-select --install</code>. On Windows it runs in Git Bash, which Claude Code needs there anyway. Most Linux has <code>python3</code> already; on a minimal install, <code>sudo apt install python3</code> or <code>sudo dnf install python3</code>. The first visit goes best on Opus: <code>/model opus</code>.</p>
+    </details>
+    <details>
+      <summary>How do I update it?</summary>
+      <p>Claude Code doesn’t update this plugin by itself: it does that only for Anthropic’s own marketplaces. To update now, run <code>/plugin</code>, open the <strong>Marketplaces</strong> tab, pick <code>cwtfigo</code>, choose <strong>Update marketplace</strong>, then run <code>/reload-plugins</code>. Choose <strong>Enable auto-update</strong> in the same place to have it done each time Claude Code starts.</p>
+    </details>
+    <details>
+      <summary>How do I uninstall it?</summary>
+      <p>In Claude Code, <code>/plugin marketplace remove cwtfigo</code> uninstalls the plugin with its marketplace. In a terminal, <code>rm -rf ~/.local/bin/cwtfigo "${XDG_RUNTIME_DIR:-$HOME/.cache}/cwtfigo-visit"</code> deletes the menu and the small markers it keeps of past visits. Then take out the <code>PATH</code> line if you added it for the menu, and Hermes as <a href="https://github.com/DozenTwelve/CWTFIGO/blob/main/HERMES.md#taking-it-off">HERMES.md</a> says if you set it up. Your notes stay in <code>~/.cwtfigo</code>: delete that folder only if you want them gone for good.</p>
     </details>
     <details>
       <summary>Which computers does it work on?</summary>
-      <p>Macs, Linux, Windows, Steam Deck and routers: the one in front of you, or others on your network over SSH. Your laptop can look after your server, your NAS and your router, with the notes for all of them in one place.</p>
+      <p>Macs, Linux, Windows, Steam Deck and routers: the one in front of you, or others on your network over SSH. Your laptop can look after your server, your NAS and your router, with the notes for all of them in one place. A machine’s checkup and upkeep start from a ready-made script on macOS, Windows, Arch, Debian and its relatives (Ubuntu, Mint, Pop!_OS, Raspberry Pi OS and a few more) and OpenWrt routers. Other systems, like Fedora or the Steam Deck, work too: Claude writes their scripts from less.</p>
     </details>
     <details>
       <summary>Why not just ask Claude?</summary>
@@ -136,7 +144,7 @@ Debian file server. Backups only.
     </details>
     <details>
       <summary>Does it make Claude smarter?</summary>
-      <p>No, and it won’t make it dumber either. It depends a lot on the model. Parking problems, showing evidence and dry-run-first scripts come from the skill’s rules, not code, so they rely on the model following them. You still see every script before you approve it. For a one-time fix on a friend’s laptop, plain Claude Code is fine. For machines you look after every week, it gets better the longer you use it.</p>
+      <p>No, and it won’t make it dumber either. It depends a lot on the model. Parking problems, showing evidence and dry-run-first scripts come from the skill’s rules, not code, so they rely on the model following them. For a one-time fix on a friend’s laptop, plain Claude Code is fine. For machines you look after every week, it gets better the longer you use it.</p>
     </details>
   </div>
 </section>

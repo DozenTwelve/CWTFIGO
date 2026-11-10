@@ -66,8 +66,8 @@
       <figure class="walk__pic"><a href="../report.png"><img src="../report.png" width="1080" height="450" alt="一台 MacBook Air 首次体检的开头：整体状况良好；磁盘、内存、温度和后台服务都正常；电池剩原始容量的 79%；有些 Homebrew 包已经没人维护了。"></a></figure>
     </details>
     <details name="walk">
-      <summary>读之前先问</summary>
-      <p>每个新脚本运行前，Claude Code 都会先问你。会改动电脑的事，每次都问。</p>
+      <summary>先问你</summary>
+      <p>插件自带的只读检查，同意一次就都能跑。Claude 给你的机器写的每个脚本，第一次运行前都会问你，脚本变了会再问。会改动电脑的事，每次都问。</p>
       <figure class="walk__pic"><a href="../approve.png"><img src="../approve.png" width="1180" height="585" loading="lazy" alt="Claude Code 在运行一个只读脚本前问“Do you want to proceed?”。这个脚本只描述这台机器是什么；提示说同意一次之后就不再问，除非脚本变了。"></a></figure>
     </details>
     <details name="walk">
@@ -104,11 +104,19 @@ Debian 文件服务器，只做备份。
   <div class="faq">
     <details>
       <summary>需要装什么？</summary>
-      <p>Claude Code、<code>git</code> 和 <code>python3</code>，后者用来搜过去的修法。Mac 上用 <code>xcode-select --install</code> 装 <code>git</code>。Windows 上它跑在 Git Bash 里，反正 Claude Code 在那边也要它。第一次用 Opus 效果最好：<code>/model opus</code>。</p>
+      <p>Claude Code、<code>git</code> 和 <code>python3</code>，后者用来搜过去的修法。Mac 上用 <code>xcode-select --install</code> 装 <code>git</code>。Windows 上它跑在 Git Bash 里，反正 Claude Code 在那边也要它。大多数 Linux 自带 <code>python3</code>；最小安装的系统上，用 <code>sudo apt install python3</code> 或 <code>sudo dnf install python3</code> 装上。第一次用 Opus 效果最好：<code>/model opus</code>。</p>
+    </details>
+    <details>
+      <summary>怎么更新？</summary>
+      <p>Claude Code 不会自己更新这个插件：它只自动更新 Anthropic 自己的插件市场。要现在更新，运行 <code>/plugin</code>，打开 <strong>Marketplaces</strong> 标签页，选 <code>cwtfigo</code>，选 <strong>Update marketplace</strong>，再运行 <code>/reload-plugins</code>。在同一个地方选 <strong>Enable auto-update</strong>，以后每次 Claude Code 启动时都会自己更新。</p>
+    </details>
+    <details>
+      <summary>怎么卸载？</summary>
+      <p>在 Claude Code 里，<code>/plugin marketplace remove cwtfigo</code> 会连同插件市场一起卸掉插件。在终端里，<code>rm -rf ~/.local/bin/cwtfigo "${XDG_RUNTIME_DIR:-$HOME/.cache}/cwtfigo-visit"</code> 删掉菜单和它记录过往访问的小标记。如果你为菜单加过 <code>PATH</code> 那一行，把它删掉；装过 Hermes 的话，照 <a href="https://github.com/DozenTwelve/CWTFIGO/blob/main/HERMES.md#taking-it-off">HERMES.md</a> 说的去掉。你的笔记还在 <code>~/.cwtfigo</code>：只有想彻底删掉时才删这个文件夹。</p>
     </details>
     <details>
       <summary>能管哪些电脑？</summary>
-      <p>Mac、Linux、Windows、Steam Deck 和路由器：你面前这台，或者同一网络里经 SSH 连到的其他机器。你的笔记本可以照看服务器、NAS 和路由器，所有机器的笔记放在一处。</p>
+      <p>Mac、Linux、Windows、Steam Deck 和路由器：你面前这台，或者同一网络里经 SSH 连到的其他机器。你的笔记本可以照看服务器、NAS 和路由器，所有机器的笔记放在一处。在 macOS、Windows、Arch、Debian 及其衍生版（Ubuntu、Mint、Pop!_OS、Raspberry Pi OS 等）和 OpenWrt 路由器上，体检和保养从现成的脚本起步。其他系统，比如 Fedora 或 Steam Deck，也能用，只是 Claude 给它们写脚本时起点少一些。</p>
     </details>
     <details>
       <summary>为什么不直接问 Claude？</summary>
@@ -136,7 +144,7 @@ Debian 文件服务器，只做备份。
     </details>
     <details>
       <summary>它会让 Claude 变聪明吗？</summary>
-      <p>不会，也不会让它变笨。效果很大程度上取决于模型。修不好的问题先搁置、拿出证据、脚本先试运行不真改，这些都来自 skill 里的规则，不是代码，所以要靠模型去遵守。每个脚本在你同意之前，你都会先看到。帮朋友的笔记本修一次，用普通的 Claude Code 就够了。你每周都要照看的机器，用得越久它越好用。</p>
+      <p>不会，也不会让它变笨。效果很大程度上取决于模型。修不好的问题先搁置、拿出证据、脚本先试运行不真改，这些都来自 skill 里的规则，不是代码，所以要靠模型去遵守。帮朋友的笔记本修一次，用普通的 Claude Code 就够了。你每周都要照看的机器，用得越久它越好用。</p>
     </details>
   </div>
 </section>
