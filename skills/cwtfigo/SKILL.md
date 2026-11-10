@@ -109,7 +109,7 @@ Every script runs through `scripts/cw` (paths here are relative to `<skill>`), w
 ```sh
 sh <skill>/scripts/cw run <alias> <script> [args]   # collect | a probe | check | maintain | a host script; local = this machine
 sh <skill>/scripts/cw approve <alias> <script>@<hash start>...   # as run printed it; several at once are one prompt, all or none
-sh <skill>/scripts/cw approve <alias> probes        # every read-only probe on this machine at once, one prompt (see Reading)
+sh <skill>/scripts/cw approve <alias> probes        # every read-only probe on <alias> at once, one prompt (see Reading)
 sh <skill>/scripts/cw name <name>                   # rename this machine in the record, after the human said what it's called
 sh <skill>/scripts/cw save "<message>"              # end of every visit
 sh <skill>/scripts/cw join <ssh-alias>:<path>       # join the record other operator machines share (see Remote and several machines)
