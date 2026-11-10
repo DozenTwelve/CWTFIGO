@@ -14,6 +14,10 @@ CWTFIGO runs scripts on your machines and keeps a record of them. A hole in it i
   without the owner reading and approving it.
 - Anything that reads a file outside the record into the conversation (a key, a `.env`, a browser export) without the
   owner's yes, for example through a `cw` call the hook lets through in normal mode.
+- The Hermes skills `cw hermes` writes, and its Hermes hook: a skill that runs something other than the owner's
+  approved script as approved, or `--apply` without a yes in the chat, or a record or script field that gets
+  instructions or commands into a skill. Not a hole: whoever may talk to the Hermes bot is trusted like the owner, since
+  a yes in the chat runs `--apply` ([HERMES.md](HERMES.md)).
 
 Not a hole: the shared record. `cw run` and `cw status` pull it first, so whoever can push to it is trusted like the
 owner: a script and its approval pushed there run on the next `cw run`. Keep it private, on a machine you control.
