@@ -1394,6 +1394,12 @@ mod tests {
         let port = l.local_addr().unwrap().port();
         assert_eq!(reach("127.0.0.1", port), Some(true));
         drop(l);
+        // A child another test spawned while the listener was open holds a copy of it until its exec (some 10 ms on
+        // a Mac): the port still answers for that long.
+        let t = Instant::now();
+        while reach("127.0.0.1", port) != Some(false) && t.elapsed() < Duration::from_secs(5) {
+            std::thread::sleep(Duration::from_millis(10));
+        }
         assert_eq!(reach("127.0.0.1", port), Some(false), "resolves, nothing listens: offline");
         // .invalid never resolves (RFC 6761), as a .local name doesn't through musl's resolver.
         assert_eq!(reach("cwtfigo-test.invalid", 22), None);
