@@ -360,6 +360,9 @@ elif command -v script >/dev/null; then out=$(script -qec "sh $W/t.sh" /dev/null
 # macOS script(1) echoes the ^D it sends at EOF ahead of the output.
 case $(printf %s "$out" | tr -d '\r') in skip|*"[a b][it's][\$(echo INJECTED)][]") ;; *) fail "ssh -t args: got '$out'" ;; esac
 grep -Eq "INJECTED|it's|a b" "$W/cmds" && fail "ssh -t: args must reach the target's sh only: $(cat "$W/cmds")"
+# A dropped link or a closed terminal hangs up what runs on the target's terminal: its sh ignores HUP, and so does
+# everything it starts, so a maintain --apply isn't cut off half-way.
+[ "$out" = skip ] || grep -q "^sh -c 'trap \"\" HUP; sh [^ ;]*; r=" "$W/cmds" || fail "ssh -t: the target's sh should ignore HUP: $(cat "$W/cmds")"
 # collect is piped with a terminal too: it never needs sudo, and through the target's terminal its lines would arrive
 # with a CR each, the id too: an ID MISMATCH against a record collected without one.
 sh "$CW" approve nas collect >/dev/null; : > "$W/cmds"; printf 'PATH=%s:$PATH sh "%s" run nas collect\n' "$W" "$CW" > "$W/t.sh"

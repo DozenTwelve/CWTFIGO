@@ -29,6 +29,10 @@ struct Item {
     args: Vec<String>,
     apply: bool,
     text: String,
+    /// The sha256 of the bytes text was read from: what an approval asked for in the TUI is pinned to.
+    sum: String,
+    /// cw would run it without asking, as the record stood at the last scan. Else the menu row says so.
+    approved: bool,
 }
 
 struct Host {
@@ -55,6 +59,8 @@ struct Target {
     file: String,
     arg: Option<String>,
     can_apply: bool,
+    /// The Item's sum, of the preview on the screen when the confirm is asked.
+    sum: String,
 }
 
 enum Then {
@@ -336,6 +342,12 @@ fn quits(k: KeyEvent) -> bool {
         || k.modifiers.contains(KeyModifiers::CONTROL) && matches!(k.code, KeyCode::Char('c' | 'd'))
 }
 
+/// The only yes to a confirm: y or Y alone. With Ctrl or Alt held it is another key (Ctrl-Y, a shell's yank, typed
+/// from habit) and means no, as every other key does.
+fn yes(k: KeyEvent) -> bool {
+    matches!(k.code, KeyCode::Char('y' | 'Y')) && (k.modifiers - KeyModifiers::SHIFT).is_empty()
+}
+
 /// One key press. false = quit.
 fn key(terminal: &mut DefaultTerminal, app: &mut App, k: KeyEvent, tx: &Sender<Msg>) -> bool {
     let code = k.code;
@@ -344,22 +356,12 @@ fn key(terminal: &mut DefaultTerminal, app: &mut App, k: KeyEvent, tx: &Sender<M
     app.message.clear(); // a message stays until the next key, then the key bar is back
     match std::mem::replace(&mut app.mode, Mode::Normal) {
         Mode::Confirm(_, then) => {
-            if !matches!(code, KeyCode::Char('y' | 'Y')) {
+            if !yes(k) {
                 app.message = "cancelled".into();
             } else {
                 match then {
                     Then::Apply(t) => go(terminal, app, t, true),
-                    Then::Approve(t) => {
-                        let mut cmd = cw(app);
-                        cmd.args(["approve", &t.name, &t.stem]);
-                        match run_external(terminal, &mut cmd, false) {
-                            Ok(s) if s.success() => {
-                                save(terminal, app, &t.name, &format!("approved {}", t.stem));
-                                go(terminal, app, t, false)
-                            }
-                            _ => app.message = format!("approve {} on {} failed", t.stem, t.name),
-                        }
-                    }
+                    Then::Approve(t) => approve(terminal, app, t),
                 }
             }
         }
@@ -419,7 +421,42 @@ fn key(terminal: &mut DefaultTerminal, app: &mut App, k: KeyEvent, tx: &Sender<M
 fn target(app: &App, arg: Option<String>) -> Target {
     let h = &app.hosts[app.host];
     let it = &h.items[app.item];
-    Target { name: h.name.clone(), stem: it.stem.clone(), file: it.file.clone(), arg, can_apply: it.apply }
+    Target { name: h.name.clone(), stem: it.stem.clone(), file: it.file.clone(), arg, can_apply: it.apply, sum: it.sum.clone() }
+}
+
+/// `cw approve <machine> <script>@<sha256 start>`, the hash of the bytes the preview showed: cw refuses when the file
+/// holds anything else by now (changed since, or another file read under that name). None without a hash: by its bare
+/// name cw would approve whatever the file holds at that moment.
+fn approve_args(t: &Target) -> Option<[String; 3]> {
+    Some(["approve".into(), t.name.clone(), format!("{}@{}", t.stem, t.sum.get(..12)?)])
+}
+
+/// The owner's y on an approve: cw approve, a note of it, then the dry run.
+fn approve(terminal: &mut DefaultTerminal, app: &mut App, t: Target) {
+    let Some(args) = approve_args(&t) else {
+        app.message = format!("{} on {} not approved: no sha256sum or shasum here to hash it with", t.stem, t.name);
+        return;
+    };
+    let mut cmd = cw(app);
+    cmd.args(args);
+    let mut err = String::new();
+    match run_external(terminal, &mut cmd, false, Some(&mut err)) {
+        Ok(s) if s.success() => {
+            save(terminal, app, &t.name, &format!("approved {}", t.stem));
+            go(terminal, app, t, false)
+        }
+        _ => app.message = approve_failed(&t, &err),
+    }
+}
+
+/// The bar's word on a refused approve, with cw's reason from its stderr: the last line, or the one before
+/// "approved none: refused ...", which only sums up. cw refuses on a computer whose Hermes hook syncs the notes, and
+/// a file that isn't what the preview showed any more.
+fn approve_failed(t: &Target, stderr: &str) -> String {
+    let lines = || stderr.lines().rev().map(str::trim).filter(|l| !l.is_empty());
+    let why = lines().find(|l| !l.starts_with("cw: approved none")).or_else(|| lines().next());
+    let why = why.map(|l| format!(": {}", l.strip_prefix("cw: ").unwrap_or(l))).unwrap_or_default();
+    format!("approve {} on {} failed{why}", t.stem, t.name)
 }
 
 fn cw(app: &App) -> Command {
@@ -429,10 +466,10 @@ fn cw(app: &App) -> Command {
 }
 
 /// `cw run`, then whatever its exit code asks for: 3 approve, 0 on a script that takes --apply: offer it.
-fn go(terminal: &mut DefaultTerminal, app: &mut App, t: Target, apply: bool) {
+fn go(terminal: &mut DefaultTerminal, app: &mut App, mut t: Target, apply: bool) {
     let mut cmd = cw(app);
     cmd.args(run_args(&t, apply));
-    let res = run_external(terminal, &mut cmd, true);
+    let res = run_external(terminal, &mut cmd, true, None);
     if apply {
         let how = match &res {
             Ok(s) => s.code().map_or("killed".into(), |c| format!("exit {c}")),
@@ -441,51 +478,82 @@ fn go(terminal: &mut DefaultTerminal, app: &mut App, t: Target, apply: bool) {
         save(terminal, app, &t.name, &format!("ran {}: {how}", run_args(&t, true)[2..].join(" ")));
     }
     rescan(app); // cw run pulls the record: scripts may have changed
+    // The preview now shows what the rescan read: an approve asked next is for those bytes, not for older ones.
+    if let Some(i) = app.hosts.iter().filter(|h| h.name == t.name).flat_map(|h| &h.items).find(|i| i.file == t.file) {
+        t.sum = i.sum.clone();
+    }
     let unapproved = !approved(&app.rec, &t);
+    // What a save had to say (nothing noted, or not saved) stays: the run's own word comes after it, not over it.
+    let unsaved = std::mem::take(&mut app.message);
     after(app, t, apply, unapproved, res.map(|s| s.code()));
+    app.message = joined(unsaved, std::mem::take(&mut app.message));
+}
+
+fn joined(a: String, b: String) -> String {
+    if a.is_empty() || b.is_empty() { a + &b } else { format!("{a}; {b}") }
 }
 
 /// What the owner did here goes where a visit's actions go: an entry on top of the machine's log.md, then `cw save`, so
-/// other computers sharing the record get the approval and the next visit sees the run. Only fails out loud.
+/// other computers sharing the record get the approval and the next visit sees the run. Only fails out loud. A log.md
+/// that can't be read gets no entry and no save: what was done is done, only the note of it is missing.
 fn save(terminal: &mut DefaultTerminal, app: &mut App, name: &str, what: &str) {
-    let mut cmd = note(app, name, what);
-    if !matches!(run_external(terminal, &mut cmd, false), Ok(s) if s.success()) {
+    let mut cmd = match note(app, name, what) {
+        Ok(cmd) => cmd,
+        Err(e) => {
+            app.message = format!("{name}'s log.md can't be read ({e}): {what} not noted, nothing saved");
+            return;
+        }
+    };
+    if !matches!(run_external(terminal, &mut cmd, false, None), Ok(s) if s.success()) {
         app.message = format!("{what} on {name}, but saving it to the notes failed");
     }
 }
 
-/// Writes the log.md entry; the `cw save` to run after it.
-fn note(app: &App, name: &str, what: &str) -> Command {
+/// Writes the log.md entry; the `cw save` to run after it. Err, and nothing written, when log.md is there but can't be
+/// read: taken for empty it would be written over, and the save would commit and push the loss.
+fn note(app: &App, name: &str, what: &str) -> std::io::Result<Command> {
     let date = Command::new("date").arg("+%F").output().map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
     let entry = format!("## {} tui\n- {what} (in the TUI)\n\n", date.unwrap_or_default());
     let f = app.rec.join("hosts").join(name).join("log.md");
-    let old = fs::read_to_string(&f).unwrap_or_default();
+    // Bytes, not text: a log with one byte that isn't UTF-8 keeps every byte. Only a missing file is an empty log.
+    let old = match fs::read(&f) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => vec![],
+        old => old?,
+    };
     // Newest first, under anything above the first entry.
-    let at = if old.starts_with("## ") { 0 } else { old.find("\n## ").map_or(old.len(), |i| i + 1) };
-    let _ = fs::write(&f, format!("{}{entry}{}", &old[..at], &old[at..]));
+    let at = if old.starts_with(b"## ") { 0 } else { old.windows(4).position(|w| w == b"\n## ").map_or(old.len(), |i| i + 1) };
+    let _ = fs::write(&f, [&old[..at], entry.as_bytes(), &old[at..]].concat());
     let mut cmd = cw(app);
     cmd.args(["save", &format!("tui: {what} on {name}")]);
-    cmd
+    Ok(cmd)
 }
 
 /// Whether cw counts the script approved: its sha256 in the host's approved.sha256, the check cw makes. Exit 3 from
 /// an approved script is the script's own, not cw asking. Reading cw's output instead would take the tty from scripts.
 fn approved(rec: &Path, t: &Target) -> bool {
     let h = rec.join("hosts").join(&t.name);
-    let f = h.join(&t.file);
-    let out = Command::new("sha256sum")
-        .arg(&f)
-        .output()
-        .or_else(|_| Command::new("shasum").args(["-a", "256"]).arg(&f).output());
-    let out = match out {
-        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).into_owned(),
-        _ => return false,
-    };
-    let sum = out.split_whitespace().next().unwrap_or("");
+    fs::read(h.join(&t.file)).ok().and_then(|b| sha256(&b)).is_some_and(|sum| listed(rec, &h, &sum))
+}
+
+/// Whether a script with this sha256 counts as approved on the machine whose dir is h.
+fn listed(rec: &Path, h: &Path, sum: &str) -> bool {
     let list = fs::read_to_string(h.join("approved.sha256")).unwrap_or_default();
     // A line ending in yolo is a run under YOLO, not the owner's yes: as in cw, it counts only while YOLO is on.
     let yolo = fresh(&rec.join("yolo.on")) || fresh(&h.join("yolo.on"));
     !sum.is_empty() && list.lines().any(|l| l.split(' ').next() == Some(sum) && (yolo || l.split_whitespace().last() != Some("yolo")))
+}
+
+/// The sha256 of bytes, in hex, by the tool cw hashes with: sha256sum, else shasum. None if neither runs.
+fn sha256(bytes: &[u8]) -> Option<String> {
+    let run = |tool: &str, args: &[&str]| {
+        let mut c = Command::new(tool).args(args).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn().ok()?;
+        // The tool prints only at stdin's end, so writing all of it first can't block on a full pipe.
+        std::io::Write::write_all(&mut c.stdin.take()?, bytes).ok()?;
+        let o = c.wait_with_output().ok().filter(|o| o.status.success())?;
+        let sum = String::from_utf8_lossy(&o.stdout).split_whitespace().next()?.to_string();
+        (sum.len() == 64).then_some(sum)
+    };
+    run("sha256sum", &[]).or_else(|| run("shasum", &["-a", "256"]))
 }
 
 /// What the owner can do about a failure cw explains only to the model, or ssh only by its exit code.
@@ -509,11 +577,15 @@ fn run_args(t: &Target, apply: bool) -> Vec<&str> {
 fn after(app: &mut App, t: Target, apply: bool, unapproved: bool, res: std::io::Result<Option<i32>>) {
     let (name, stem) = (t.name.clone(), t.stem.clone());
     match res {
+        // Each question says which machine and, when the script was started with one, which menu word: the popup
+        // is all the owner reads before y.
         Ok(Some(3)) if unapproved => {
-            app.mode = Mode::Confirm(format!("Approve {stem} on {name}? y/N"), Then::Approve(t))
+            let then = t.arg.as_ref().map(|a| format!(", then run it with {a}")).unwrap_or_default();
+            app.mode = Mode::Confirm(format!("Approve {stem} on {name}{then}? y/N"), Then::Approve(t))
         }
         Ok(Some(0)) if t.can_apply && !apply => {
-            app.mode = Mode::Confirm(format!("Run {stem} with --apply? y/N"), Then::Apply(t))
+            let run = run_args(&t, true)[2..].join(" ");
+            app.mode = Mode::Confirm(format!("Run {run} on {name}? y/N"), Then::Apply(t))
         }
         Ok(Some(c)) => {
             let here = app.hosts.iter().any(|h| h.name == name && h.here);
@@ -535,10 +607,26 @@ fn survive_ctrl_c() {
     unsafe { libc::signal(libc::SIGINT, ignore as extern "C" fn(libc::c_int) as libc::sighandler_t) };
 }
 
-/// Leave the TUI, run cmd in the real terminal, wait for Enter (always on failure), come back.
-fn run_external(terminal: &mut DefaultTerminal, cmd: &mut Command, pause: bool) -> std::io::Result<ExitStatus> {
+/// What was typed into the terminal fd and not read yet is dropped: keys hit while a script ran must not answer the
+/// "Press Enter" after it.
+// ponytail: unix only, as survive_ctrl_c; the TUI has no Windows build.
+#[cfg(unix)]
+fn drop_typed(fd: libc::c_int) {
+    unsafe { libc::tcflush(fd, libc::TCIFLUSH) };
+}
+#[cfg(not(unix))]
+fn drop_typed(_: i32) {}
+
+/// Leave the TUI, run cmd in the real terminal, wait for Enter (always on failure), come back. With err, what cmd
+/// wrote to stderr is kept there too. Keys typed meanwhile are dropped: a y hit during the dry run would otherwise
+/// answer the --apply question that follows it.
+fn run_external(terminal: &mut DefaultTerminal, cmd: &mut Command, pause: bool, err: Option<&mut String>) -> std::io::Result<ExitStatus> {
     ratatui::restore();
-    let res = cmd.status();
+    let res = match err {
+        None => cmd.status(),
+        Some(err) => keep_stderr(cmd, err),
+    };
+    drop_typed(0);
     if pause || !matches!(&res, Ok(s) if s.success()) {
         match &res {
             Ok(s) => println!("\n[{s}] Press Enter to return."),
@@ -548,7 +636,20 @@ fn run_external(terminal: &mut DefaultTerminal, cmd: &mut Command, pause: bool) 
     }
     *terminal = ratatui::init();
     let _ = terminal.clear();
+    // Also what the event reader had already taken in before the run (Enter and y in one burst), and what came
+    // during the pause.
+    while event::poll(Duration::ZERO).unwrap_or(false) && event::read().is_ok() {}
     res
+}
+
+/// cmd with its stderr read into err, then passed on to the terminal's. Only for a command that asks nothing and ends
+/// soon (cw approve): what it says there shows when it ends. stdin and stdout stay the terminal's. Never a script's
+/// run: sudo and ssh there need the terminal as it is.
+fn keep_stderr(cmd: &mut Command, err: &mut String) -> std::io::Result<ExitStatus> {
+    let o = cmd.stderr(Stdio::piped()).spawn()?.wait_with_output()?;
+    *err = String::from_utf8_lossy(&o.stderr).into_owned();
+    eprint!("{err}");
+    Ok(o.status)
 }
 
 fn scan(rec: &Path) -> Vec<Host> {
@@ -563,7 +664,11 @@ fn scan(rec: &Path) -> Vec<Host> {
             let here = name == me;
             let os = os(&e.path());
             let yolo = fresh(&rec.join("yolo.on")) || fresh(&e.path().join("yolo.on"));
-            Host { here, online: None, yolo, items: items(&e.path(), ext(os.as_deref(), here)), os, name }
+            let mut items = items(&e.path(), ext(os.as_deref(), here));
+            for i in &mut items {
+                i.approved = listed(rec, &e.path(), &i.sum);
+            }
+            Host { here, online: None, yolo, items, os, name }
         })
         .collect();
     hosts.sort_by(|a, b| a.name.cmp(&b.name));
@@ -656,7 +761,14 @@ fn ext(os: Option<&str>, here: bool) -> Option<&'static str> {
     Some(if windows { "ps1" } else { "sh" })
 }
 
-/// Scripts with a `# menu:` line, plus check and maintain, which always belong on the menu.
+/// As cw's badscript: a name cw refuses to run or approve. In a line of approved.sha256 a space or a newline would
+/// split the name, and fix@<hash>.sh would read as fix at that hash.
+fn badscript(stem: &str) -> bool {
+    stem.chars().any(|c| c.is_whitespace() || c.is_control() || c == '\\' || c == '@')
+}
+
+/// Scripts with a `# menu:` line, plus check and maintain, which always belong on the menu. None that cw would refuse
+/// by its name.
 fn items(dir: &Path, ext: Option<&str>) -> Vec<Item> {
     let mut v: Vec<Item> = fs::read_dir(dir)
         .into_iter()
@@ -669,8 +781,12 @@ fn items(dir: &Path, ext: Option<&str>) -> Vec<Item> {
                 return None;
             }
             let stem = p.file_stem()?.to_str()?.to_string();
+            if badscript(&stem) {
+                return None;
+            }
+            let raw = fs::read(&p).ok()?;
             // Lossy: a script with a Latin-1 comment still shows up.
-            let text = String::from_utf8_lossy(&fs::read(&p).ok()?).replace('\t', "    ");
+            let text = String::from_utf8_lossy(&raw).replace('\t', "    ");
             let h = header::parse(&text);
             if h.menu.is_none() && stem != "check" && stem != "maintain" {
                 return None;
@@ -682,6 +798,8 @@ fn items(dir: &Path, ext: Option<&str>) -> Vec<Item> {
                 args: h.args,
                 apply: h.apply,
                 text,
+                sum: sha256(&raw).unwrap_or_default(),
+                approved: false, // scan's to say: it knows the record
             })
         })
         .collect();
@@ -879,6 +997,10 @@ fn draw(f: &mut Frame, app: &mut App) {
         .iter()
         .map(|i| {
             let mut sub = i.file.clone();
+            // First, so a narrow pane cuts the rest instead: Enter on it shows the script and asks before it runs.
+            if !i.approved {
+                sub += " · unapproved";
+            }
             if i.apply {
                 sub += " · --apply";
             }
@@ -1037,7 +1159,7 @@ mod tests {
 
     fn item(stem: &str, apply: bool) -> Item {
         let (file, text) = (format!("{stem}.sh"), String::new());
-        Item { stem: stem.into(), file, label: stem.into(), args: vec![], apply, text }
+        Item { stem: stem.into(), file, label: stem.into(), args: vec![], apply, text, sum: String::new(), approved: true }
     }
 
     fn app(hosts: Vec<Host>) -> App {
@@ -1116,17 +1238,45 @@ mod tests {
         (a.cw, a.rec) = (d.join("cw"), d.join("rec"));
         let log = d.join("rec/hosts/b/log.md");
         let entries = || fs::read_to_string(&log).unwrap().lines().filter(|l| l.starts_with("## ")).map(|l| l.ends_with(" tui")).collect::<Vec<_>>();
-        assert!(note(&a, "b", "approved fix").status().unwrap().success());
+        assert!(note(&a, "b", "approved fix").unwrap().status().unwrap().success());
         assert_eq!(fs::read_to_string(d.join("cw.args")).unwrap(), "save|tui: approved fix on b|");
         assert!(fs::read_to_string(&log).unwrap().contains("- approved fix (in the TUI)\n"));
         fs::write(&log, "# log\n\n## 2026-11-01 visit\n- x\n").unwrap();
-        note(&a, "b", "ran maintain --apply: exit 0");
+        note(&a, "b", "ran maintain --apply: exit 0").unwrap();
         let text = fs::read_to_string(&log).unwrap();
         assert!(text.starts_with("# log\n\n## ") && text.contains("- ran maintain --apply: exit 0"), "{text}");
         assert_eq!(entries(), [true, false], "newest first");
         fs::write(&log, "## 2026-11-01 visit\n").unwrap();
-        note(&a, "b", "approved fix");
+        note(&a, "b", "approved fix").unwrap();
         assert_eq!(entries(), [true, false]);
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn a_log_that_cant_be_read_as_text_is_never_written_over() {
+        let d = env::temp_dir().join(format!("cwtfigo-tui-log-{}", std::process::id()));
+        fs::create_dir_all(d.join("rec/hosts/b")).unwrap();
+        let mut a = app(vec![host("b", vec![])]);
+        a.rec = d.join("rec");
+        let log = d.join("rec/hosts/b/log.md");
+        // One byte that isn't UTF-8 (a Latin-1 name pasted in): every old byte stays, the entry goes above the first one.
+        let old = b"# log of caf\xe9\n\n## 2026-11-01 visit\n- fixed \xff\xfe\n";
+        fs::write(&log, old).unwrap();
+        note(&a, "b", "approved fix").unwrap();
+        let new = fs::read(&log).unwrap();
+        let at = b"# log of caf\xe9\n\n".len();
+        assert_eq!((&new[..at], &new[new.len() - (old.len() - at)..]), (&old[..at], &old[at..]));
+        let entry = String::from_utf8(new[at..new.len() - (old.len() - at)].to_vec()).unwrap();
+        assert!(entry.starts_with("## ") && entry.ends_with(" tui\n- approved fix (in the TUI)\n\n"), "{entry}");
+        // Not readable at all (here a directory in its place): left alone, and no cw save to run.
+        fs::remove_file(&log).unwrap();
+        fs::create_dir(&log).unwrap();
+        fs::write(log.join("kept"), "x").unwrap();
+        assert!(note(&a, "b", "approved fix").is_err());
+        assert_eq!(fs::read_to_string(log.join("kept")).unwrap(), "x");
+        // What save says about it isn't wiped out by the run's own word.
+        assert_eq!(joined("not noted".into(), "fix on b: exit 0".into()), "not noted; fix on b: exit 0");
+        assert_eq!((joined("a".into(), String::new()), joined(String::new(), "b".into())), ("a".into(), "b".into()));
         fs::remove_dir_all(&d).unwrap();
     }
 
@@ -1136,6 +1286,16 @@ mod tests {
         assert!(quits(k('c', KeyModifiers::CONTROL)) && quits(k('d', KeyModifiers::CONTROL)) && quits(k('q', KeyModifiers::NONE)));
         assert!(quits(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)));
         assert!(!quits(k('c', KeyModifiers::NONE)) && !quits(k('r', KeyModifiers::CONTROL)));
+    }
+
+    #[test]
+    fn only_a_plain_y_confirms() {
+        let k = |c, m| KeyEvent::new(KeyCode::Char(c), m);
+        assert!(yes(k('y', KeyModifiers::NONE)) && yes(k('Y', KeyModifiers::SHIFT)) && yes(k('Y', KeyModifiers::NONE)));
+        for m in [KeyModifiers::CONTROL, KeyModifiers::ALT, KeyModifiers::CONTROL | KeyModifiers::SHIFT, KeyModifiers::SUPER] {
+            assert!(!yes(k('y', m)) && !yes(k('Y', m)), "{m:?}");
+        }
+        assert!(!yes(k('n', KeyModifiers::NONE)) && !yes(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)));
     }
 
     #[cfg(unix)]
@@ -1184,9 +1344,21 @@ mod tests {
         a.hosts = vec![host("a", vec![item("x", true)]), host("b", vec![])];
         after(&mut a, t.clone(), false, false, Ok(Some(0)));
         assert!(matches!(&a.mode, Mode::Confirm(_, Then::Apply(u)) if *u == t));
+        // The question names the machine and the menu word the run was started with.
+        let asked = |a: &App| match &a.mode {
+            Mode::Confirm(q, _) => q.clone(),
+            _ => String::new(),
+        };
+        assert_eq!(asked(&a), "Run maintain --apply guard on b? y/N");
         after(&mut a, t.clone(), true, true, Ok(Some(3)));
         // cw stopped an --apply run on a changed script: the approve doesn't carry --apply over.
         assert!(matches!(&a.mode, Mode::Confirm(_, Then::Approve(u)) if *u == t));
+        assert_eq!(asked(&a), "Approve maintain on b, then run it with guard? y/N");
+        let plain = Target { arg: None, ..t.clone() };
+        after(&mut a, plain.clone(), false, false, Ok(Some(0)));
+        assert_eq!(asked(&a), "Run maintain --apply on b? y/N");
+        after(&mut a, plain, false, true, Ok(Some(3)));
+        assert_eq!(asked(&a), "Approve maintain on b? y/N");
         assert_eq!(t.name, "b");
         assert_eq!(t.stem, "maintain");
     }
@@ -1251,6 +1423,12 @@ mod tests {
         let port = l.local_addr().unwrap().port();
         assert_eq!(reach("127.0.0.1", port), Some(true));
         drop(l);
+        // A child another test spawned while the listener was open holds a copy of it until its exec (some 10 ms on
+        // a Mac): the port still answers for that long.
+        let t = Instant::now();
+        while reach("127.0.0.1", port) != Some(false) && t.elapsed() < Duration::from_secs(5) {
+            std::thread::sleep(Duration::from_millis(10));
+        }
         assert_eq!(reach("127.0.0.1", port), Some(false), "resolves, nothing listens: offline");
         // .invalid never resolves (RFC 6761), as a .local name doesn't through musl's resolver.
         assert_eq!(reach("cwtfigo-test.invalid", 22), None);
@@ -1289,7 +1467,7 @@ mod tests {
         fs::create_dir_all(&h).unwrap();
         fs::write(h.join("fix.sh"), "#!/bin/sh\nexit 3\n").unwrap();
         fs::write(h.join("approved.sha256"), "").unwrap();
-        let t = Target { name: "b".into(), stem: "fix".into(), file: "fix.sh".into(), arg: None, can_apply: false };
+        let t = Target { name: "b".into(), stem: "fix".into(), file: "fix.sh".into(), arg: None, can_apply: false, sum: String::new() };
         assert!(!approved(&rec, &t));
         let sum = "bb6220bfa599c6294ebc0954c2781c5513b565eb55f01aba387bfd0dc90176b1"; // of fix.sh above
         fs::write(h.join("approved.sha256"), format!("{sum}  fix  2026-11-07  yolo\n")).unwrap();
@@ -1308,6 +1486,140 @@ mod tests {
         assert!(matches!(a.mode, Mode::Normal));
         assert_eq!(a.message, "fix on b: exit 4");
         fs::remove_dir_all(&rec).unwrap();
+    }
+
+    /// A record with machine b in it, and this checkout's cw run on it: no ssh (b has a device.json), no real HOME.
+    #[cfg(unix)]
+    fn real_cw(tag: &str) -> (PathBuf, impl Fn(&[String]) -> Command) {
+        let d = env::temp_dir().join(format!("cwtfigo-tui-{tag}-{}", std::process::id()));
+        fs::create_dir_all(d.join("rec/hosts/b")).unwrap();
+        fs::write(d.join("rec/hosts/b/device.json"), "{ \"os\": \"arch\" }\n").unwrap();
+        let home = d.clone();
+        let cw = move |args: &[String]| {
+            let mut c = Command::new("sh");
+            c.arg(concat!(env!("CARGO_MANIFEST_DIR"), "/../skills/cwtfigo/scripts/cw")).args(args);
+            c.env("HOME", &home).env("CWTFIGO_HOME", home.join("rec")).env_remove("CWTFIGO_HERMES").stdin(Stdio::null());
+            c
+        };
+        (d, cw)
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn approve_is_pinned_to_what_the_preview_showed() {
+        assert_eq!(sha256(b"#!/bin/sh\nexit 3\n").as_deref(), Some("bb6220bfa599c6294ebc0954c2781c5513b565eb55f01aba387bfd0dc90176b1"));
+        let (d, cw) = real_cw("pin");
+        let (rec, h) = (d.join("rec"), d.join("rec/hosts/b"));
+        fs::write(h.join("fix.sh"), "# menu: fix it\necho shown\n").unwrap();
+        // A host script of this name: by its bare name cw approve would take it for "every plugin probe".
+        fs::write(h.join("probes.sh"), "# menu: mine\necho mine\n").unwrap();
+        let mut a = app(vec![host("b", items(&h, Some("sh")))]);
+        let fix = target(&a, None);
+        assert_eq!(fix.sum, sha256(b"# menu: fix it\necho shown\n").unwrap(), "the hash of the bytes in the preview");
+        assert_eq!(approve_args(&fix).unwrap(), ["approve".to_string(), "b".into(), format!("fix@{}", &fix.sum[..12])]);
+        assert_eq!(approve_args(&Target { sum: String::new(), ..fix.clone() }), None, "no hash: no approve by bare name");
+        // Changed between the preview and the y: cw refuses, the new content isn't approved.
+        fs::write(h.join("fix.sh"), "# menu: fix it\necho never shown\n").unwrap();
+        let o = cw(&approve_args(&fix).unwrap()).output().unwrap();
+        assert_eq!(o.status.code(), Some(1), "{o:?}");
+        assert!(String::from_utf8_lossy(&o.stderr).contains("fix changed since cw run showed it"), "{o:?}");
+        assert!(!approved(&rec, &fix));
+        // As shown: approved, and only that.
+        fs::write(h.join("fix.sh"), "# menu: fix it\necho shown\n").unwrap();
+        let o = cw(&approve_args(&fix).unwrap()).output().unwrap();
+        assert!(o.status.success() && approved(&rec, &fix), "{o:?}");
+        a.item = 1;
+        let probes = target(&a, None);
+        assert_eq!(probes.stem, "probes");
+        assert!(cw(&approve_args(&probes).unwrap()).output().unwrap().status.success());
+        let list = fs::read_to_string(h.join("approved.sha256")).unwrap();
+        assert_eq!(list.lines().map(|l| l.split_whitespace().nth(1).unwrap()).collect::<Vec<_>>(), ["fix", "probes"], "{list}");
+        assert!(approved(&rec, &probes));
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn the_menu_lists_no_name_cw_refuses() {
+        let d = env::temp_dir().join(format!("cwtfigo-tui-badname-{}", std::process::id()));
+        fs::create_dir_all(&d).unwrap();
+        // The decoy: shown and approved as itself, cw would read it as fix pinned to that hash.
+        for f in ["fix.sh", "fix@0123456789ab.sh", "a b.sh", "tab\tbed.sh", "back\\slash.sh"] {
+            fs::write(d.join(f), "# menu: x\n").unwrap();
+        }
+        assert_eq!(items(&d, Some("sh")).into_iter().map(|i| i.file).collect::<Vec<_>>(), ["fix.sh"]);
+        assert!(badscript("new\nline") && badscript("bell\u{7}") && !badscript("fix-2.old_one"));
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_refused_approve_says_why() {
+        let (d, cw) = real_cw("why");
+        let h = d.join("rec/hosts/b");
+        fs::write(h.join("fix.sh"), "# menu: fix it\necho shown\n").unwrap();
+        let a = app(vec![host("b", items(&h, Some("sh")))]);
+        let t = target(&a, None);
+        let mut err = String::new();
+        // The file is no longer what the preview showed: that line, not the "approved none" that sums up after it.
+        fs::write(h.join("fix.sh"), "# menu: fix it\necho never shown\n").unwrap();
+        assert_eq!(keep_stderr(&mut cw(&approve_args(&t).unwrap()), &mut err).unwrap().code(), Some(1));
+        let m = approve_failed(&t, &err);
+        assert!(m.starts_with("approve fix on b failed: fix changed since cw run showed it"), "{m}");
+        // A computer whose Hermes hook syncs the notes: cw approves nothing there.
+        fs::write(d.join("rec/hermes.on"), "").unwrap();
+        assert_eq!(keep_stderr(&mut cw(&approve_args(&t).unwrap()), &mut err).unwrap().code(), Some(1));
+        assert_eq!(approve_failed(&t, &err).split('.').next().unwrap(), "approve fix on b failed: cw runs scripts for Hermes here: it approves nothing and YOLO stays off");
+        assert_eq!(approve_failed(&t, "cw: approved none: refused fix\n\n"), "approve fix on b failed: approved none: refused fix");
+        assert_eq!(approve_failed(&t, ""), "approve fix on b failed", "sh didn't start");
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn the_menu_marks_what_is_not_approved() {
+        let rec = env::temp_dir().join(format!("cwtfigo-tui-mark-{}", std::process::id()));
+        let h = rec.join("hosts/b");
+        fs::create_dir_all(&h).unwrap();
+        fs::write(h.join("check.sh"), "# check\n").unwrap();
+        fs::write(h.join("fix.sh"), "# menu: fix\n").unwrap();
+        let marks = || scan(&rec)[0].items.iter().map(|i| i.approved).collect::<Vec<_>>();
+        assert_eq!(marks(), [false, false], "no approved.sha256 yet");
+        let sum = sha256(b"# menu: fix\n").unwrap();
+        fs::write(h.join("approved.sha256"), format!("{sum}  fix  2026-11-11\n")).unwrap();
+        assert_eq!(marks(), [false, true]);
+        let mut a = app(scan(&rec));
+        let s = screen(&mut a, 80, 24);
+        assert!(s.contains("check.sh · unapproved"), "{s}");
+        assert!(s.lines().any(|l| l.contains("fix.sh")) && !s.lines().any(|l| l.contains("fix.sh") && l.contains("unapproved")), "{s}");
+        // As cw counts: a run under YOLO is no approval once YOLO is off, and an edit since isn't the approved script.
+        fs::write(h.join("approved.sha256"), format!("{sum}  fix  2026-11-11  yolo\n")).unwrap();
+        assert_eq!(marks(), [false, false]);
+        fs::write(h.join("approved.sha256"), format!("{sum}  fix  2026-11-11\n")).unwrap();
+        fs::write(h.join("fix.sh"), "# menu: fix\necho edited\n").unwrap();
+        assert_eq!(marks(), [false, false]);
+        fs::remove_dir_all(&rec).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn keys_typed_during_a_run_are_dropped() {
+        // A terminal of the test's own: what is written to its master end is what a keyboard types.
+        let (mut master, mut tty) = (0, 0);
+        use std::ptr::null_mut;
+        assert_eq!(unsafe { libc::openpty(&mut master, &mut tty, null_mut(), null_mut(), null_mut()) }, 0);
+        let waiting = || {
+            let mut n: libc::c_int = 0;
+            assert_eq!(unsafe { libc::ioctl(tty, libc::FIONREAD as _, &mut n) }, 0);
+            n
+        };
+        assert_eq!(unsafe { libc::write(master, b"y\n".as_ptr().cast(), 2) }, 2);
+        let t = Instant::now();
+        while waiting() == 0 && t.elapsed() < Duration::from_secs(2) {
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert_eq!(waiting(), 2, "the typed y and Enter wait to be read");
+        drop_typed(tty);
+        assert_eq!(waiting(), 0);
+        unsafe { (libc::close(master), libc::close(tty)) };
     }
 
     #[cfg(unix)]
@@ -1582,6 +1894,7 @@ mod tests {
             file: "maintain.sh".into(),
             arg: Some("guard".into()),
             can_apply: true,
+            sum: String::new(),
         };
         assert_eq!(run_args(&t, true), ["run", "b", "maintain", "--apply", "guard"]);
         assert_eq!(run_args(&t, false), ["run", "b", "maintain", "guard"]);

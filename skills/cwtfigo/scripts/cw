@@ -286,7 +286,10 @@ go() {
     # Its command only sh -c with the temp path in '': the same in sh, bash, zsh and fish.
     # Not collect: it never needs sudo, and through the target's terminal every line of its output would arrive with
     # a CR, the id too: an ID MISMATCH against a record collected without one.
-    t=$(ssh "$alias" mktemp) && sargs "$@" | ssh "$alias" "cat > $t" && ssh -t "$alias" "sh -c 'sh $t; r=\$?; rm -f $t; exit \$r'"
+    # trap "" HUP: with a terminal, a dropped link or a closed window hangs up the target's sh and what it runs, in
+    # the middle of an upgrade. Ignored there and in every child, the run is left to finish, as without a terminal
+    # (reap, above). Ctrl-C still stops it, and the script's own traps but one for HUP still run.
+    t=$(ssh "$alias" mktemp) && sargs "$@" | ssh "$alias" "cat > $t" && ssh -t "$alias" "sh -c 'trap \"\" HUP; sh $t; r=\$?; rm -f $t; exit \$r'"
   else
     sargs "$@" | exec ssh $SSHO "$alias" 'sh -s' & reap
   fi
@@ -695,7 +698,9 @@ hermes)
         NR == 1 { h = 1; if (index($0, bom) == 1) $0 = substr($0, 4) }
         { sub(/\r$/, ""); l = trim($0) }
         l !~ /^#/ { h = 0; x = $0; gsub(/"/, "", x); gsub(q, "", x)
-          if (index(x, "= --apply") || index(x, "--apply)") || index(x, "-contains --apply")) ap = 1; next }
+          # Code that compares an argument to --apply, quotes out: [ $1 = --apply ], [ --apply = $1 ], a case pattern
+          # (--apply) or -y|--apply) or --apply|-y), PowerShell -contains and -eq. As header.rs, by tests/menu-headers.txt.
+          if (index(x, "= --apply") || index(x, "[ --apply =") || index(x, "-contains --apply") || index(x, "-eq --apply") || x ~ /--apply(\|[^ \t)]*)?\)/) ap = 1; next }
         h && l !~ /^#!/ { c = l; sub(/^#+/, "", c); t = trim(c)
           if (t ~ /^menu-args:/) { g = ""; nw = nr = 0; k = split(substr(t, 11), p, "|")
             # Any word, in whatever language the owner writes, sq()-quoted on its line; but none that reads as an option (--apply on

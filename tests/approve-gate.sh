@@ -40,6 +40,11 @@ ask "$(bash 'sh \"scripts/cw\"  yolo box')" "cw yolo, quoted, two spaces"
 ask "$(bash 'date +%s > ~/.cwtfigo/hosts/local/yolo.on')" "write yolo.on"
 ask "$(bash 'touch ~/.cwtfigo/hosts/local/yolo.on')" "touch yolo.on"
 ask "$(hook '"tool_name":"Write","tool_input":{"file_path":"/Users/u/.cwtfigo/hosts/local/yolo.on","content":"1"}')" "Write yolo.on"
+# hermes.on: with it in the record cw approves nothing on this computer (it syncs for Hermes). Not the model's to make
+# or to empty by Write/Edit, wherever the record is.
+ask "$(hook '"tool_name":"Write","tool_input":{"file_path":"/Users/u/.cwtfigo/hermes.on","content":""}')" "Write hermes.on"
+ask "$(hook '"tool_name":"Edit","tool_input":{"file_path":"/Users/u/.cwtfigo/hermes.on","old_string":"","new_string":"x"}')" "Edit hermes.on"
+ask "$(hook '"tool_name":"Write","tool_input":{"file_path":"/Users/u/.cwtfigo/HERMES.ON","content":""}')" "Write hermes.on, other case"
 ask "$(hook '"tool_name":"Write","tool_input":{"file_path":"/Users/u/.cwtfigo/hosts/local/APPROVED.SHA256","content":"x"}')" "Write, other case"
 
 [ -z "$(bash 'ls')" ] || fail "ls should pass silently"
@@ -245,7 +250,7 @@ for y in "$REC/hosts/box/yolo.on" "$REC/yolo.on"; do
   nallow "$(w Edit "$REC/hosts/other/fix.PS1")" "Edit a .ps1 under YOLO ($y)"
   allow "$(w Write "$REC/hosts/box/notes.md")" "Write notes.md under YOLO ($y)"; rm "$y"
 done
-for f in "$REC/hosts/box/approved.sha256" "$REC/hosts/box/yolo.on" "$REC/yolo.on" "$REC/mode" "$REC/MODE" "$REC/self" \
+for f in "$REC/hosts/box/approved.sha256" "$REC/hosts/box/yolo.on" "$REC/yolo.on" "$REC/hermes.on" "$REC/mode" "$REC/MODE" "$REC/self" \
          "$REC/.git/config" "$REC/.git/hooks/pre-commit" "$REC/.gitignore" "$REC/.gitattributes" "$REC/hosts/box/../../x" \
          "$REC/hosts/./box/notes.md" "$REC//operator.md" "$REC/../x" "$REC/" "$REC" "${REC}2/x" "$TMPDIR/elsewhere/notes.md" \
          "$REC/hosts/box/a\\\\b"; do
@@ -254,7 +259,8 @@ done
 # Other spellings of the same file. approved.sha256/. and yolo.on/ are the file itself to Write; on Windows so are a
 # trailing dot or space and ::$DATA. With the name in the path: ask, whatever follows. Other files in the record
 # spelled that way (mode. is mode there), or by a short name (APPROV~1.SHA): no allow.
-for f in "$REC/hosts/box/approved.sha256/." "$REC/hosts/box/yolo.on/" "$REC/yolo.on/." "$REC/hosts/box/approved.sha256." \
+for f in "$REC/hermes.on" "$REC/Hermes.On" "$REC/hermes.on/." "$REC/hermes.on." "$REC/hermes.on::\$DATA" \
+         "$REC/hosts/box/approved.sha256/." "$REC/hosts/box/yolo.on/" "$REC/yolo.on/." "$REC/hosts/box/approved.sha256." \
          "$REC/hosts/box/approved.sha256::\$DATA" "$REC/hosts/box/APPROVED.SHA256 " "$REC/hosts/box/yolo.on.bak" \
          "/u/a\\\\\\\"b/.cwtfigo/hosts/box/approved.sha256" "C:\\\\\\\\Users\\\\\\\\u\\\\\\\\.cwtfigo\\\\\\\\yolo.on."; do
   ask "$(w Write "$f")" "Write $f"; ask "$(w Edit "$f")" "Edit $f"
@@ -298,6 +304,7 @@ for f in "$REC/hosts/box/notes.md" "$REC/operator.md" "$(echo "$REC" | tr 'a-z' 
 done
 [ -z "$(bash 'ls')" ] && [ -z "$(w Write "$TMPDIR/elsewhere/notes.md")" ] || fail "strict mode: what isn't cw or the record takes Claude Code's own path"
 ask "$(bash "sh $CW approve local x")" "strict mode, cw approve"
+why "$(w Write "$REC/hermes.on")" "this needs your own yes" "strict mode, Write hermes.on: its own ask, not the notes' one"
 # A hand-edited mode file: anything but normal (case and spaces aside) is strict. Never fails open.
 for m in 'strict\r\n' 'Strict\n' ' strict\n' '' 'x\n'; do printf "$m" > "$REC/mode"; nallow "$(bash "sh $CW status")" "mode file '$m'"; done
 for m in 'normal\r\n' ' NORMAL \n'; do printf "$m" > "$REC/mode"; allow "$(bash "sh $CW status")" "mode file '$m'"; done
