@@ -3,8 +3,10 @@
 # maintain.ps1 (Windows): updates and cleanup for this host. PowerShell 5.1, ASCII only.
 #   no argument: dry run. Lists pending upgrades and what each cleanup item would free. Changes nothing
 #                except refreshing package indexes (scoop update pulls scoop and its buckets).
-#   --apply:     upgrade what UPDATE names, clean the items in CLEAN (or only those named after --apply),
-#                report space freed.
+#   --apply:     upgrade what UPDATE names, clean the items in CLEAN, report space freed.
+#   --apply <word>...: only what is named. update = the upgrades in UPDATE; any other word = that cleanup item.
+#                --apply recyclebin empties the Recycle Bin and upgrades nothing; --apply update npm upgrades, then
+#                cleans npm's cache.
 #                cw doesn't elevate. If the session is already admin (an admin account over SSH gets an elevated
 #                token), admin-only steps run directly; if not, each prints its command for the human to run in an
 #                admin PowerShell. The dry run's first line says which.
@@ -35,12 +37,22 @@ $CHOCO_HOLD = 'python,python3'
 # Never touched: Windows.old, the component store (DISM), restore points: each ends a way back, ask separately.
 
 $APPLY = $args -contains '--apply'
-# Items named after --apply are the owner's pick for this run, in place of CLEAN (none: clean nothing). The pick goes
-# as args, not as an edit: an edit changes the hash and asks for approval again. CLEAN stays the habit.
+# Words after --apply are the owner's pick for this run: only what is named runs. update is the upgrades in UPDATE,
+# every other word a cleanup item, in place of CLEAN. So --apply recyclebin empties the Recycle Bin and upgrades
+# nothing, and --apply update upgrades and cleans nothing. The pick goes as args, not as an edit: an edit changes the
+# hash and asks for approval again. CLEAN and UPDATE stay the habit. A word that is neither is a typo: said, and
+# nothing runs.
 # recyclebin only when named after --apply (--apply recyclebin), never from CLEAN: emptying it takes the owner's yes
 # typed in chat, and --apply runs on a permission prompt alone. So it is left out of CLEAN even if added there.
+# ITEMS: every cleanup item below. One added to this script goes here too, or naming it is refused as a typo.
+$ITEMS = 'usertemp winget scoop choco npm pip wudownload recyclebin'
 $pick = @($args | Where-Object { $_ -ne '--apply' })
-if ($pick.Count) { $CLEAN = $pick -join ' ' } else { $CLEAN = (($CLEAN -split ' ') | Where-Object { $_ -ne 'recyclebin' }) -join ' ' }
+$NOUP = $false
+if ($pick.Count) {
+  foreach ($w in $pick) { if ($w -ne 'update' -and ($ITEMS -split ' ') -notcontains $w) { "unknown item: $w"; "known: update $ITEMS"; exit 1 } }
+  $NOUP = $APPLY -and ($pick -notcontains 'update')
+  $CLEAN = @($pick | Where-Object { $_ -ne 'update' }) -join ' '
+} else { $CLEAN = (($CLEAN -split ' ') | Where-Object { $_ -ne 'recyclebin' }) -join ' ' }
 $ErrorActionPreference = 'SilentlyContinue'
 $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 function has($c) { [bool](Get-Command $c) }
@@ -84,6 +96,7 @@ if (-not $APPLY) {
 }
 
 sec updates
+if ($NOUP) { $UPDATE = ''; 'updates: not asked for (--apply <items> without update): nothing listed, nothing upgraded' }
 # Shortcuts on both desktops before the upgrades; afterwards only ones not in this list and created since go.
 # In a service or SSH profile GetFolderPath can return '' and a desktop can be missing: skipped.
 $desk = $APPLY -and (on $UPDATE desktop)
@@ -140,21 +153,23 @@ if ($desk) {
   }
 }
 # Windows Update via its COM API, offline: what Windows' own last scan found. In a job, it can hang behind a running update.
-$j = Start-Job {
-  # The job is a child process: the loader's $ProgressPreference doesn't reach it, and its module-loading progress
-  # comes back to stderr as CLIXML.
-  $ProgressPreference = 'SilentlyContinue'
-  $ErrorActionPreference = 'Stop'
-  $s = (New-Object -ComObject Microsoft.Update.Session).CreateUpdateSearcher(); $s.Online = $false
-  @($s.Search('IsInstalled=0 and IsHidden=0').Updates | ForEach-Object { $_.Title })
+if (-not $NOUP) {
+  $j = Start-Job {
+    # The job is a child process: the loader's $ProgressPreference doesn't reach it, and its module-loading progress
+    # comes back to stderr as CLIXML.
+    $ProgressPreference = 'SilentlyContinue'
+    $ErrorActionPreference = 'Stop'
+    $s = (New-Object -ComObject Microsoft.Update.Session).CreateUpdateSearcher(); $s.Online = $false
+    @($s.Search('IsInstalled=0 and IsHidden=0').Updates | ForEach-Object { $_.Title })
+  }
+  if (Wait-Job $j -Timeout 60) {
+    $wu = @(Receive-Job $j)
+    if ($j.State -ne 'Completed') { 'Windows Update: search failed' }
+    elseif ($wu.Count) { 'Windows Update (list only, as of its last scan; install from Settings, it reboots):'; $wu | ForEach-Object { "  $_" } }
+    else { 'Windows Update: nothing pending (as of its last scan)' }
+  } else { 'Windows Update: search gave no answer in 60 s' }
+  Remove-Job $j -Force
 }
-if (Wait-Job $j -Timeout 60) {
-  $wu = @(Receive-Job $j)
-  if ($j.State -ne 'Completed') { 'Windows Update: search failed' }
-  elseif ($wu.Count) { 'Windows Update (list only, as of its last scan; install from Settings, it reboots):'; $wu | ForEach-Object { "  $_" } }
-  else { 'Windows Update: nothing pending (as of its last scan)' }
-} else { 'Windows Update: search gave no answer in 60 s' }
-Remove-Job $j -Force
 
 sec 'cleanup (size, on/off)'
 item usertemp (size $env:TEMP 7) { $cut = (Get-Date).AddDays(-7); Get-ChildItem $env:TEMP -Recurse -File -Force | Where-Object { $_.LastWriteTime -lt $cut } | Remove-Item -Force }

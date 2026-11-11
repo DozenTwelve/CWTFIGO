@@ -5,8 +5,10 @@
 #   no argument: dry run. Last upgrade, pending updates (from fresh package lists in a private dir), held and kept-back
 #                packages, what each cleanup item would free, autoremove candidates. Changes nothing.
 #   --apply:     apt-get update, apt-get upgrade --with-new-pkgs (apt asks before it changes anything), snap, flatpak,
-#                clean the items in CLEAN (or only those named after --apply), report space freed, .dpkg-dist, reboot.
+#                clean the items in CLEAN, report space freed, .dpkg-dist, reboot.
 #                Uses sudo: the human runs it in their terminal.
+#   --apply <word>...: only what is named. update = the upgrades in UPDATE; any other word = that cleanup item.
+#                --apply trash empties the Trash and upgrades nothing; --apply update journal upgrades, then vacuums.
 #
 # This is where the host's habits live. Edit CLEAN and UPDATE to fit the machine and its owner;
 # an item missing here is never cleaned, whatever the dry run shows. Packages to hold: sudo apt-mark hold <pkg>,
@@ -31,11 +33,23 @@ JOURNAL_MAX=200M
 # keeps on purpose: show the full list, check notes.md, confirm separately).
 
 APPLY=; [ "$1" = --apply ] && APPLY=1 && shift
-# Items named after --apply are the owner's pick for this run, in place of CLEAN (none: clean nothing). The pick goes
-# as args, not as an edit: an edit changes the hash and asks for approval again. CLEAN stays the habit.
+# Words after --apply are the owner's pick for this run: only what is named runs. `update` is the upgrades in UPDATE,
+# every other word a cleanup item, in place of CLEAN. So --apply trash empties the Trash and upgrades nothing, and
+# --apply update upgrades and cleans nothing. The pick goes as args, not as an edit: an edit changes the hash and asks
+# for approval again. CLEAN and UPDATE stay the habit. A word that is neither is a typo: said, and nothing runs.
 # trash only when named after --apply (--apply trash), never from CLEAN: emptying it takes the owner's yes typed in
 # chat, and --apply runs on a permission prompt alone. So it is left out of CLEAN even if added there.
-[ $# -gt 0 ] && CLEAN="$*" || { c=; for i in $CLEAN; do [ "$i" = trash ] || c="${c:+$c }$i"; done; CLEAN=$c; }
+# ITEMS: every cleanup item below. One added to this script goes here too, or naming it is refused as a typo.
+ITEMS="aptcache journal snaprev usercache trash"
+NOUP=
+if [ $# -gt 0 ]; then
+  [ -n "$APPLY" ] && NOUP=1; c=
+  for i in "$@"; do
+    if [ "$i" = update ]; then NOUP=; continue; fi
+    case " $ITEMS " in *" $i "*) c="${c:+$c }$i" ;; *) echo "unknown item: $i"; echo "known: update $ITEMS"; exit 1 ;; esac
+  done
+  CLEAN=$c
+else c=; for i in $CLEAN; do [ "$i" = trash ] || c="${c:+$c }$i"; done; CLEAN=$c; fi
 has() { command -v "$1" >/dev/null 2>&1; }
 on() { case " $1 " in *" $2 "*) return 0;; esac; return 1; }
 sec() { echo; echo "## $1"; }
@@ -68,6 +82,7 @@ case $(sed -n 's/^ID=//p' /etc/os-release) in
 esac
 
 sec updates
+[ -n "$NOUP" ] && { UPDATE=; echo "updates: not asked for (--apply <items> without update): nothing listed, nothing upgraded"; }
 if on "$UPDATE" apt; then
   # The system's lists are as old as the last root apt-get update. The dry run fetches fresh ones into a private dir
   # (no root, no lock, like checkupdates on Arch); --apply updates the real ones.

@@ -4,7 +4,9 @@
 # maintain.sh (macOS): updates and cleanup for this host.
 #   no argument: dry run. Lists pending updates and what each cleanup item would free. Changes nothing
 #                except refreshing Homebrew's package index.
-#   --apply:     upgrade, clean the items in CLEAN (or only those named after --apply), report space freed.
+#   --apply:     upgrade what UPDATE names, clean the items in CLEAN, report space freed.
+#   --apply <word>...: only what is named. update = the upgrades in UPDATE; any other word = that cleanup item.
+#                --apply trash empties the Trash and upgrades nothing; --apply update brew upgrades, then cleans brew.
 #
 # This is where the host's habits live. Edit CLEAN and UPDATE to fit the machine and its owner;
 # an item missing here is never cleaned, whatever the dry run shows.
@@ -28,11 +30,23 @@ SNAPSHOT=no
 # Never touched: Xcode Archives (dSYMs), iOS backups, anything under ~/Documents or ~/Desktop.
 
 APPLY=; [ "$1" = --apply ] && APPLY=1 && shift
-# Items named after --apply are the owner's pick for this run, in place of CLEAN (none: clean nothing). The pick goes
-# as args, not as an edit: an edit changes the hash and asks for approval again. CLEAN stays the habit.
+# Words after --apply are the owner's pick for this run: only what is named runs. `update` is the upgrades in UPDATE,
+# every other word a cleanup item, in place of CLEAN. So --apply trash empties the Trash and upgrades nothing, and
+# --apply update upgrades and cleans nothing. The pick goes as args, not as an edit: an edit changes the hash and asks
+# for approval again. CLEAN and UPDATE stay the habit. A word that is neither is a typo: said, and nothing runs.
 # trash only when named after --apply (--apply trash), never from CLEAN: emptying it takes the owner's yes typed in
 # chat, and --apply runs on a permission prompt alone. So it is left out of CLEAN even if added there.
-[ $# -gt 0 ] && CLEAN="$*" || { c=; for i in $CLEAN; do [ "$i" = trash ] || c="${c:+$c }$i"; done; CLEAN=$c; }
+# ITEMS: every cleanup item below. One added to this script goes here too, or naming it is refused as a typo.
+ITEMS="brew logs xcode simulators npm pnpm yarn pip go caches docker trash"
+NOUP=
+if [ $# -gt 0 ]; then
+  [ -n "$APPLY" ] && NOUP=1; c=
+  for i in "$@"; do
+    if [ "$i" = update ]; then NOUP=; continue; fi
+    case " $ITEMS " in *" $i "*) c="${c:+$c }$i" ;; *) echo "unknown item: $i"; echo "known: update $ITEMS"; exit 1 ;; esac
+  done
+  CLEAN=$c
+else c=; for i in $CLEAN; do [ "$i" = trash ] || c="${c:+$c }$i"; done; CLEAN=$c; fi
 has() { command -v "$1" >/dev/null 2>&1; }
 on() { case " $1 " in *" $2 "*) return 0;; esac; return 1; }
 sec() { echo; echo "## $1"; }
@@ -63,6 +77,7 @@ if [ -n "$APPLY" ] && [ "$SNAPSHOT" = yes ]; then
 fi
 
 sec updates
+[ -n "$NOUP" ] && { UPDATE=; echo "updates: not asked for (--apply <items> without update): nothing listed, nothing upgraded"; }
 if on "$UPDATE" brew && has brew; then
   e=$(brew update -q 2>&1 >/dev/null) || echo "brew update failed, the list is from the last index: $(echo "$e" | tail -1)"
   if lst brew outdated --verbose; then
@@ -91,13 +106,15 @@ if on "$UPDATE" npm && has npm; then
 fi
 # softwareupdate -l asks Apple's server and can hang behind a stuck softwareupdated: 120 s. macOS has no timeout(1),
 # so a background job and a killer; the killer's output goes nowhere, so its leftover sleep holds no pipe open.
-softwareupdate -l >"$E" 2>&1 & p=$!
-( sleep 120; kill $p ) >/dev/null 2>&1 & k=$!
-if wait $p; then
-  out=$(sed -n 's/.*\* Label: /  /p' "$E")
-  [ -n "$out" ] && printf 'macOS (list only, installing reboots):\n%s\n' "$out" || echo "macOS (list only, installing reboots): all current"
-else echo "macOS: softwareupdate -l failed or gave no answer in 120 s: $(tail -1 "$E")"; fi
-kill $k 2>/dev/null
+if [ -z "$NOUP" ]; then
+  softwareupdate -l >"$E" 2>&1 & p=$!
+  ( sleep 120; kill $p ) >/dev/null 2>&1 & k=$!
+  if wait $p; then
+    out=$(sed -n 's/.*\* Label: /  /p' "$E")
+    [ -n "$out" ] && printf 'macOS (list only, installing reboots):\n%s\n' "$out" || echo "macOS (list only, installing reboots): all current"
+  else echo "macOS: softwareupdate -l failed or gave no answer in 120 s: $(tail -1 "$E")"; fi
+  kill $k 2>/dev/null
+fi
 
 sec "cleanup (size, on/off)"
 has brew && item brew "$(brew cleanup -n --prune=30 2>/dev/null | sed -n 's/.*free approximately \([^ ]*\).*/\1/p')" "brew cleanup --prune=30"

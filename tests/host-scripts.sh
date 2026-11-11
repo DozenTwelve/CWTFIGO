@@ -11,6 +11,7 @@ SH=${SH:-sh}; SH="$(command -v ${SH%% *})${SH#${SH%% *}}"   # absolute: the scri
 # python3 by its real path, found before HOME moves: a version manager's shim (mise, pyenv) breaks under a temp HOME.
 PY=$(python3 -c 'import sys; print(sys.executable)') || { echo "FAIL: the kinds.json check needs python3"; exit 1; }
 T=$(mktemp -d); export HOME="$T/home"; mkdir "$HOME"
+unset XDG_CACHE_HOME XDG_DATA_HOME   # the scripts' cache and Trash paths follow them: here they stay under the temp HOME
 fail() { echo "FAIL: $* (copy: ${D:-}/script)"; exit 1; }
 
 # fresh: a new fake root $D whose bin/ holds basic tools; stub <command> <sh body>: a fake command there.
@@ -165,25 +166,36 @@ echo "$out" | grep -qx '  partly: caches, [0-9]*M left (in use or protected)' ||
 [ -e "$X/gone" ] && fail "macos maintain: item should still clean what it can"
 echo "$out" | grep -qx '  failed: trash' || fail "macos maintain: without a dir a failed clean stays failed: $out"
 
-# maintain: items named after --apply replace CLEAN for that run (the owner's pick, no edit, no new hash); none
-# cleans nothing; no items keep CLEAN. Only the argument lines run, cut out of each script.
+# maintain: words after --apply are the owner's pick for that run (no edit, no new hash): only what is named runs.
+# `update` is the upgrades, any other word a cleanup item in place of CLEAN; words without `update` under --apply
+# upgrade nothing (NOUP=1). No words keep CLEAN. A word the script doesn't know (a typo, the old `none`, an --apply
+# that isn't first) stops it with exit 1. Only the argument lines run, cut out of each script.
 fresh
 for s in macos debian arch; do
-  { sed -n '/^APPLY=/,/^\[ \$# -gt 0 \]/p' "$F/$s/maintain.sh"; echo 'echo "$APPLY|$CLEAN"'; } > "$D/args.sh"
-  c=$(sed -n 's/^CLEAN="\(.*\)"$/\1/p' "$F/$s/maintain.sh")
-  # args | APPLY | CLEAN after (= the script's own CLEAN)
-  for t in "--apply brew trash|1|brew trash" "--apply none|1|none" "--apply|1|=" "||="; do
-    a=${t%%|*}; w=${t#*|}; [ "${w#*|}" = = ] && w="${w%|*}|$c"
-    { echo "CLEAN=\"$c\""; cat "$D/args.sh"; } > "$D/a.sh"; o=$(PATH=$D/bin $SH "$D/a.sh" $a)
-    [ "$o" = "$w" ] || fail "$s maintain: args '$a' should give APPLY|CLEAN '$w', got '$o'"
+  { sed -n '/^APPLY=/p; /^ITEMS=/,/^else c=/p' "$F/$s/maintain.sh"; echo 'echo "$APPLY|$NOUP|$CLEAN"'; } > "$D/args.sh"
+  c=$(sed -n 's/^CLEAN="\(.*\)"$/\1/p' "$F/$s/maintain.sh"); i=${c%% *}
+  { echo "CLEAN=\"$c\""; cat "$D/args.sh"; } > "$D/a.sh"
+  # args | APPLY | NOUP | CLEAN after (= the script's own CLEAN)
+  for t in "--apply $i trash|1|1|$i trash" "--apply update|1||" "--apply update $i|1||$i" "--apply $i update|1||$i" "--apply|1||=" "|||=" "$i|||$i"; do
+    a=${t%%|*}; w=${t#*|}; [ "${w##*|}" = = ] && w="${w%|*}|$c"
+    o=$(PATH=$D/bin $SH "$D/a.sh" $a)
+    [ "$o" = "$w" ] || fail "$s maintain: args '$a' should give APPLY|NOUP|CLEAN '$w', got '$o'"
   done
+  for a in "--apply trahs" "--apply none" "--apply $i trahs" "trahs" "$i --apply"; do
+    o=$(PATH=$D/bin $SH "$D/a.sh" $a); [ $? = 1 ] || fail "$s maintain: args '$a' should exit 1: $o"
+    [ "$(echo "$o" | sed -n 1p)" = "unknown item: ${a##* }" ] && [ "$(echo "$o" | wc -l)" -eq 2 ] && echo "$o" | grep -q "^known: update $i .*trash\$" ||
+      fail "$s maintain: args '$a' should name the unknown word and the known ones, nothing else: $o"
+  done
+  # ITEMS is what that check knows: it names every item the script has, no more.
+  [ "$(sed -n 's/^ITEMS="\(.*\)"$/\1/p' "$F/$s/maintain.sh" | tr ' ' '\n' | sort)" = "$(grep -v '^ *#' "$F/$s/maintain.sh" | grep -o 'item [a-z]* "\$(' | cut -d' ' -f2 | sort)" ] ||
+    fail "$s maintain: ITEMS should list exactly the items the script has"
 done
 # maintain --apply with no items never empties the Trash, even with trash in CLEAN: that takes the owner's yes in chat
 # and a run that names it. The CLEAN lines, on, mb, item and the trash item, cut out of each script; rm is a stub.
 for s in macos debian arch; do
   fresh; ln -s "${SH%% *}" "$D/bin/sh"; stub rm 'touch "$0.ran"'; mkdir -p "$HOME/.Trash" "$HOME/.local/share/Trash"
   { sed -n 's/^CLEAN="/CLEAN="trash /p' "$F/$s/maintain.sh"; echo 'APPLY=1; S='
-    sed -n '/^\[ \$# -gt 0 \]/p; /^on()/p; /^mb()/p; /^item()/,/^}/p; /^item trash/p; s/^else \(item trash.*\); fi$/\1/p' "$F/$s/maintain.sh"; } > "$D/trash.sh"
+    sed -n '/^ITEMS=/,/^else c=/p; /^on()/p; /^mb()/p; /^item()/,/^}/p; /^item trash/p; s/^else \(item trash.*\); fi$/\1/p' "$F/$s/maintain.sh"; } > "$D/trash.sh"
   out=$(run "$D/trash.sh" 2>&1); [ -e "$D/bin/rm.ran" ] && fail "$s maintain --apply with no items emptied the Trash: $out"
   echo "$out" | grep -Eq '^trash +off ' || fail "$s maintain --apply with no items should show trash off: $out"
   run "$D/trash.sh" trash >/dev/null 2>&1; [ -e "$D/bin/rm.ran" ] || fail "$s maintain --apply trash should empty the Trash"
@@ -191,9 +203,17 @@ done
 # The same for the Recycle Bin on Windows: only its CLEAN lines, where pwsh is installed.
 if command -v pwsh >/dev/null; then
   fresh; { sed -n 's/^\$CLEAN = '"'"'/$CLEAN = '"'"'recyclebin /p' "$F/windows/maintain.ps1"
-    sed -n '/^\$pick = /,/^if (\$pick.Count)/p' "$F/windows/maintain.ps1"; echo '$CLEAN'; } > "$D/rb.ps1"
+    sed -n '/^\$APPLY = /p; /^\$ITEMS = /,/^} else { \$CLEAN/p' "$F/windows/maintain.ps1"; echo '"$NOUP|$CLEAN"'; } > "$D/rb.ps1"
   pwsh -NoProfile -NonInteractive -File "$D/rb.ps1" --apply | grep -qw recyclebin && fail "windows maintain --apply with no items keeps recyclebin in CLEAN"
-  pwsh -NoProfile -NonInteractive -File "$D/rb.ps1" --apply recyclebin | grep -qx recyclebin || fail "windows maintain --apply recyclebin should clean it"
+  pwsh -NoProfile -NonInteractive -File "$D/rb.ps1" --apply recyclebin | grep -qx 'True|recyclebin' || fail "windows maintain --apply recyclebin should clean it and upgrade nothing"
+  # The same words as the sh scripts: update, the items, and a stop at anything else.
+  pwsh -NoProfile -NonInteractive -File "$D/rb.ps1" --apply npm update | grep -qx 'False|npm' || fail "windows maintain --apply npm update: the upgrades and npm"
+  for a in recyclebni none; do
+    o=$(pwsh -NoProfile -NonInteractive -File "$D/rb.ps1" --apply $a); [ $? = 1 ] && [ "$(echo "$o" | sed -n 1p)" = "unknown item: $a" ] && [ "$(echo "$o" | wc -l)" -eq 2 ] ||
+      fail "windows maintain --apply $a should stop at the unknown word: $o"
+  done
+  [ "$(sed -n "s/^\$ITEMS = '\(.*\)'$/\1/p" "$F/windows/maintain.ps1" | tr ' ' '\n' | sort)" = "$(grep -v '^ *#' "$F/windows/maintain.ps1" | grep -o 'item [a-z]* (' | cut -d' ' -f2 | sort)" ] ||
+    fail "windows maintain: ITEMS should list exactly the items the script has"
 fi
 # The dry run shows the pick as on/off too.
 fresh; stub id 'case $1 in -u) echo 1000 ;; -Gn) echo adm ;; *) echo u ;; esac'
@@ -202,6 +222,68 @@ for s in debian arch; do
   run "$F/$s/maintain.sh" usercache 2>/dev/null | grep -Eq '^journal +off ' || fail "$s maintain: journal not in the pick should be off"
   run "$F/$s/maintain.sh" 2>/dev/null | grep -Eq '^journal +on ' || fail "$s maintain: journal is in CLEAN, should be on"
 done
+
+# Whole --apply runs, every command a stub that writes its call to $D/bin/log, HOME the temp one: `--apply <item>`
+# cleans it, upgrades nothing and says so; `--apply update` upgrades and cleans nothing; a typo stops before anything
+# runs; --apply alone still does both. stdin is /dev/null, and apt and pacman have nothing pending: their question
+# needs a terminal.
+has() { grep -qx -- "$1" "$D/bin/log" 2>/dev/null; }
+mac() {   # one outdated formula, one outdated npm package, a file in the Trash
+  fresh; ln -s "${SH%% *}" "$D/bin/sh"; mkdir -p "$HOME/.Trash"; touch "$HOME/.Trash/f"
+  stub brew 'echo "brew $*" >> "${0%/*}/log"; case $1 in outdated) echo "foo (1.0) < 2.0" ;; cleanup) [ "$2" = -n ] && echo "would free approximately 5MB of disk space." ;; esac'
+  stub npm 'echo "npm $*" >> "${0%/*}/log"; [ "$1" != outdated ] || echo "pnpm 9 9 10"'
+  stub softwareupdate 'echo "softwareupdate $*" >> "${0%/*}/log"'
+}
+mac; out=$(run "$F/macos/maintain.sh" --apply trash </dev/null 2>&1) || fail "macos maintain --apply trash: $out"
+[ -e "$HOME/.Trash/f" ] && fail "macos maintain --apply trash should empty the Trash: $out"
+grep -E ' (update|upgrade|outdated)|softwareupdate|^brew cleanup --prune' "$D/bin/log" && fail "macos maintain --apply trash upgraded, listed or cleaned something else: $out"
+echo "$out" | grep -q '^updates: not asked for ' && echo "$out" | grep -qx 'mode: applied' || fail "macos maintain --apply trash should say the upgrades were not asked for: $out"
+mac; out=$(run "$F/macos/maintain.sh" --apply update </dev/null 2>&1) || fail "macos maintain --apply update: $out"
+has 'brew upgrade' && has 'npm update -g' && has 'softwareupdate -l' || fail "macos maintain --apply update should upgrade: $(cat "$D/bin/log")"
+has 'brew cleanup --prune=30' || has 'npm cache clean --force' || [ ! -e "$HOME/.Trash/f" ] && fail "macos maintain --apply update cleaned something: $(cat "$D/bin/log")"
+echo "$out" | grep -q 'not asked for' && fail "macos maintain --apply update: the upgrades were asked for: $out"
+mac; out=$(run "$F/macos/maintain.sh" --apply trahs </dev/null 2>&1); [ $? = 1 ] || fail "macos maintain --apply trahs should exit 1: $out"
+[ "$(echo "$out" | sed -n 1p)" = "unknown item: trahs" ] && [ ! -e "$D/bin/log" ] && [ -e "$HOME/.Trash/f" ] || fail "macos maintain --apply trahs should run nothing: $out $(cat "$D/bin/log" 2>&1)"
+mac; out=$(run "$F/macos/maintain.sh" --apply </dev/null 2>&1) || fail "macos maintain --apply: $out"
+has 'brew upgrade' && has 'npm update -g' && has 'brew cleanup --prune=30' && has 'npm cache clean --force' && [ -e "$HOME/.Trash/f" ] || fail "macos maintain --apply should upgrade, clean CLEAN and leave the Trash: $(cat "$D/bin/log")"
+echo "$out" | grep -qx 'mode: applied' || fail "macos maintain --apply should end applied: $out"
+rm -r "$HOME/.Trash"
+
+deb() {   # sudo passes its command on; $1: what apt-get -s upgrade lists
+  fresh; stub id 'echo 1000'; stub apt-mark :
+  stub sudo 'echo "sudo $*" >> "${0%/*}/log"; [ "$1" = -v ] || exec "$@"'
+  stub apt-get 'echo "apt-get $*" >> "${0%/*}/log"; case " $* " in *" -s upgrade "*) echo "'"${1:-}"'" ;; esac'
+}
+deb; out=$(run "$F/debian/maintain.sh" --apply aptcache </dev/null 2>&1) || fail "debian maintain --apply aptcache: $out"
+has 'apt-get clean' || fail "debian maintain --apply aptcache should clean the cache: $(cat "$D/bin/log")"
+grep -E 'update|upgrade' "$D/bin/log" && fail "debian maintain --apply aptcache updated or upgraded: $out"
+echo "$out" | grep -q '^updates: not asked for ' && echo "$out" | grep -qx 'mode: applied' || fail "debian maintain --apply aptcache should say the upgrades were not asked for: $out"
+deb; out=$(run "$F/debian/maintain.sh" --apply update </dev/null 2>&1) || fail "debian maintain --apply update: $out"
+has 'apt-get update -qq' && has 'apt-get upgrade --with-new-pkgs' || fail "debian maintain --apply update should upgrade: $(cat "$D/bin/log")"
+has 'apt-get clean' && fail "debian maintain --apply update cleaned something: $(cat "$D/bin/log")"
+deb; out=$(run "$F/debian/maintain.sh" --apply aptcahce </dev/null 2>&1); [ $? = 1 ] || fail "debian maintain --apply aptcahce should exit 1: $out"
+[ "$(echo "$out" | sed -n 1p)" = "unknown item: aptcahce" ] && [ ! -e "$D/bin/log" ] || fail "debian maintain --apply aptcahce should run nothing, not even sudo -v: $out $(cat "$D/bin/log" 2>&1)"
+# The one whole run to the end: --apply alone.
+deb; out=$(run "$F/debian/maintain.sh" --apply </dev/null 2>&1) || fail "debian maintain --apply should exit 0: $out"
+has 'sudo -v' && has 'apt-get update -qq' && has 'apt-get upgrade --with-new-pkgs' && has 'apt-get clean' || fail "debian maintain --apply should upgrade and clean: $(cat "$D/bin/log")"
+echo "$out" | grep -qx 'mode: applied' && echo "$out" | grep -qx 'no .dpkg-dist' || fail "debian maintain --apply should end applied: $out"
+
+arch() {   # $1: checkupdates' body (exit 2 = nothing pending)
+  fresh; ln -s "${SH%% *}" "$D/bin/sh"; stub id 'echo 1000'; stub uname 'echo 6.1'; stub checkupdates "$1"
+  stub sudo 'echo "sudo $*" >> "${0%/*}/log"; [ "$1" = -v ] || exec "$@"'
+  for c in pacman paccache; do stub $c "echo \"$c \$*\" >> \"\${0%/*}/log\""; done
+}
+arch 'exit 2'; out=$(run "$F/arch/maintain.sh" --apply pkgcache </dev/null 2>&1) || fail "arch maintain --apply pkgcache: $out"
+has 'paccache -rk2' && has 'paccache -ruk0' || fail "arch maintain --apply pkgcache should clean the cache: $(cat "$D/bin/log")"
+grep 'pacman -S' "$D/bin/log" && fail "arch maintain --apply pkgcache synced or upgraded: $out"
+echo "$out" | grep -q '^updates: not asked for ' && echo "$out" | grep -qx 'mode: applied' || fail "arch maintain --apply pkgcache should say the upgrades were not asked for: $out"
+arch 'exit 2'; out=$(run "$F/arch/maintain.sh" --apply update </dev/null 2>&1) || fail "arch maintain --apply update: $out"
+has 'pacman -Sy --needed --noconfirm archlinux-keyring' && has 'pacman -Su' || fail "arch maintain --apply update should upgrade: $(cat "$D/bin/log")"
+grep 'paccache -r' "$D/bin/log" && fail "arch maintain --apply update cleaned something: $out"
+arch 'exit 2'; out=$(run "$F/arch/maintain.sh" --apply pkgcahce </dev/null 2>&1); [ $? = 1 ] || fail "arch maintain --apply pkgcahce should exit 1: $out"
+[ "$(echo "$out" | sed -n 1p)" = "unknown item: pkgcahce" ] && [ ! -e "$D/bin/log" ] || fail "arch maintain --apply pkgcahce should run nothing, not even sudo -v: $out $(cat "$D/bin/log" 2>&1)"
+arch 'exit 2'; out=$(run "$F/arch/maintain.sh" --apply </dev/null 2>&1) || fail "arch maintain --apply: $out"
+has 'pacman -Su' && has 'paccache -rk2' && echo "$out" | grep -qx 'mode: applied' || fail "arch maintain --apply should upgrade and clean: $out $(cat "$D/bin/log")"
 
 # openwrt maintain: a package in UPGRADE whose upgrade would also move a core package is skipped, and the dry run says so.
 for pm in apk opkg; do
@@ -261,6 +343,23 @@ if command -v pwsh >/dev/null; then
   fresh; for c in winget choco scoop; do stub $c "touch \"\$0.ran\""; done
   ps "$F/windows/check.ps1" >/dev/null 2>&1
   for c in winget choco scoop; do [ -e "$D/bin/$c.ran" ] && fail "windows check: ran $c"; done
+  # windows maintain --apply, whole, as the sh scripts above: PATH holds only the stubs, TEMP is a temp dir with one
+  # old file, and what Windows alone has (COM, the registry, the Recycle Bin) fails quietly under pwsh on Unix.
+  PWSH=$(command -v pwsh)
+  win() {
+    fresh; mkdir "$D/tmp"; touch -t 202601010000 "$D/tmp/old"
+    stub winget 'echo "winget $*" >> "${0%/*}/log"; [ "$*" != "upgrade --accept-source-agreements" ] || printf "%s\r\n" "Name Id Version Available Source" "--------------------" "Foo Vendor.Foo 1.0 2.0 winget"'
+  }
+  wm() { PATH=$D/bin TEMP=$D/tmp "$PWSH" -NoProfile -NonInteractive -File "$F/windows/maintain.ps1" "$@" </dev/null 2>&1; }
+  win; out=$(wm --apply usertemp) || fail "windows maintain --apply usertemp: $out"
+  [ ! -e "$D/tmp/old" ] && [ ! -e "$D/bin/log" ] || fail "windows maintain --apply usertemp should clean TEMP and run no winget: $out $(cat "$D/bin/log" 2>&1)"
+  echo "$out" | grep -q '^updates: not asked for ' && echo "$out" | grep -qx 'mode: applied' || fail "windows maintain --apply usertemp should say the upgrades were not asked for: $out"
+  win; out=$(wm --apply update) || fail "windows maintain --apply update: $out"
+  grep -q '^winget upgrade --id Vendor.Foo --exact --silent ' "$D/bin/log" && [ -e "$D/tmp/old" ] || fail "windows maintain --apply update should upgrade and clean nothing: $out $(cat "$D/bin/log" 2>&1)"
+  win; out=$(wm --apply usertmp); [ $? = 1 ] || fail "windows maintain --apply usertmp should exit 1: $out"
+  [ "$(echo "$out" | sed -n 1p)" = "unknown item: usertmp" ] && [ ! -e "$D/bin/log" ] && [ -e "$D/tmp/old" ] || fail "windows maintain --apply usertmp should run nothing: $out"
+  win; out=$(wm --apply) || fail "windows maintain --apply: $out"
+  grep -q '^winget upgrade --id Vendor.Foo ' "$D/bin/log" && [ ! -e "$D/tmp/old" ] && echo "$out" | grep -qx 'mode: applied' || fail "windows maintain --apply should upgrade and clean: $out"
   # collect: choco counts installed packages, on v1 (whose plain list is the remote feed) and on v2.
   for v in 1.4.0 2.2.2; do
     fresh; stub choco "case \"\$*\" in
