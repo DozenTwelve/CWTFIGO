@@ -28,7 +28,7 @@ In Claude Code, paste one line at a time:
 
 The second line doesn't install by itself: it opens a panel that shows the plugin. Choose **Install for you (user scope)** there, the one that covers every project on this computer. Then type `cwtfigo`. If it offers you a checkup of this computer, it's working; if not, run `/reload-plugins` (or restart Claude Code) and type it again.
 
-It needs `git` (on a Mac: `xcode-select --install`; on Windows it runs in Git Bash, which Claude Code needs there anyway) and `python3` to search past fixes (most Linux has it already; on a minimal install, `sudo apt install python3` or `sudo dnf install python3`; a Mac gets it with `xcode-select --install` too). The first visit goes best on Opus (`/model opus`).
+It needs `git` (on a Mac: `xcode-select --install`) and `python3` to search past fixes (most Linux has it already; on a minimal install, `sudo apt install python3` or `sudo dnf install python3`; a Mac gets it with `xcode-select --install` too). On Windows it needs Git for Windows: CWTFIGO's own scripts, and the check that asks you before changes, run in its Git Bash. Claude Code works without Git Bash; CWTFIGO doesn't. The first visit goes best on Opus (`/model opus`).
 
 A machine's checkup and upkeep start from a ready-made script on macOS, Windows, Arch, Debian and its relatives (Ubuntu, Mint, Pop!_OS, Raspberry Pi OS and a few more) and OpenWrt routers. Other systems, like Fedora or the Steam Deck, work too: Claude writes their scripts from less.
 
