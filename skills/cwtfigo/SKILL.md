@@ -1,6 +1,6 @@
 ---
 name: cwtfigo
-description: "Use ONLY when the user calls it by name: \"CWTFIGO\", \"Claude WTFIGO\", \"what the fuck is going on\", \"一体どうなってやがるんだ\" (any casing, any language around it), or /cwtfigo. It reads and changes the user's own or LAN machines (Linux, macOS, Windows, Steam Deck, routers), locally or over SSH: cleanup and upgrades, slowness and heat, crashes, broken services, network trouble. Do NOT use it for machine problems described without the name; answer those normally. Keeps a per-machine record so every visit gets cheaper."
+description: "Use ONLY when the user says \"CWTFIGO\", \"Claude WTFIGO\" or /cwtfigo (whatever follows), or \"what the fuck is going on\" or \"一体どうなってやがるんだ\" about a computer or network problem, not code or a build (any casing, any language around it). It reads and changes their own or LAN machines (Linux, macOS, Windows, Steam Deck, routers) and keeps a record of each: cleanup and upgrades, slowness and heat, crashes, broken services, network trouble. Do NOT use it without one of these: answer machine problems normally."
 ---
 
 # CWTFIGO — Claude, what the fuck is going on?
