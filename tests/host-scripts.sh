@@ -396,6 +396,18 @@ if command -v pwsh >/dev/null; then
   [ "$(echo "$out" | sed -n 1p)" = "unknown item: usertmp" ] && [ ! -e "$D/bin/log" ] && [ -e "$D/tmp/old" ] || fail "windows maintain --apply usertmp should run nothing: $out"
   win; out=$(wm --apply) || fail "windows maintain --apply: $out"
   grep -q '^winget upgrade --id Vendor.Foo ' "$D/bin/log" && [ ! -e "$D/tmp/old" ] && echo "$out" | grep -qx 'mode: applied' || fail "windows maintain --apply should upgrade and clean: $out"
+  # Cleanup deletes by its own walk: a link under TEMP goes itself, what it points at is never read or deleted. Windows
+  # PowerShell 5.1's Get-ChildItem -Recurse and Remove-Item -Recurse walk into junctions and directory links; pwsh 7
+  # doesn't, so here this shows the walk's own rules, not the 5.1 fault. usertemp: old files and old links go, new
+  # files and the folders stay. winget: everything under its folder goes.
+  win; mkdir -p "$D/mine" "$D/tmp/sub" "$D/tmp/WinGet/pkg"; ln -s "$D/mine" "$D/tmp/link"; ln -s "$D/mine" "$D/tmp/WinGet/pkg/link"
+  touch "$D/tmp/sub/new" "$D/tmp/WinGet/pkg/new"; touch -t 202601010000 "$D/mine/keep" "$D/tmp/sub/old"; touch -h -t 202601010000 "$D/tmp/link"
+  out=$(wm --apply usertemp winget) || fail "windows maintain --apply usertemp winget: $out"
+  [ -e "$D/mine/keep" ] || fail "windows maintain: cleanup deleted through a link: $out"
+  [ ! -e "$D/tmp/link" ] && [ ! -L "$D/tmp/link" ] || fail "windows maintain usertemp: an old link in TEMP should go itself: $out"
+  [ ! -e "$D/tmp/sub/old" ] && [ -e "$D/tmp/sub/new" ] || fail "windows maintain usertemp: old files go, new ones and folders stay: $out"
+  [ -d "$D/tmp/WinGet" ] && [ -z "$(ls -A "$D/tmp/WinGet")" ] || fail "windows maintain winget: its folder should be emptied: $out $(ls -AR "$D/tmp/WinGet")"
+  echo "$out" | grep -q 'error(s)' && fail "windows maintain: cleanup reported errors: $out"
   # collect: choco counts installed packages, on v1 (whose plain list is the remote feed) and on v2.
   for v in 1.4.0 2.2.2; do
     fresh; stub choco "case \"\$*\" in

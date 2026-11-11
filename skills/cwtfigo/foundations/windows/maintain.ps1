@@ -26,7 +26,8 @@ $CHOCO_HOLD = 'python,python3'
 # Public desktop each time). Off by default: some owners want them.
 #
 # Items the dry run knows (on = in CLEAN):
-#   usertemp    files in %TEMP% older than 7 days (counts old files of winget and choco below too)
+#   usertemp    files in %TEMP% older than 7 days (counts old files of winget and choco below too). A link there
+#               goes itself; what it points at is never touched.
 #   winget      winget's installer downloads (%TEMP%\WinGet)
 #   scoop       scoop's download cache and old app versions (scoop cache rm, scoop cleanup); size is the cache only
 #   choco       choco's download cache (%TEMP%\chocolatey)
@@ -72,6 +73,33 @@ function size($path, $days) {
   if ($days) { $cut = (Get-Date).AddDays(-$days); $f = @($f | Where-Object { $_.LastWriteTime -lt $cut }) }
   $s = mb ($f | Measure-Object Length -Sum).Sum
   if (-not $e) { $s } elseif ($f.Count) { "$s+ (part unreadable)" } else { 'unreadable without admin' }
+}
+
+# sweep <folder> [<days>]: delete what is under a folder; with <days> only files not written for that long, and the
+# folders stay. Its own walk, as in probes/space.ps1: in 5.1 Get-ChildItem -Recurse and Remove-Item -Recurse walk into
+# junctions and directory links, so a link under %TEMP% that points into the owner's files would get them deleted.
+# Here a link is deleted itself (an old one, with <days>) and never walked into. Read-only files go too, as with -Force.
+function sweep($path, $days) {
+  if (-not $path -or -not (Test-Path -LiteralPath $path)) { return }
+  $cut = $null; if ($days) { $cut = (Get-Date).AddDays(-$days) }
+  $link = [IO.FileAttributes]::ReparsePoint
+  $dirs = @(); $todo = New-Object System.Collections.Stack
+  $todo.Push((Get-Item -LiteralPath $path -Force))
+  while ($todo.Count) {
+    $d = $todo.Pop()
+    try {
+      foreach ($i in @($d.EnumerateFileSystemInfos())) {
+        if ($i -is [IO.DirectoryInfo] -and -not ($i.Attributes -band $link)) { $todo.Push($i); $dirs += $i; continue }
+        if ($cut -and $i.LastWriteTime -ge $cut) { continue }
+        try {
+          if ($i -is [IO.FileInfo] -and -not ($i.Attributes -band $link) -and $i.IsReadOnly) { $i.IsReadOnly = $false }
+          $i.Delete()
+        } catch { }
+      }
+    } catch { }
+  }
+  # Without <days> the emptied folders go too, deepest first (a folder is listed after the one that holds it).
+  if (-not $cut) { for ($n = $dirs.Count - 1; $n -ge 0; $n--) { try { $dirs[$n].Delete() } catch { } } }
 }
 
 # item <name> <size> <action> [admin]: one dry-run line; on --apply, clean if the item is in CLEAN.
@@ -172,16 +200,16 @@ if (-not $NOUP) {
 }
 
 sec 'cleanup (size, on/off)'
-item usertemp (size $env:TEMP 7) { $cut = (Get-Date).AddDays(-7); Get-ChildItem $env:TEMP -Recurse -File -Force | Where-Object { $_.LastWriteTime -lt $cut } | Remove-Item -Force }
-item winget (size "$env:TEMP\WinGet") { Remove-Item "$env:TEMP\WinGet\*" -Recurse -Force }
+item usertemp (size $env:TEMP 7) { sweep $env:TEMP 7 }
+item winget (size "$env:TEMP\WinGet") { sweep "$env:TEMP\WinGet" }
 if (has scoop) {
   $sc = $env:SCOOP; if (-not $sc) { $sc = "$env:USERPROFILE\scoop" }
   item scoop (size "$sc\cache") { scoop cache rm *; scoop cleanup * }
 }
-item choco (size "$env:TEMP\chocolatey") { Remove-Item "$env:TEMP\chocolatey\*" -Recurse -Force }
+item choco (size "$env:TEMP\chocolatey") { sweep "$env:TEMP\chocolatey" }
 if (has npm) { item npm (size "$(npm config get cache)\_cacache") { npm cache clean --force } }
 if (has pip) { item pip (size "$(pip cache dir)") { pip cache purge } }
-item wudownload (size "$env:SystemRoot\SoftwareDistribution\Download") { Stop-Service wuauserv -Force; Remove-Item "$env:SystemRoot\SoftwareDistribution\Download\*" -Recurse -Force; Start-Service wuauserv } $true
+item wudownload (size "$env:SystemRoot\SoftwareDistribution\Download") { Stop-Service wuauserv -Force; sweep "$env:SystemRoot\SoftwareDistribution\Download"; Start-Service wuauserv } $true
 $rb = (New-Object -ComObject Shell.Application).NameSpace(10)
 if ($rb) { item recyclebin (mb (@($rb.Items()) | Measure-Object Size -Sum).Sum) { Clear-RecycleBin -Force } }
 
