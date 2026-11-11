@@ -11,7 +11,7 @@
 
 Your computer acts up and you don't know why. Call Claude by name: it looks, tells you in plain words what's wrong, fixes it once you say OK, and remembers that machine for next time.
 
-It asks before it changes anything, and its notes stay on your computer.
+Its scripts run only after your yes, the run that makes changes asks every time, and its notes stay on your computer.
 
 A plugin for [Claude Code](https://claude.com/claude-code) ([website](https://cwtfigo.diamonddoge.org) · [中文](https://cwtfigo.diamonddoge.org/zh/)), independent, not made by Anthropic. Macs, Linux, Windows, Steam Deck, routers, the one in front of you or others on your network over SSH.
 
@@ -46,7 +46,7 @@ Or just `cwtfigo`, and it offers a checkup: disk, memory, battery, failed servic
 
 There's no fixed script library. Claude writes each machine's scripts on the spot, for that machine: its OS, what's installed, what you told it not to touch. It starts from a short template per OS and, where open-source projects already keep the data (which files an app leaves behind, where games keep saves, how each package manager upgrades), it reads theirs instead of guessing. It reads them; it never downloads and runs their code.
 
-Before a new script runs, Claude Code asks you. One yes covers the plugin's own read-only checks; the scripts Claude writes for your machine need their own yes. Once approved, a script runs from then on without asking, until it changes. Anything that would change your computer (an update, a cleanup, a fix) asks every time, and shows you first what it would do.
+Before a new script runs, Claude Code asks you. One yes covers the plugin's own read-only checks; the scripts Claude writes for your machine need their own yes. Once approved, a script runs from then on without asking, until it changes. A script that changes your computer (an update, a cleanup, a fix) comes in two steps: a plain run only shows what it would do, and the run that does it asks every time, unless you run Claude Code with its permission prompts switched off. The two steps are a rule Claude follows when it writes a script, not a lock: a script is worth a look before your yes. Other commands Claude runs along the way ask or not as your own Claude Code permission settings say.
 
 What it learns goes into notes on your computer, one folder per machine: what it is, what went wrong, what fixed it, a health check that grows with every fix. The next visit starts from there, so the same question costs less, and a fix that quietly comes undone shows up in the next check.
 
