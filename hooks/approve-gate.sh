@@ -24,7 +24,9 @@
 # (`cw approve`, approved.sha256), turns on YOLO (`cw yolo`, yolo.on, which skips approval for a visit) or touches the
 # marker (cwtfigo-visit, which switches the gate off) goes to a permission prompt, and so does `cw mode <anything>`
 # (plain `cw mode` only prints it). So does a Write/Edit of the record's mode or self file: what cw mode and cw name
-# write, by another door. These asks come first and win over the allow below.
+# write, by another door. And a Write/Edit of hermes.on, the switch cw hermes --sync leaves on a computer whose Hermes
+# hook syncs a shared record: while it is there cw approves nothing on that computer, so putting it there turns the
+# owner's approving off. These asks come first and win over the allow below.
 # Their prompt names what the yes is for: for cw approve, the scripts and the machine when the command names them
 # plainly, else the general line.
 # Then, in every mode, what changes a machine or who may change it asks too, each time, so "anything that changes a
@@ -61,7 +63,7 @@
 #   (--app''ly is --apply): --apply changes the machine, and that is the owner's OK moment. SKILL makes every script
 #   that changes a machine a dry run without --apply, like maintain, so a rerun of an approved fix only shows what it
 #   would do. And only with a script name, unquoted, no / or ~ in it: given a path, cw would show that file.
-# - Write/Edit of a file in the record, but not approved.sha256, yolo.on, mode, self or .git* anywhere in it (any case),
+# - Write/Edit of a file in the record, but not approved.sha256, yolo.on, hermes.on, mode, self or .git* anywhere in it (any case),
 #   no . .. or // in the path, no name ending in a dot or a space, no :: and no ~ (Windows drops a trailing dot or
 #   space, reads ::$DATA as the file itself and may have a short name for it: other spellings of the same file),
 #   nothing but ASCII (a Mac folds U+017F, the long s, to s: approved.sha256 spelled with it is the same file) and no
@@ -147,7 +149,7 @@ if printf '%s' "$in" | grep -Eq '"tool_name" *: *"(Bash|PowerShell)"'; then
 else
   # The name anywhere in the path, whatever follows: approved.sha256/. and yolo.on/ are the file itself to Write, and
   # so are approved.sha256. and approved.sha256::$DATA on Windows.
-  printf '%s' "$in" | grep -Eiq '"file_path" *: *"([^"\\]|\\.)*(approved\.sha256|yolo\.on|cwtfigo-visit)'
+  printf '%s' "$in" | grep -Eiq '"file_path" *: *"([^"\\]|\\.)*(approved\.sha256|yolo\.on|hermes\.on|cwtfigo-visit)'
 fi && {
   # What the yes is for, in the owner's words: the prompt is the question, and a newcomer reads it.
   t=${cmd:-$(printf '%s' "$in" | sed -nE 's/.*"file_path" *: *"([^"]*)".*/\1/p')}
@@ -294,7 +296,7 @@ pathok() (
   # A name ending in a dot or a space, a :: or a ~: Windows drops the first two, reads ::$DATA as the file itself and
   # may know a file by a short name too (APPROV~1.SHA), so mode. or self::$DATA could be mode or self there.
   case /$r/ in *\\*|*//*|*./*|*' /'*|*::*|*'~'*) exit 1 ;; esac
-  case $(printf '%s' "/$r" | tr 'A-Z' 'a-z') in */.git*|*/approved.sha256|*/yolo.on|*/mode|*/self) exit 1 ;; esac
+  case $(printf '%s' "/$r" | tr 'A-Z' 'a-z') in */.git*|*/approved.sha256|*/yolo.on|*/hermes.on|*/mode|*/self) exit 1 ;; esac
   # Under YOLO cw runs a script it has never seen: written then, it takes Claude Code's own prompt.
   case $(printf '%s' "$r" | tr 'A-Z' 'a-z') in *.sh|*.ps1)
     for y in "$REC/yolo.on" "$REC"/hosts/*/yolo.on; do [ -e "$y" ] && exit 1; done ;;
