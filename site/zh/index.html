@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CWTFIGO: Claude, what the fuck is going on?</title>
-<meta name="description" content="电脑出毛病了？喊 Claude 的名字。它找出哪里不对，你点头才动手，还会记住这台机器。一个 Claude Code 插件，支持 Mac、Linux、Windows、Steam Deck 和路由器。">
+<meta name="description" content="电脑出毛病了？在 Claude Code 里喊一声 CWTFIGO。它找出哪里不对，你点头才动手，还会记住这台机器。一个 Claude Code 插件，支持 Mac、Linux、Windows、Steam Deck 和路由器。">
 <meta property="og:title" content="CWTFIGO: Claude, what the fuck is going on?">
-<meta property="og:description" content="喊 Claude 的名字。它找出哪里不对，你点头才修，还会记住。">
+<meta property="og:description" content="在 Claude Code 里喊一声 CWTFIGO。它找出哪里不对，你点头才修，还会记住。">
 <meta property="og:type" content="website">
 <meta name="color-scheme" content="light dark">
 <link rel="alternate" hreflang="en" href="../">
@@ -46,14 +46,14 @@
     <img class="hero__banner" src="../banner-light.png" alt="CWTFIGO：一个叼着雪茄的橙色机器人" width="1280" height="640" fetchpriority="high">
   </picture>
   <h1 id="hero-title" lang="en">Claude, what the fuck is going on?</h1>
-  <p class="lead">喊 Claude 的名字。它找出哪里不对，你点头才修，还会记住。</p>
+  <p class="lead">在 Claude Code 里喊一声 CWTFIGO。它找出哪里不对，你点头才修，还会记住。</p>
   <div class="install">
     <div class="install__box">
       <div class="install__head"><span class="install__status" role="status">一行一行粘贴到 Claude Code</span><button class="btn btn--primary" type="button" data-copy="install-1">复制第 1 行</button></div>
       <pre id="install-1" tabindex="0"><code><span class="ln">/plugin marketplace add DozenTwelve/<wbr>CWTFIGO</span><span class="ln">/plugin install cwtfigo@cwtfigo</span></code></pre>
     </div>
   </div>
-  <p class="hero__then">然后运行 <code>/reload-plugins</code>（或重启 Claude Code），再输入 <code>cwtfigo</code>。它提出给这台电脑做个体检，就说明装好了。</p>
+  <p class="hero__then">第二行会打开一个面板，显示这个插件：在那里选 <strong>Install for you (user scope)</strong>。然后输入 <code>cwtfigo</code>。它提出给这台电脑做个体检，就说明装好了；没反应的话，运行 <code>/reload-plugins</code>（或重启 Claude Code）再输入一次。</p>
 </section>
 
 <section class="walk-section container" id="how" aria-labelledby="how-title">
@@ -67,7 +67,7 @@
     </details>
     <details name="walk">
       <summary>先问你</summary>
-      <p>插件自带的只读检查，同意一次就都能跑。Claude 给你的机器写的每个脚本，第一次运行前都会问你，脚本变了会再问。会改动电脑的事，每次都问。</p>
+      <p>插件自带的只读检查，同意一次就都能跑。Claude 给你的机器写的每个脚本，第一次运行前都会问你，脚本变了会再问。会改动电脑的脚本分两步：一步只告诉你它打算做什么，一步真的动手，动手的那一步每次都问。</p>
       <figure class="walk__pic"><a href="../approve.png"><img src="../approve.png" width="1180" height="585" loading="lazy" alt="Claude Code 在运行一个只读脚本前问“Do you want to proceed?”。这个脚本只描述这台机器是什么；提示说同意一次之后就不再问，除非脚本变了。"></a></figure>
     </details>
     <details name="walk">
@@ -104,7 +104,7 @@ Debian 文件服务器，只做备份。
   <div class="faq">
     <details>
       <summary>需要装什么？</summary>
-      <p>Claude Code、<code>git</code> 和 <code>python3</code>，后者用来搜过去的修法。Mac 上用 <code>xcode-select --install</code> 装 <code>git</code>。Windows 上它跑在 Git Bash 里，反正 Claude Code 在那边也要它。大多数 Linux 自带 <code>python3</code>；最小安装的系统上，用 <code>sudo apt install python3</code> 或 <code>sudo dnf install python3</code> 装上。第一次用 Opus 效果最好：<code>/model opus</code>。</p>
+      <p>Claude Code、<code>git</code> 和 <code>python3</code>，后者用来搜过去的修法。Mac 上用 <code>xcode-select --install</code> 装 <code>git</code>。Windows 上要装 Git for Windows：CWTFIGO 自己的脚本，还有改动前先问你的那道检查，都跑在它带的 Git Bash 里。Claude Code 没有 Git Bash 也能用，CWTFIGO 不行。大多数 Linux 自带 <code>python3</code>；最小安装的系统上，用 <code>sudo apt install python3</code> 或 <code>sudo dnf install python3</code> 装上。第一次用 Opus 效果最好：<code>/model opus</code>。</p>
     </details>
     <details>
       <summary>怎么更新？</summary>
@@ -112,7 +112,7 @@ Debian 文件服务器，只做备份。
     </details>
     <details>
       <summary>怎么卸载？</summary>
-      <p>在 Claude Code 里，<code>/plugin marketplace remove cwtfigo</code> 会连同插件市场一起卸掉插件。在终端里，<code>rm -rf ~/.local/bin/cwtfigo "${XDG_RUNTIME_DIR:-$HOME/.cache}/cwtfigo-visit"</code> 删掉菜单和它记录过往访问的小标记。如果你为菜单加过 <code>PATH</code> 那一行，把它删掉；装过 Hermes 的话，照 <a href="https://github.com/DozenTwelve/CWTFIGO/blob/main/HERMES.md#taking-it-off">HERMES.md</a> 说的去掉。你的笔记还在 <code>~/.cwtfigo</code>：只有想彻底删掉时才删这个文件夹。</p>
+      <p>在 Claude Code 里，<code>/plugin marketplace remove cwtfigo</code> 会连同插件市场一起卸掉插件。在终端里，<code>rm -rf ~/.local/bin/cwtfigo ~/.cache/cwtfigo-visit</code> 删掉菜单和它记录过往访问的小标记。如果你为菜单加过 <code>PATH</code> 那一行，把它删掉；装过 Hermes 的话，照 <a href="https://github.com/DozenTwelve/CWTFIGO/blob/main/HERMES.md#taking-it-off">HERMES.md</a> 说的去掉。你的笔记还在 <code>~/.cwtfigo</code>：只有想彻底删掉时才删这个文件夹。</p>
     </details>
     <details>
       <summary>能管哪些电脑？</summary>
@@ -124,7 +124,7 @@ Debian 文件服务器，只做备份。
     </details>
     <details>
       <summary>不用 AI 能用吗？</summary>
-      <p>能，Mac 和 Linux 上。终端里有个小菜单，按机器列出 Claude 写好、你同意过的脚本，直接就能跑；所以第一天它是空的，用得越多越满。在 Claude Code 里说“CWTFIGO install the TUI”，然后在终端里输入 <code>cwtfigo</code>。</p>
+      <p>能，Mac 和 Linux 上。终端里有个小菜单，按机器列出 Claude 写好的脚本，直接就能跑；所以第一天它是空的，用得越多越满。你还没同意过的脚本标着 <code>unapproved</code>：它先把脚本给你看，问过你才跑。在 Claude Code 里说“CWTFIGO install the TUI”，然后在终端里输入 <code>cwtfigo</code>。</p>
     </details>
     <details>
       <summary>笔记存在哪儿？</summary>

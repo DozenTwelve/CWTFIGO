@@ -16,8 +16,15 @@ CWTFIGO runs scripts on your machines and keeps a record of them. A hole in it i
   owner's yes, for example through a `cw` call the hook lets through in normal mode.
 - The Hermes skills `cw hermes` writes, and its Hermes hook: a skill that runs something other than the owner's
   approved script as approved, or `--apply` without a yes in the chat, or a record or script field that gets
-  instructions or commands into a skill. Not a hole: whoever may talk to the Hermes bot is trusted like the owner, since
-  a yes in the chat runs `--apply` ([HERMES.md](HERMES.md)).
+  instructions or commands into a skill. And a `cw approve` or `cw yolo` that goes through where cw refuses both: in a
+  command a generated skill runs, and on a computer whose Hermes hook syncs a shared record (it has `hermes.on` in its
+  record). Not a hole: whoever may talk to the Hermes bot is trusted like the owner, since a yes in the chat runs
+  `--apply` ([HERMES.md](HERMES.md)).
+
+Known limit on a Hermes computer, not a hole: with no shared record there is no `hermes.on`, so a model that writes
+its own cw command, against the skill's rules, can still approve a script or turn YOLO on there. And nothing in cw stops
+a direct write of the record's files (`approved.sha256`, `yolo.on`, `hermes.on`) where Hermes' own tools allow one: no
+hook asks the owner on that computer.
 
 Not a hole: the shared record. `cw run` and `cw status` pull it first, so whoever can push to it is trusted like the
 owner: a script and its approval pushed there run on the next `cw run`. Keep it private, on a machine you control.

@@ -9,9 +9,9 @@
 
 **Claude, what the fuck is going on?**
 
-Your computer acts up and you don't know why. Call Claude by name: it looks, tells you in plain words what's wrong, fixes it once you say OK, and remembers that machine for next time.
+Your computer acts up and you don't know why. Say "CWTFIGO" in Claude Code: it looks, tells you in plain words what's wrong, fixes it once you say OK, and remembers that machine for next time.
 
-It asks before it changes anything, and its notes stay on your computer.
+Its scripts run only after your yes, the run that makes changes asks every time, and its notes stay on your computer.
 
 A plugin for [Claude Code](https://claude.com/claude-code) ([website](https://cwtfigo.diamonddoge.org) · [中文](https://cwtfigo.diamonddoge.org/zh/)), independent, not made by Anthropic. Macs, Linux, Windows, Steam Deck, routers, the one in front of you or others on your network over SSH.
 
@@ -26,9 +26,9 @@ In Claude Code, paste one line at a time:
 /plugin install cwtfigo@cwtfigo
 ```
 
-Then run `/reload-plugins` (or restart Claude Code) and type `cwtfigo`. If it offers you a checkup of this computer, it's working.
+The second line doesn't install by itself: it opens a panel that shows the plugin. Choose **Install for you (user scope)** there, the one that covers every project on this computer. Then type `cwtfigo`. If it offers you a checkup of this computer, it's working; if not, run `/reload-plugins` (or restart Claude Code) and type it again.
 
-It needs `git` (on a Mac: `xcode-select --install`; on Windows it runs in Git Bash, which Claude Code needs there anyway) and `python3` to search past fixes (most Linux has it already; on a minimal install, `sudo apt install python3` or `sudo dnf install python3`; a Mac gets it with `xcode-select --install` too). The first visit goes best on Opus (`/model opus`).
+It needs `git` (on a Mac: `xcode-select --install`) and `python3` to search past fixes (most Linux has it already; on a minimal install, `sudo apt install python3` or `sudo dnf install python3`; a Mac gets it with `xcode-select --install` too). On Windows it needs Git for Windows: CWTFIGO's own scripts, and the check that asks you before changes, run in its Git Bash. Claude Code works without Git Bash; CWTFIGO doesn't. The first visit goes best on Opus (`/model opus`).
 
 A machine's checkup and upkeep start from a ready-made script on macOS, Windows, Arch, Debian and its relatives (Ubuntu, Mint, Pop!_OS, Raspberry Pi OS and a few more) and OpenWrt routers. Other systems, like Fedora or the Steam Deck, work too: Claude writes their scripts from less.
 
@@ -46,7 +46,7 @@ Or just `cwtfigo`, and it offers a checkup: disk, memory, battery, failed servic
 
 There's no fixed script library. Claude writes each machine's scripts on the spot, for that machine: its OS, what's installed, what you told it not to touch. It starts from a short template per OS and, where open-source projects already keep the data (which files an app leaves behind, where games keep saves, how each package manager upgrades), it reads theirs instead of guessing. It reads them; it never downloads and runs their code.
 
-Before a new script runs, Claude Code asks you. One yes covers the plugin's own read-only checks; the scripts Claude writes for your machine need their own yes. Once approved, a script runs from then on without asking, until it changes. Anything that would change your computer (an update, a cleanup, a fix) asks every time, and shows you first what it would do.
+Before a new script runs, Claude Code asks you. One yes covers the plugin's own read-only checks; the scripts Claude writes for your machine need their own yes. Once approved, a script runs from then on without asking, until it changes. A script that changes your computer (an update, a cleanup, a fix) comes in two steps: a plain run only shows what it would do, and the run that does it asks every time, unless you run Claude Code with its permission prompts switched off. The two steps are a rule Claude follows when it writes a script, not a lock: a script is worth a look before your yes. Other commands Claude runs along the way ask or not as your own Claude Code permission settings say.
 
 What it learns goes into notes on your computer, one folder per machine: what it is, what went wrong, what fixed it, a health check that grows with every fix. The next visit starts from there, so the same question costs less, and a fix that quietly comes undone shows up in the next check.
 
@@ -64,7 +64,7 @@ What it learns goes into notes on your computer, one folder per machine: what it
 
 ![The menu: machines, their scripts, a check's output](assets/tui.png)
 
-It shows the scripts Claude has written and you've approved, machine by machine, so on day one it's empty: it fills as you use CWTFIGO. Mac and Linux. In Claude Code, say "CWTFIGO install the TUI", then type `cwtfigo` in a terminal.
+It shows the scripts Claude has written, machine by machine, so on day one it's empty: it fills as you use CWTFIGO. One you haven't approved yet is marked `unapproved`: it shows you the script and asks before it runs. Mac and Linux. In Claude Code, say "CWTFIGO install the TUI", then type `cwtfigo` in a terminal.
 
 Plugin installed but no Claude Code at hand right now? This gets the newest release instead (the menu always needs the plugin installed, which is how it finds CWTFIGO, and the notes your visits made):
 
@@ -72,7 +72,7 @@ Plugin installed but no Claude Code at hand right now? This gets the newest rele
 mkdir -p ~/.local/bin && curl -fsSL https://github.com/DozenTwelve/CWTFIGO/releases/latest/download/cwtfigo-tui-$(uname -s)-$(uname -m).tar.gz | tar -xz -C ~/.local/bin cwtfigo
 ```
 
-Then type `cwtfigo`. If the terminal says it's not found, `~/.local/bin` isn't on your `PATH` yet (a Mac doesn't have it there by default). Add it and open a new terminal (on Linux with bash, `~/.bashrc` instead of `~/.zshrc`):
+That line takes the download as it comes; the install through Claude checks it against the release's published checksum first, and [`tui/README.md`](tui/README.md) has the lines to do that by hand. Then type `cwtfigo`. If the terminal says it's not found, `~/.local/bin` isn't on your `PATH` yet (a Mac doesn't have it there by default). Add it and open a new terminal (on Linux with bash, `~/.bashrc` instead of `~/.zshrc`):
 
 ```
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
@@ -108,7 +108,7 @@ Then in Claude Code, one line at a time (the path is where you cloned it; a `./`
 /plugin install cwtfigo@cwtfigo
 ```
 
-Then `/reload-plugins`.
+The second line opens the same panel: choose **Install for you (user scope)**. Then `/reload-plugins` if `cwtfigo` isn't known yet.
 
 </details>
 
@@ -121,7 +121,7 @@ Claude Code doesn't update this plugin by itself: it does that only for Anthropi
 In Claude Code, `/plugin marketplace remove cwtfigo` uninstalls the plugin with its marketplace. In a terminal, this deletes the menu and the small markers it keeps of past visits:
 
 ```
-rm -rf ~/.local/bin/cwtfigo "${XDG_RUNTIME_DIR:-$HOME/.cache}/cwtfigo-visit"
+rm -rf ~/.local/bin/cwtfigo ~/.cache/cwtfigo-visit
 ```
 
 Then take out the `PATH` line if you added it for the menu, and Hermes as [`HERMES.md`](HERMES.md#taking-it-off) says if you set it up. Your notes stay in `~/.cwtfigo`: delete that folder only if you want them gone for good.
