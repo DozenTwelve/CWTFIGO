@@ -602,14 +602,26 @@ fn survive_ctrl_c() {
     unsafe { libc::signal(libc::SIGINT, ignore as extern "C" fn(libc::c_int) as libc::sighandler_t) };
 }
 
+/// What was typed into the terminal fd and not read yet is dropped: keys hit while a script ran must not answer the
+/// "Press Enter" after it.
+// ponytail: unix only, as survive_ctrl_c; the TUI has no Windows build.
+#[cfg(unix)]
+fn drop_typed(fd: libc::c_int) {
+    unsafe { libc::tcflush(fd, libc::TCIFLUSH) };
+}
+#[cfg(not(unix))]
+fn drop_typed(_: i32) {}
+
 /// Leave the TUI, run cmd in the real terminal, wait for Enter (always on failure), come back. With err, what cmd
-/// wrote to stderr is kept there too.
+/// wrote to stderr is kept there too. Keys typed meanwhile are dropped: a y hit during the dry run would otherwise
+/// answer the --apply question that follows it.
 fn run_external(terminal: &mut DefaultTerminal, cmd: &mut Command, pause: bool, err: Option<&mut String>) -> std::io::Result<ExitStatus> {
     ratatui::restore();
     let res = match err {
         None => cmd.status(),
         Some(err) => keep_stderr(cmd, err),
     };
+    drop_typed(0);
     if pause || !matches!(&res, Ok(s) if s.success()) {
         match &res {
             Ok(s) => println!("\n[{s}] Press Enter to return."),
@@ -619,6 +631,9 @@ fn run_external(terminal: &mut DefaultTerminal, cmd: &mut Command, pause: bool, 
     }
     *terminal = ratatui::init();
     let _ = terminal.clear();
+    // Also what the event reader had already taken in before the run (Enter and y in one burst), and what came
+    // during the pause.
+    while event::poll(Duration::ZERO).unwrap_or(false) && event::read().is_ok() {}
     res
 }
 
@@ -1543,6 +1558,29 @@ mod tests {
         assert_eq!(approve_failed(&t, "cw: approved none: refused fix\n\n"), "approve fix on b failed: approved none: refused fix");
         assert_eq!(approve_failed(&t, ""), "approve fix on b failed", "sh didn't start");
         fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn keys_typed_during_a_run_are_dropped() {
+        // A terminal of the test's own: what is written to its master end is what a keyboard types.
+        let (mut master, mut tty) = (0, 0);
+        use std::ptr::null_mut;
+        assert_eq!(unsafe { libc::openpty(&mut master, &mut tty, null_mut(), null_mut(), null_mut()) }, 0);
+        let waiting = || {
+            let mut n: libc::c_int = 0;
+            assert_eq!(unsafe { libc::ioctl(tty, libc::FIONREAD as _, &mut n) }, 0);
+            n
+        };
+        assert_eq!(unsafe { libc::write(master, b"y\n".as_ptr().cast(), 2) }, 2);
+        let t = Instant::now();
+        while waiting() == 0 && t.elapsed() < Duration::from_secs(2) {
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert_eq!(waiting(), 2, "the typed y and Enter wait to be read");
+        drop_typed(tty);
+        assert_eq!(waiting(), 0);
+        unsafe { (libc::close(master), libc::close(tty)) };
     }
 
     #[cfg(unix)]
