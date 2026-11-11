@@ -695,7 +695,9 @@ hermes)
         NR == 1 { h = 1; if (index($0, bom) == 1) $0 = substr($0, 4) }
         { sub(/\r$/, ""); l = trim($0) }
         l !~ /^#/ { h = 0; x = $0; gsub(/"/, "", x); gsub(q, "", x)
-          if (index(x, "= --apply") || index(x, "--apply)") || index(x, "-contains --apply")) ap = 1; next }
+          # Code that compares an argument to --apply, quotes out: [ $1 = --apply ], [ --apply = $1 ], a case pattern
+          # (--apply) or -y|--apply) or --apply|-y), PowerShell -contains and -eq. As header.rs, by tests/menu-headers.txt.
+          if (index(x, "= --apply") || index(x, "[ --apply =") || index(x, "-contains --apply") || index(x, "-eq --apply") || x ~ /--apply(\|[^ \t)]*)?\)/) ap = 1; next }
         h && l !~ /^#!/ { c = l; sub(/^#+/, "", c); t = trim(c)
           if (t ~ /^menu-args:/) { g = ""; nw = nr = 0; k = split(substr(t, 11), p, "|")
             # Any word, in whatever language the owner writes, sq()-quoted on its line; but none that reads as an option (--apply on

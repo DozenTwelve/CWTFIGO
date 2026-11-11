@@ -40,3 +40,23 @@ echo "run it with --apply"
 #!/bin/sh
 # upkeep
 [ "$2" = "--apply" ] || exit 0
+@@ either way @@  @@ yes
+#!/bin/sh
+# either way
+case "$1" in
+  --apply|-y) APPLY=1 ;;
+esac
+@@ short first @@  @@ yes
+# short first
+case $1 in -y|--apply) APPLY=1 ;; esac
+@@ flag on the left @@  @@ yes
+# flag on the left
+if [ "--apply" = "$1" ]; then APPLY=1; fi
+@@ win eq @@  @@ yes
+# win eq
+if ($args[0] -eq '--apply') { $apply = $true }
+@@ only said @@  @@ no
+# only said
+echo "usage: only-said.sh [--apply|-n]"
+echo "--apply = really do it, -eq is a test"
+echo "run it again with --apply | tee log"

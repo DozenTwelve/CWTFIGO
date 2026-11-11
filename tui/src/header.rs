@@ -28,11 +28,21 @@ pub fn parse(text: &str) -> Header {
         }
     }
     // Takes --apply only if code compares an argument to it; a comment or an echo that mentions it doesn't count.
+    // Quotes out: [ $1 = --apply ], [ --apply = $1 ], a case pattern, PowerShell's -contains and -eq. As cw hermes
+    // reads it (cw's awk): tests/menu-headers.txt holds a case per shape for both.
     h.apply = text.lines().filter(|l| !l.trim_start().starts_with('#')).any(|l| {
         let l = l.replace(['"', '\''], "");
-        l.contains("= --apply") || l.contains("--apply)") || l.contains("-contains --apply")
+        ["= --apply", "[ --apply =", "-contains --apply", "-eq --apply"].iter().any(|p| l.contains(p)) || case_pattern(&l)
     });
     h
+}
+
+/// --apply in a case pattern: right before the ), or with other words up to it, as in -y|--apply) and --apply|-y).
+fn case_pattern(l: &str) -> bool {
+    l.match_indices("--apply").any(|(i, m)| {
+        let rest = &l[i + m.len()..];
+        rest.find([' ', '\t', ')']).is_some_and(|end| rest[end..].starts_with(')') && (end == 0 || rest.starts_with('|')))
+    })
 }
 
 #[cfg(test)]
@@ -63,6 +73,12 @@ mod tests {
         assert!(parse("case $1 in --apply) a=1 ;; esac").apply);
         assert!(parse("$APPLY = $args -contains '--apply'").apply);
         assert!(!parse("# --apply = do it").apply);
+        assert!(parse("case $1 in\n  --apply|-y|--yes) a=1 ;;\nesac").apply);
+        assert!(parse("case $1 in -y|--apply) a=1 ;; esac").apply);
+        assert!(parse("[ \"--apply\" = \"$1\" ] && a=1").apply);
+        assert!(parse("if ($args[0] -eq '--apply') { $a = $true }").apply);
+        assert!(!parse("echo \"usage: x [--apply|-n]\"").apply);
+        assert!(!parse("echo \"--apply | tee log (see the notes)\"").apply);
     }
 
     #[test]
