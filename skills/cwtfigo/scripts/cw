@@ -286,7 +286,10 @@ go() {
     # Its command only sh -c with the temp path in '': the same in sh, bash, zsh and fish.
     # Not collect: it never needs sudo, and through the target's terminal every line of its output would arrive with
     # a CR, the id too: an ID MISMATCH against a record collected without one.
-    t=$(ssh "$alias" mktemp) && sargs "$@" | ssh "$alias" "cat > $t" && ssh -t "$alias" "sh -c 'sh $t; r=\$?; rm -f $t; exit \$r'"
+    # trap "" HUP: with a terminal, a dropped link or a closed window hangs up the target's sh and what it runs, in
+    # the middle of an upgrade. Ignored there and in every child, the run is left to finish, as without a terminal
+    # (reap, above). Ctrl-C still stops it, and the script's own traps but one for HUP still run.
+    t=$(ssh "$alias" mktemp) && sargs "$@" | ssh "$alias" "cat > $t" && ssh -t "$alias" "sh -c 'trap \"\" HUP; sh $t; r=\$?; rm -f $t; exit \$r'"
   else
     sargs "$@" | exec ssh $SSHO "$alias" 'sh -s' & reap
   fi
