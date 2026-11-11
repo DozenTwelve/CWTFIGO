@@ -31,6 +31,8 @@ struct Item {
     text: String,
     /// The sha256 of the bytes text was read from: what an approval asked for in the TUI is pinned to.
     sum: String,
+    /// cw would run it without asking, as the record stood at the last scan. Else the menu row says so.
+    approved: bool,
 }
 
 struct Host {
@@ -530,8 +532,11 @@ fn note(app: &App, name: &str, what: &str) -> std::io::Result<Command> {
 /// an approved script is the script's own, not cw asking. Reading cw's output instead would take the tty from scripts.
 fn approved(rec: &Path, t: &Target) -> bool {
     let h = rec.join("hosts").join(&t.name);
-    let Some(sum) = fs::read(h.join(&t.file)).ok().and_then(|b| sha256(&b)) else { return false };
-    let sum = sum.as_str();
+    fs::read(h.join(&t.file)).ok().and_then(|b| sha256(&b)).is_some_and(|sum| listed(rec, &h, &sum))
+}
+
+/// Whether a script with this sha256 counts as approved on the machine whose dir is h.
+fn listed(rec: &Path, h: &Path, sum: &str) -> bool {
     let list = fs::read_to_string(h.join("approved.sha256")).unwrap_or_default();
     // A line ending in yolo is a run under YOLO, not the owner's yes: as in cw, it counts only while YOLO is on.
     let yolo = fresh(&rec.join("yolo.on")) || fresh(&h.join("yolo.on"));
@@ -659,7 +664,11 @@ fn scan(rec: &Path) -> Vec<Host> {
             let here = name == me;
             let os = os(&e.path());
             let yolo = fresh(&rec.join("yolo.on")) || fresh(&e.path().join("yolo.on"));
-            Host { here, online: None, yolo, items: items(&e.path(), ext(os.as_deref(), here)), os, name }
+            let mut items = items(&e.path(), ext(os.as_deref(), here));
+            for i in &mut items {
+                i.approved = listed(rec, &e.path(), &i.sum);
+            }
+            Host { here, online: None, yolo, items, os, name }
         })
         .collect();
     hosts.sort_by(|a, b| a.name.cmp(&b.name));
@@ -790,6 +799,7 @@ fn items(dir: &Path, ext: Option<&str>) -> Vec<Item> {
                 apply: h.apply,
                 text,
                 sum: sha256(&raw).unwrap_or_default(),
+                approved: false, // scan's to say: it knows the record
             })
         })
         .collect();
@@ -987,6 +997,10 @@ fn draw(f: &mut Frame, app: &mut App) {
         .iter()
         .map(|i| {
             let mut sub = i.file.clone();
+            // First, so a narrow pane cuts the rest instead: Enter on it shows the script and asks before it runs.
+            if !i.approved {
+                sub += " · unapproved";
+            }
             if i.apply {
                 sub += " · --apply";
             }
@@ -1145,7 +1159,7 @@ mod tests {
 
     fn item(stem: &str, apply: bool) -> Item {
         let (file, text) = (format!("{stem}.sh"), String::new());
-        Item { stem: stem.into(), file, label: stem.into(), args: vec![], apply, text, sum: String::new() }
+        Item { stem: stem.into(), file, label: stem.into(), args: vec![], apply, text, sum: String::new(), approved: true }
     }
 
     fn app(hosts: Vec<Host>) -> App {
@@ -1558,6 +1572,31 @@ mod tests {
         assert_eq!(approve_failed(&t, "cw: approved none: refused fix\n\n"), "approve fix on b failed: approved none: refused fix");
         assert_eq!(approve_failed(&t, ""), "approve fix on b failed", "sh didn't start");
         fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn the_menu_marks_what_is_not_approved() {
+        let rec = env::temp_dir().join(format!("cwtfigo-tui-mark-{}", std::process::id()));
+        let h = rec.join("hosts/b");
+        fs::create_dir_all(&h).unwrap();
+        fs::write(h.join("check.sh"), "# check\n").unwrap();
+        fs::write(h.join("fix.sh"), "# menu: fix\n").unwrap();
+        let marks = || scan(&rec)[0].items.iter().map(|i| i.approved).collect::<Vec<_>>();
+        assert_eq!(marks(), [false, false], "no approved.sha256 yet");
+        let sum = sha256(b"# menu: fix\n").unwrap();
+        fs::write(h.join("approved.sha256"), format!("{sum}  fix  2026-11-11\n")).unwrap();
+        assert_eq!(marks(), [false, true]);
+        let mut a = app(scan(&rec));
+        let s = screen(&mut a, 80, 24);
+        assert!(s.contains("check.sh · unapproved"), "{s}");
+        assert!(s.lines().any(|l| l.contains("fix.sh")) && !s.lines().any(|l| l.contains("fix.sh") && l.contains("unapproved")), "{s}");
+        // As cw counts: a run under YOLO is no approval once YOLO is off, and an edit since isn't the approved script.
+        fs::write(h.join("approved.sha256"), format!("{sum}  fix  2026-11-11  yolo\n")).unwrap();
+        assert_eq!(marks(), [false, false]);
+        fs::write(h.join("approved.sha256"), format!("{sum}  fix  2026-11-11\n")).unwrap();
+        fs::write(h.join("fix.sh"), "# menu: fix\necho edited\n").unwrap();
+        assert_eq!(marks(), [false, false]);
+        fs::remove_dir_all(&rec).unwrap();
     }
 
     #[cfg(unix)]
