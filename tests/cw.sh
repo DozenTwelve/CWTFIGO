@@ -1277,6 +1277,8 @@ echo '{ "os": "arch" }' > "$B/device.json"   # sh scripts on every operator, Git
 printf '# menu: 每天的检查\necho "OK   load"\necho "WARN disk / 91%%"\n' > "$B/check.sh"; CWTFIGO_HOME=$R sh "$CW" approve local check >/dev/null
 mkdir -p "$R/hosts/nas" "$R/hosts/new"; echo "x  check  2026-11-01" > "$R/hosts/nas/approved.sha256"; touch "$R/hosts/new/approved.sha256"
 printf '## 用途\n- 家里的 NAS\n' > "$B/notes.md"; CWTFIGO_HOME=$R sh "$CW" save init >/dev/null
+# The owner signs commits and gpg can't sign here (a pinentry with nobody to answer): unattended's commit goes unsigned, as cw's.
+git -C "$R" config commit.gpgsign true; git -C "$R" config gpg.program false
 # A failed post marks nothing seen: the next run sends the same findings.
 (FAIL=$U/noclaude:$U/nocurl un >/dev/null 2>&1) && fail "a failed post should exit non-zero"
 [ -e "$R/unattended.seen/box" ] && fail "a failed post must not mark its findings seen"
