@@ -2,7 +2,7 @@
 
 [Hermes](https://github.com/NousResearch/hermes-agent) is a chat bot you run yourself, on a computer that's always on (a home server, a NAS). With CWTFIGO's help it can run the checks and upkeep you approved in Claude Code, from Discord, without Claude Code on that computer: `cw hermes` turns each approved script the menu would show (check, maintain, and scripts with a `# menu:` line) into a Hermes skill, a command you can send it.
 
-**Anyone who may talk to the Hermes bot can change that computer and the machines it reaches.** Upkeep runs a dry run first, then asks in the chat whether to make the changes; a yes typed there runs it for real (`--apply`). The skills tell Hermes never to approve a script, and cw runs only scripts you approved, as you approved them. Past that, nothing checks who is asking, and Hermes can't tell who typed the yes: keep the bot to yourself.
+**Anyone who may talk to the Hermes bot can change that computer and the machines it reaches.** Upkeep runs a dry run first, then asks in the chat whether to make the changes; a yes typed there runs it for real (`--apply`). The skills tell Hermes never to approve a script, and cw runs only scripts you approved, as you approved them. cw itself refuses to approve a script, or to let unapproved ones run (`cw yolo`), in any command a skill runs; on a computer that shares its notes it refuses both altogether, once Hermes has answered its first message there. Past that, nothing checks who is asking, and Hermes can't tell who typed the yes: keep the bot to yourself.
 
 ## What the always-on computer needs
 
@@ -59,8 +59,10 @@ In Discord, `/reload-skills` refreshes the `/skill` list; each script shows up a
 
 The hook (in `~/.hermes/hooks/cwtfigo/`) means nothing needs a timer: before Hermes answers a message, it asks the shared notes whether a Claude Code visit saved something new, and if so rebuilds the skills. A script you approve today has its skill at your next message; one that changed since you approved it loses its skill until you approve it again. Only the `/skill` list in Discord needs `/reload-skills` after a change.
 
-To update the plugin's files: `git -C ~/CWTFIGO pull`. The skills rebuild at the next message. Then run `sh $CW hermes` once more and `hermes gateway restart`, so Hermes loads the hook as the new version writes it.
+The hook's first check of the shared notes also leaves a file, `~/.cwtfigo/hermes.on`. From then on nothing can be approved on this computer, at its own terminal either: say yes in Claude Code on your own computer, and it arrives here with the notes.
+
+To update the plugin's files: `git -C ~/CWTFIGO pull`. The skills rebuild at the next message. Then run `sh ~/CWTFIGO/skills/cwtfigo/scripts/cw hermes` once more and `hermes gateway restart`, so Hermes loads the hook as the new version writes it.
 
 ## Taking it off
 
-Delete `~/.local/share/cwtfigo/hermes` and `~/.hermes/hooks/cwtfigo`, take the folder out of `~/.hermes/config.yaml`, then `hermes gateway restart`. The clone (`~/CWTFIGO`) and this computer's copy of the notes (`~/.cwtfigo`) can go too: your own computer keeps its notes.
+Delete `~/.local/share/cwtfigo/hermes` and `~/.hermes/hooks/cwtfigo`, take the folder out of `~/.hermes/config.yaml`, then `hermes gateway restart`. The clone (`~/CWTFIGO`) and this computer's copy of the notes (`~/.cwtfigo`) can go too: your own computer keeps its notes. If you keep the notes here, delete `~/.cwtfigo/hermes.on` after that restart (until then each message puts it back): scripts can then be approved on this computer again.
