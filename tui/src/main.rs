@@ -29,6 +29,8 @@ struct Item {
     args: Vec<String>,
     apply: bool,
     text: String,
+    /// The sha256 of the bytes text was read from: what an approval asked for in the TUI is pinned to.
+    sum: String,
 }
 
 struct Host {
@@ -55,6 +57,8 @@ struct Target {
     file: String,
     arg: Option<String>,
     can_apply: bool,
+    /// The Item's sum, of the preview on the screen when the confirm is asked.
+    sum: String,
 }
 
 enum Then {
@@ -349,17 +353,7 @@ fn key(terminal: &mut DefaultTerminal, app: &mut App, k: KeyEvent, tx: &Sender<M
             } else {
                 match then {
                     Then::Apply(t) => go(terminal, app, t, true),
-                    Then::Approve(t) => {
-                        let mut cmd = cw(app);
-                        cmd.args(["approve", &t.name, &t.stem]);
-                        match run_external(terminal, &mut cmd, false) {
-                            Ok(s) if s.success() => {
-                                save(terminal, app, &t.name, &format!("approved {}", t.stem));
-                                go(terminal, app, t, false)
-                            }
-                            _ => app.message = format!("approve {} on {} failed", t.stem, t.name),
-                        }
-                    }
+                    Then::Approve(t) => approve(terminal, app, t),
                 }
             }
         }
@@ -419,7 +413,31 @@ fn key(terminal: &mut DefaultTerminal, app: &mut App, k: KeyEvent, tx: &Sender<M
 fn target(app: &App, arg: Option<String>) -> Target {
     let h = &app.hosts[app.host];
     let it = &h.items[app.item];
-    Target { name: h.name.clone(), stem: it.stem.clone(), file: it.file.clone(), arg, can_apply: it.apply }
+    Target { name: h.name.clone(), stem: it.stem.clone(), file: it.file.clone(), arg, can_apply: it.apply, sum: it.sum.clone() }
+}
+
+/// `cw approve <machine> <script>@<sha256 start>`, the hash of the bytes the preview showed: cw refuses when the file
+/// holds anything else by now (changed since, or another file read under that name). None without a hash: by its bare
+/// name cw would approve whatever the file holds at that moment.
+fn approve_args(t: &Target) -> Option<[String; 3]> {
+    Some(["approve".into(), t.name.clone(), format!("{}@{}", t.stem, t.sum.get(..12)?)])
+}
+
+/// The owner's y on an approve: cw approve, a note of it, then the dry run.
+fn approve(terminal: &mut DefaultTerminal, app: &mut App, t: Target) {
+    let Some(args) = approve_args(&t) else {
+        app.message = format!("{} on {} not approved: no sha256sum or shasum here to hash it with", t.stem, t.name);
+        return;
+    };
+    let mut cmd = cw(app);
+    cmd.args(args);
+    match run_external(terminal, &mut cmd, false) {
+        Ok(s) if s.success() => {
+            save(terminal, app, &t.name, &format!("approved {}", t.stem));
+            go(terminal, app, t, false)
+        }
+        _ => app.message = format!("approve {} on {} failed", t.stem, t.name),
+    }
 }
 
 fn cw(app: &App) -> Command {
@@ -429,7 +447,7 @@ fn cw(app: &App) -> Command {
 }
 
 /// `cw run`, then whatever its exit code asks for: 3 approve, 0 on a script that takes --apply: offer it.
-fn go(terminal: &mut DefaultTerminal, app: &mut App, t: Target, apply: bool) {
+fn go(terminal: &mut DefaultTerminal, app: &mut App, mut t: Target, apply: bool) {
     let mut cmd = cw(app);
     cmd.args(run_args(&t, apply));
     let res = run_external(terminal, &mut cmd, true);
@@ -441,6 +459,10 @@ fn go(terminal: &mut DefaultTerminal, app: &mut App, t: Target, apply: bool) {
         save(terminal, app, &t.name, &format!("ran {}: {how}", run_args(&t, true)[2..].join(" ")));
     }
     rescan(app); // cw run pulls the record: scripts may have changed
+    // The preview now shows what the rescan read: an approve asked next is for those bytes, not for older ones.
+    if let Some(i) = app.hosts.iter().filter(|h| h.name == t.name).flat_map(|h| &h.items).find(|i| i.file == t.file) {
+        t.sum = i.sum.clone();
+    }
     let unapproved = !approved(&app.rec, &t);
     after(app, t, apply, unapproved, res.map(|s| s.code()));
 }
@@ -472,20 +494,25 @@ fn note(app: &App, name: &str, what: &str) -> Command {
 /// an approved script is the script's own, not cw asking. Reading cw's output instead would take the tty from scripts.
 fn approved(rec: &Path, t: &Target) -> bool {
     let h = rec.join("hosts").join(&t.name);
-    let f = h.join(&t.file);
-    let out = Command::new("sha256sum")
-        .arg(&f)
-        .output()
-        .or_else(|_| Command::new("shasum").args(["-a", "256"]).arg(&f).output());
-    let out = match out {
-        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).into_owned(),
-        _ => return false,
-    };
-    let sum = out.split_whitespace().next().unwrap_or("");
+    let Some(sum) = fs::read(h.join(&t.file)).ok().and_then(|b| sha256(&b)) else { return false };
+    let sum = sum.as_str();
     let list = fs::read_to_string(h.join("approved.sha256")).unwrap_or_default();
     // A line ending in yolo is a run under YOLO, not the owner's yes: as in cw, it counts only while YOLO is on.
     let yolo = fresh(&rec.join("yolo.on")) || fresh(&h.join("yolo.on"));
     !sum.is_empty() && list.lines().any(|l| l.split(' ').next() == Some(sum) && (yolo || l.split_whitespace().last() != Some("yolo")))
+}
+
+/// The sha256 of bytes, in hex, by the tool cw hashes with: sha256sum, else shasum. None if neither runs.
+fn sha256(bytes: &[u8]) -> Option<String> {
+    let run = |tool: &str, args: &[&str]| {
+        let mut c = Command::new(tool).args(args).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn().ok()?;
+        // The tool prints only at stdin's end, so writing all of it first can't block on a full pipe.
+        std::io::Write::write_all(&mut c.stdin.take()?, bytes).ok()?;
+        let o = c.wait_with_output().ok().filter(|o| o.status.success())?;
+        let sum = String::from_utf8_lossy(&o.stdout).split_whitespace().next()?.to_string();
+        (sum.len() == 64).then_some(sum)
+    };
+    run("sha256sum", &[]).or_else(|| run("shasum", &["-a", "256"]))
 }
 
 /// What the owner can do about a failure cw explains only to the model, or ssh only by its exit code.
@@ -669,8 +696,9 @@ fn items(dir: &Path, ext: Option<&str>) -> Vec<Item> {
                 return None;
             }
             let stem = p.file_stem()?.to_str()?.to_string();
+            let raw = fs::read(&p).ok()?;
             // Lossy: a script with a Latin-1 comment still shows up.
-            let text = String::from_utf8_lossy(&fs::read(&p).ok()?).replace('\t', "    ");
+            let text = String::from_utf8_lossy(&raw).replace('\t', "    ");
             let h = header::parse(&text);
             if h.menu.is_none() && stem != "check" && stem != "maintain" {
                 return None;
@@ -682,6 +710,7 @@ fn items(dir: &Path, ext: Option<&str>) -> Vec<Item> {
                 args: h.args,
                 apply: h.apply,
                 text,
+                sum: sha256(&raw).unwrap_or_default(),
             })
         })
         .collect();
@@ -1037,7 +1066,7 @@ mod tests {
 
     fn item(stem: &str, apply: bool) -> Item {
         let (file, text) = (format!("{stem}.sh"), String::new());
-        Item { stem: stem.into(), file, label: stem.into(), args: vec![], apply, text }
+        Item { stem: stem.into(), file, label: stem.into(), args: vec![], apply, text, sum: String::new() }
     }
 
     fn app(hosts: Vec<Host>) -> App {
@@ -1289,7 +1318,7 @@ mod tests {
         fs::create_dir_all(&h).unwrap();
         fs::write(h.join("fix.sh"), "#!/bin/sh\nexit 3\n").unwrap();
         fs::write(h.join("approved.sha256"), "").unwrap();
-        let t = Target { name: "b".into(), stem: "fix".into(), file: "fix.sh".into(), arg: None, can_apply: false };
+        let t = Target { name: "b".into(), stem: "fix".into(), file: "fix.sh".into(), arg: None, can_apply: false, sum: String::new() };
         assert!(!approved(&rec, &t));
         let sum = "bb6220bfa599c6294ebc0954c2781c5513b565eb55f01aba387bfd0dc90176b1"; // of fix.sh above
         fs::write(h.join("approved.sha256"), format!("{sum}  fix  2026-11-07  yolo\n")).unwrap();
@@ -1308,6 +1337,56 @@ mod tests {
         assert!(matches!(a.mode, Mode::Normal));
         assert_eq!(a.message, "fix on b: exit 4");
         fs::remove_dir_all(&rec).unwrap();
+    }
+
+    /// A record with machine b in it, and this checkout's cw run on it: no ssh (b has a device.json), no real HOME.
+    #[cfg(unix)]
+    fn real_cw(tag: &str) -> (PathBuf, impl Fn(&[String]) -> std::process::Output) {
+        let d = env::temp_dir().join(format!("cwtfigo-tui-{tag}-{}", std::process::id()));
+        fs::create_dir_all(d.join("rec/hosts/b")).unwrap();
+        fs::write(d.join("rec/hosts/b/device.json"), "{ \"os\": \"arch\" }\n").unwrap();
+        let home = d.clone();
+        let cw = move |args: &[String]| {
+            let mut c = Command::new("sh");
+            c.arg(concat!(env!("CARGO_MANIFEST_DIR"), "/../skills/cwtfigo/scripts/cw")).args(args);
+            c.env("HOME", &home).env("CWTFIGO_HOME", home.join("rec")).env_remove("CWTFIGO_HERMES").stdin(Stdio::null());
+            c.output().unwrap()
+        };
+        (d, cw)
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn approve_is_pinned_to_what_the_preview_showed() {
+        assert_eq!(sha256(b"#!/bin/sh\nexit 3\n").as_deref(), Some("bb6220bfa599c6294ebc0954c2781c5513b565eb55f01aba387bfd0dc90176b1"));
+        let (d, cw) = real_cw("pin");
+        let (rec, h) = (d.join("rec"), d.join("rec/hosts/b"));
+        fs::write(h.join("fix.sh"), "# menu: fix it\necho shown\n").unwrap();
+        // A host script of this name: by its bare name cw approve would take it for "every plugin probe".
+        fs::write(h.join("probes.sh"), "# menu: mine\necho mine\n").unwrap();
+        let mut a = app(vec![host("b", items(&h, Some("sh")))]);
+        let fix = target(&a, None);
+        assert_eq!(fix.sum, sha256(b"# menu: fix it\necho shown\n").unwrap(), "the hash of the bytes in the preview");
+        assert_eq!(approve_args(&fix).unwrap(), ["approve".to_string(), "b".into(), format!("fix@{}", &fix.sum[..12])]);
+        assert_eq!(approve_args(&Target { sum: String::new(), ..fix.clone() }), None, "no hash: no approve by bare name");
+        // Changed between the preview and the y: cw refuses, the new content isn't approved.
+        fs::write(h.join("fix.sh"), "# menu: fix it\necho never shown\n").unwrap();
+        let o = cw(&approve_args(&fix).unwrap());
+        assert_eq!(o.status.code(), Some(1), "{o:?}");
+        assert!(String::from_utf8_lossy(&o.stderr).contains("fix changed since cw run showed it"), "{o:?}");
+        assert!(!approved(&rec, &fix));
+        // As shown: approved, and only that.
+        fs::write(h.join("fix.sh"), "# menu: fix it\necho shown\n").unwrap();
+        let o = cw(&approve_args(&fix).unwrap());
+        assert!(o.status.success() && approved(&rec, &fix), "{o:?}");
+        a.item = 1;
+        let probes = target(&a, None);
+        assert_eq!(probes.stem, "probes");
+        assert!(cw(&approve_args(&probes).unwrap()).status.success());
+        let list = fs::read_to_string(h.join("approved.sha256")).unwrap();
+        assert_eq!(list.lines().map(|l| l.split_whitespace().nth(1).unwrap()).collect::<Vec<_>>(), ["fix", "probes"], "{list}");
+        assert!(approved(&rec, &probes));
+        fs::remove_dir_all(&d).unwrap();
     }
 
     #[cfg(unix)]
@@ -1582,6 +1661,7 @@ mod tests {
             file: "maintain.sh".into(),
             arg: Some("guard".into()),
             can_apply: true,
+            sum: String::new(),
         };
         assert_eq!(run_args(&t, true), ["run", "b", "maintain", "--apply", "guard"]);
         assert_eq!(run_args(&t, false), ["run", "b", "maintain", "guard"]);
