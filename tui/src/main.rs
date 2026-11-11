@@ -566,11 +566,15 @@ fn run_args(t: &Target, apply: bool) -> Vec<&str> {
 fn after(app: &mut App, t: Target, apply: bool, unapproved: bool, res: std::io::Result<Option<i32>>) {
     let (name, stem) = (t.name.clone(), t.stem.clone());
     match res {
+        // Each question says which machine and, when the script was started with one, which menu word: the popup
+        // is all the owner reads before y.
         Ok(Some(3)) if unapproved => {
-            app.mode = Mode::Confirm(format!("Approve {stem} on {name}? y/N"), Then::Approve(t))
+            let then = t.arg.as_ref().map(|a| format!(", then run it with {a}")).unwrap_or_default();
+            app.mode = Mode::Confirm(format!("Approve {stem} on {name}{then}? y/N"), Then::Approve(t))
         }
         Ok(Some(0)) if t.can_apply && !apply => {
-            app.mode = Mode::Confirm(format!("Run {stem} with --apply? y/N"), Then::Apply(t))
+            let run = run_args(&t, true)[2..].join(" ");
+            app.mode = Mode::Confirm(format!("Run {run} on {name}? y/N"), Then::Apply(t))
         }
         Ok(Some(c)) => {
             let here = app.hosts.iter().any(|h| h.name == name && h.here);
@@ -1295,9 +1299,21 @@ mod tests {
         a.hosts = vec![host("a", vec![item("x", true)]), host("b", vec![])];
         after(&mut a, t.clone(), false, false, Ok(Some(0)));
         assert!(matches!(&a.mode, Mode::Confirm(_, Then::Apply(u)) if *u == t));
+        // The question names the machine and the menu word the run was started with.
+        let asked = |a: &App| match &a.mode {
+            Mode::Confirm(q, _) => q.clone(),
+            _ => String::new(),
+        };
+        assert_eq!(asked(&a), "Run maintain --apply guard on b? y/N");
         after(&mut a, t.clone(), true, true, Ok(Some(3)));
         // cw stopped an --apply run on a changed script: the approve doesn't carry --apply over.
         assert!(matches!(&a.mode, Mode::Confirm(_, Then::Approve(u)) if *u == t));
+        assert_eq!(asked(&a), "Approve maintain on b, then run it with guard? y/N");
+        let plain = Target { arg: None, ..t.clone() };
+        after(&mut a, plain.clone(), false, false, Ok(Some(0)));
+        assert_eq!(asked(&a), "Run maintain --apply on b? y/N");
+        after(&mut a, plain, false, true, Ok(Some(3)));
+        assert_eq!(asked(&a), "Approve maintain on b? y/N");
         assert_eq!(t.name, "b");
         assert_eq!(t.stem, "maintain");
     }
