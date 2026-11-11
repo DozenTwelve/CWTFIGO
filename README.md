@@ -9,7 +9,7 @@
 
 **Claude, what the fuck is going on?**
 
-Your computer acts up and you don't know why. Call Claude by name: it looks, tells you in plain words what's wrong, fixes it once you say OK, and remembers that machine for next time.
+Your computer acts up and you don't know why. Say "CWTFIGO" in Claude Code: it looks, tells you in plain words what's wrong, fixes it once you say OK, and remembers that machine for next time.
 
 Its scripts run only after your yes, the run that makes changes asks every time, and its notes stay on your computer.
 
@@ -72,7 +72,7 @@ Plugin installed but no Claude Code at hand right now? This gets the newest rele
 mkdir -p ~/.local/bin && curl -fsSL https://github.com/DozenTwelve/CWTFIGO/releases/latest/download/cwtfigo-tui-$(uname -s)-$(uname -m).tar.gz | tar -xz -C ~/.local/bin cwtfigo
 ```
 
-Then type `cwtfigo`. If the terminal says it's not found, `~/.local/bin` isn't on your `PATH` yet (a Mac doesn't have it there by default). Add it and open a new terminal (on Linux with bash, `~/.bashrc` instead of `~/.zshrc`):
+That line takes the download as it comes; the install through Claude checks it against the release's published checksum first, and [`tui/README.md`](tui/README.md) has the lines to do that by hand. Then type `cwtfigo`. If the terminal says it's not found, `~/.local/bin` isn't on your `PATH` yet (a Mac doesn't have it there by default). Add it and open a new terminal (on Linux with bash, `~/.bashrc` instead of `~/.zshrc`):
 
 ```
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
