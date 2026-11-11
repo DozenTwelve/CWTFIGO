@@ -29,6 +29,8 @@ SNAPSHOT=no
 #               when named after --apply (--apply trash): never from CLEAN.
 # Never touched: Xcode Archives (dSYMs), iOS backups, anything under ~/Documents or ~/Desktop.
 
+# Cleanup paths below start at $HOME: with it empty they would start at / (/Library/Caches, /.cache). Stop at once.
+: "${HOME:?HOME is empty}"
 APPLY=; [ "$1" = --apply ] && APPLY=1 && shift
 # Words after --apply are the owner's pick for this run: only what is named runs. `update` is the upgrades in UPDATE,
 # every other word a cleanup item, in place of CLEAN. So --apply trash empties the Trash and upgrades nothing, and

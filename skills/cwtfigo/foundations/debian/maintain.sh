@@ -34,6 +34,8 @@ JOURNAL_MAX=200M
 # Never removed here: autoremove candidates (listed only; removal cascades and can take a kernel or driver this host
 # keeps on purpose: show the full list, check notes.md, confirm separately).
 
+# Cleanup paths below start at $HOME: with it empty they would start at / (/Library/Caches, /.cache). Stop at once.
+: "${HOME:?HOME is empty}"
 APPLY=; [ "$1" = --apply ] && APPLY=1 && shift
 # Words after --apply are the owner's pick for this run: only what is named runs. `update` is the upgrades in UPDATE,
 # every other word a cleanup item, in place of CLEAN. So --apply trash empties the Trash and upgrades nothing, and

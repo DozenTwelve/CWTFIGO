@@ -173,6 +173,13 @@ echo "$out" | grep -qx '  partly: caches, [0-9]*M left (in use or protected)' ||
 [ -e "$X/gone" ] && fail "macos maintain: item should still clean what it can"
 echo "$out" | grep -qx '  failed: trash' || fail "macos maintain: without a dir a failed clean stays failed: $out"
 
+# maintain deletes under $HOME: with HOME empty its paths would start at / (/Library/Caches, /.cache), so it stops at
+# once. The dry run, in a subshell: HOME stays the temp one for the rest of the suite.
+for s in macos debian arch; do
+  fresh; out=$(HOME=; run "$F/$s/maintain.sh" 2>&1) && fail "$s maintain with an empty HOME should stop: $out"
+  echo "$out" | grep -q 'HOME is empty' || fail "$s maintain with an empty HOME should say so: $out"
+  echo "$out" | grep -q '^## ' && fail "$s maintain with an empty HOME went on: $out"
+done
 # maintain: words after --apply are the owner's pick for that run (no edit, no new hash): only what is named runs.
 # `update` is the upgrades, any other word a cleanup item in place of CLEAN; words without `update` under --apply
 # upgrade nothing (NOUP=1). No words keep CLEAN. A word the script doesn't know (a typo, the old `none`, an --apply
