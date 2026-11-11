@@ -39,6 +39,7 @@ ask "$(bash 'sh scripts/cw yolo local')" "cw yolo"
 ask "$(bash 'sh \"scripts/cw\"  yolo box')" "cw yolo, quoted, two spaces"
 ask "$(bash 'date +%s > ~/.cwtfigo/hosts/local/yolo.on')" "write yolo.on"
 ask "$(bash 'touch ~/.cwtfigo/hosts/local/yolo.on')" "touch yolo.on"
+ask "$(bash 'rm ~/.cwtfigo/hermes.on')" "rm hermes.on"
 ask "$(hook '"tool_name":"Write","tool_input":{"file_path":"/Users/u/.cwtfigo/hosts/local/yolo.on","content":"1"}')" "Write yolo.on"
 # hermes.on: with it in the record cw approves nothing on this computer (it syncs for Hermes). Not the model's to make
 # or to empty by Write/Edit, wherever the record is.

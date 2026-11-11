@@ -24,7 +24,7 @@
 # (`cw approve`, approved.sha256), turns on YOLO (`cw yolo`, yolo.on, which skips approval for a visit) or touches the
 # marker (cwtfigo-visit, which switches the gate off) goes to a permission prompt, and so does `cw mode <anything>`
 # (plain `cw mode` only prints it). So does a Write/Edit of the record's mode or self file: what cw mode and cw name
-# write, by another door. And a Write/Edit of hermes.on, the switch cw hermes --sync leaves on a computer whose Hermes
+# write, by another door. And a Write/Edit of hermes.on (or a command that names it), the switch cw hermes --sync leaves on a computer whose Hermes
 # hook syncs a shared record: while it is there cw approves nothing on that computer, so putting it there turns the
 # owner's approving off. These asks come first and win over the allow below.
 # Their prompt names what the yes is for: for cw approve, the scripts and the machine when the command names them
@@ -138,7 +138,7 @@ who() { [ "$1" = local ] && echo "this computer" || echo "$1"; }
 if printf '%s' "$in" | grep -Eq '"tool_name" *: *"(Bash|PowerShell)"'; then
   printf '%s' "$in" | sed -E 's/"(cwd|transcript_path)" *: *"[^"]*"//g' | tr 'A-Z' 'a-z' \
     | sed -E 's/cw[^a-z]*yolo[[:space:]]+off([[:space:];&|)"]|\\n|$)/\1/g' \
-    | grep -Eq 'cw[^a-z]*(approve|yolo|[$`])|\$[{a-z_][a-z0-9_}]*[^a-z]*(approve|yolo)|approved(\.sha|\.?[?*[])|yolo\.|yolo[?*[]|cwtfigo(-v|-?[?*[])' || {
+    | grep -Eq 'cw[^a-z]*(approve|yolo|[$`])|\$[{a-z_][a-z0-9_}]*[^a-z]*(approve|yolo)|approved(\.sha|\.?[?*[])|yolo\.|yolo[?*[]|hermes\.on|cwtfigo(-v|-?[?*[])' || {
     # cw's name hidden from the match above (c''w, c\w): approve or yolo as a whole word in the command asks too, a
     # plain yolo off aside, when the command is ours (below). Only the command, not its description ("Switch off
     # YOLO"), else the model turning YOLO off with nobody there would stop at a prompt. JSON's \n and \t are spaces
