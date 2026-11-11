@@ -26,7 +26,7 @@ In Claude Code, paste one line at a time:
 /plugin install cwtfigo@cwtfigo
 ```
 
-Then run `/reload-plugins` (or restart Claude Code) and type `cwtfigo`. If it offers you a checkup of this computer, it's working.
+The second line doesn't install by itself: it opens a panel that shows the plugin. Choose **Install for you (user scope)** there, the one that covers every project on this computer. Then type `cwtfigo`. If it offers you a checkup of this computer, it's working; if not, run `/reload-plugins` (or restart Claude Code) and type it again.
 
 It needs `git` (on a Mac: `xcode-select --install`; on Windows it runs in Git Bash, which Claude Code needs there anyway) and `python3` to search past fixes (most Linux has it already; on a minimal install, `sudo apt install python3` or `sudo dnf install python3`; a Mac gets it with `xcode-select --install` too). The first visit goes best on Opus (`/model opus`).
 
@@ -108,7 +108,7 @@ Then in Claude Code, one line at a time (the path is where you cloned it; a `./`
 /plugin install cwtfigo@cwtfigo
 ```
 
-Then `/reload-plugins`.
+The second line opens the same panel: choose **Install for you (user scope)**. Then `/reload-plugins` if `cwtfigo` isn't known yet.
 
 </details>
 
