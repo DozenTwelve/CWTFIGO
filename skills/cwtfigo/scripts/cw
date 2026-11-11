@@ -563,7 +563,7 @@ status)
 EOF
   if [ -n "$yw" ]; then echo "  '---------'"; else echo "  '---------'    Scripts run only after your OK."; fi
   echo
-  [ -z "$yw" ] || echo "  YOLO is on for $yw, up to $yh h left: new scripts run without your OK. Anything that changes a computer still asks every time."
+  [ -z "$yw" ] || echo "  YOLO is on for $yw, up to $yh h left: new scripts run without your OK. The run that makes changes (--apply) still asks every time."
   r=$REC; case $r in "$HOME"/*) r="~${r#"$HOME"}" ;; esac
   echo "  Notes stay on your side: $r$(remote && echo ' and your private remote')"
   echo "  CWTFIGO version: ${VERSION:-unknown}"  # bug reports ask for it
