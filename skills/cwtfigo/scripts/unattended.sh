@@ -117,7 +117,8 @@ if [ -z "$report" ]; then last "ok, offline:${offline:- none}"; exit 0; fi
 # Write back: newest first, like the rest of log.md. Pull first, so the commit goes on top of what other operators
 # pushed meanwhile. Only the log.md files written here (and .gitignore) are committed, not whatever a visit going on
 # right now has half done in the record. A failed save goes into the report and the exit code.
-G() { PATH="$W:$PATH" $TO git -C "$REC" "$@" </dev/null >/dev/null 2>"$W/err"; }
+# Never signed, as in cw: with commit.gpgsign on, the owner's pinentry has nobody to answer it here and the commit fails.
+G() { PATH="$W:$PATH" $TO git -C "$REC" -c commit.gpgsign=false "$@" </dev/null >/dev/null 2>"$W/err"; }
 nosave=
 if ls "$W"/host.* >/dev/null 2>&1; then
   if [ -n "$(git -C "$REC" remote)" ] && ! G pull -q --ff-only --no-rebase; then

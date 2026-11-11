@@ -2,8 +2,9 @@
 # PATH in search order: scope, missing or empty folders, duplicates, %var% entries; commands found in several PATH
 # folders (the first wins); non-default variables and the ones pointing at a missing path. Run for "wrong version
 # runs", "command not found", "it broke after an install". Secret-looking values are never printed, only their length:
-# by name (key, token, secret, password, credential, auth, cookie, session), by value (token prefixes, user:pass@ URLs,
-# long single words). PowerShell 5.1, ASCII only.
+# by name (key, token, secret, pass, pwd, credential, auth, cookie, session, webhook, dsn, conn, sas, signature), by value
+# (token prefixes, user:pass@ URLs, password= token= key= sig= and the like anywhere in it, Slack and Discord webhook
+# URLs, long single words). PowerShell 5.1, ASCII only.
 $ErrorActionPreference = 'SilentlyContinue'
 
 $st = @{ open = $false }
@@ -49,10 +50,13 @@ $default = '^(Path|PATHEXT|ComSpec|OS|PROCESSOR_.*|NUMBER_OF_PROCESSORS|windir|S
   'USERNAME|OneDrive|OneDriveConsumer|OneDriveCommercial|__PSLockdownPolicy|ZES_ENABLE_SYSMAN|CommonProgramFiles.*|ProgramFiles.*|' +
   'ProgramData|ProgramW6432|ALLUSERSPROFILE|APPDATA|LOCALAPPDATA|USERPROFILE|HOMEDRIVE|HOMEPATH|LOGONSERVER|USERDOMAIN.*|' +
   'COMPUTERNAME|PUBLIC|SystemDrive|SESSIONNAME)$'
-$byname = '(?i)key|token|secret|passw|pwd|credential|auth|cookie|session'
+$byname = '(?i)key|token|secret|pass|pwd|credential|auth|cookie|session|webhook|dsn|conn|sas|signature'
 # Token prefixes (OpenAI/Anthropic sk-, GitHub, GitLab, Slack, AWS, JWT), credentials in a URL, or one long word
 # without path or list separators. A GUID or a hash hides too: a hidden harmless value costs only a question.
 $byvalue = '^(sk-|ghp_|gho_|ghs_|github_pat_|glpat-|xox[abprs]-|AKIA|ASIA|eyJ)|://[^/\s]*@|^[^\s\\/;:]{24,}$'
+# Anywhere in the value: a secret after its name (connection strings and URL queries: Password=, PWD=, AccountKey=,
+# ?token=, &sig=), and Slack and Discord webhook URLs, which are secrets whole.
+$byvalue += '|(pass(word|wd)?|pwd|token|secret|key|sig(nature)?)=|hooks\.slack\.com|discord(app)?\.com/api/webhooks'
 function secret($k, $v) { $k -match $byname -or $v -match $byvalue -or (ex $v) -match $byvalue }
 foreach ($scope in 'Machine', 'User') {
   $h = [Environment]::GetEnvironmentVariables($scope)

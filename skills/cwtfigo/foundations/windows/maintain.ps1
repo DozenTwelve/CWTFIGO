@@ -3,8 +3,10 @@
 # maintain.ps1 (Windows): updates and cleanup for this host. PowerShell 5.1, ASCII only.
 #   no argument: dry run. Lists pending upgrades and what each cleanup item would free. Changes nothing
 #                except refreshing package indexes (scoop update pulls scoop and its buckets).
-#   --apply:     upgrade what UPDATE names, clean the items in CLEAN (or only those named after --apply),
-#                report space freed.
+#   --apply:     upgrade what UPDATE names, clean the items in CLEAN, report space freed.
+#   --apply <word>...: only what is named. update = the upgrades in UPDATE; any other word = that cleanup item.
+#                --apply recyclebin empties the Recycle Bin and upgrades nothing; --apply update npm upgrades, then
+#                cleans npm's cache.
 #                cw doesn't elevate. If the session is already admin (an admin account over SSH gets an elevated
 #                token), admin-only steps run directly; if not, each prints its command for the human to run in an
 #                admin PowerShell. The dry run's first line says which.
@@ -24,7 +26,8 @@ $CHOCO_HOLD = 'python,python3'
 # Public desktop each time). Off by default: some owners want them.
 #
 # Items the dry run knows (on = in CLEAN):
-#   usertemp    files in %TEMP% older than 7 days (counts old files of winget and choco below too)
+#   usertemp    files in %TEMP% older than 7 days (counts old files of winget and choco below too). A link there
+#               goes itself; what it points at is never touched.
 #   winget      winget's installer downloads (%TEMP%\WinGet)
 #   scoop       scoop's download cache and old app versions (scoop cache rm, scoop cleanup); size is the cache only
 #   choco       choco's download cache (%TEMP%\chocolatey)
@@ -35,12 +38,22 @@ $CHOCO_HOLD = 'python,python3'
 # Never touched: Windows.old, the component store (DISM), restore points: each ends a way back, ask separately.
 
 $APPLY = $args -contains '--apply'
-# Items named after --apply are the owner's pick for this run, in place of CLEAN (none: clean nothing). The pick goes
-# as args, not as an edit: an edit changes the hash and asks for approval again. CLEAN stays the habit.
+# Words after --apply are the owner's pick for this run: only what is named runs. update is the upgrades in UPDATE,
+# every other word a cleanup item, in place of CLEAN. So --apply recyclebin empties the Recycle Bin and upgrades
+# nothing, and --apply update upgrades and cleans nothing. The pick goes as args, not as an edit: an edit changes the
+# hash and asks for approval again. CLEAN and UPDATE stay the habit. A word that is neither is a typo: said, and
+# nothing runs.
 # recyclebin only when named after --apply (--apply recyclebin), never from CLEAN: emptying it takes the owner's yes
 # typed in chat, and --apply runs on a permission prompt alone. So it is left out of CLEAN even if added there.
+# ITEMS: every cleanup item below. One added to this script goes here too, or naming it is refused as a typo.
+$ITEMS = 'usertemp winget scoop choco npm pip wudownload recyclebin'
 $pick = @($args | Where-Object { $_ -ne '--apply' })
-if ($pick.Count) { $CLEAN = $pick -join ' ' } else { $CLEAN = (($CLEAN -split ' ') | Where-Object { $_ -ne 'recyclebin' }) -join ' ' }
+$NOUP = $false
+if ($pick.Count) {
+  foreach ($w in $pick) { if ($w -ne 'update' -and ($ITEMS -split ' ') -notcontains $w) { "unknown item: $w"; "known: update $ITEMS"; exit 1 } }
+  $NOUP = $APPLY -and ($pick -notcontains 'update')
+  $CLEAN = @($pick | Where-Object { $_ -ne 'update' }) -join ' '
+} else { $CLEAN = (($CLEAN -split ' ') | Where-Object { $_ -ne 'recyclebin' }) -join ' ' }
 $ErrorActionPreference = 'SilentlyContinue'
 $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 function has($c) { [bool](Get-Command $c) }
@@ -60,6 +73,33 @@ function size($path, $days) {
   if ($days) { $cut = (Get-Date).AddDays(-$days); $f = @($f | Where-Object { $_.LastWriteTime -lt $cut }) }
   $s = mb ($f | Measure-Object Length -Sum).Sum
   if (-not $e) { $s } elseif ($f.Count) { "$s+ (part unreadable)" } else { 'unreadable without admin' }
+}
+
+# sweep <folder> [<days>]: delete what is under a folder; with <days> only files not written for that long, and the
+# folders stay. Its own walk, as in probes/space.ps1: in 5.1 Get-ChildItem -Recurse and Remove-Item -Recurse walk into
+# junctions and directory links, so a link under %TEMP% that points into the owner's files would get them deleted.
+# Here a link is deleted itself (an old one, with <days>) and never walked into. Read-only files go too, as with -Force.
+function sweep($path, $days) {
+  if (-not $path -or -not (Test-Path -LiteralPath $path)) { return }
+  $cut = $null; if ($days) { $cut = (Get-Date).AddDays(-$days) }
+  $link = [IO.FileAttributes]::ReparsePoint
+  $dirs = @(); $todo = New-Object System.Collections.Stack
+  $todo.Push((Get-Item -LiteralPath $path -Force))
+  while ($todo.Count) {
+    $d = $todo.Pop()
+    try {
+      foreach ($i in @($d.EnumerateFileSystemInfos())) {
+        if ($i -is [IO.DirectoryInfo] -and -not ($i.Attributes -band $link)) { $todo.Push($i); $dirs += $i; continue }
+        if ($cut -and $i.LastWriteTime -ge $cut) { continue }
+        try {
+          if ($i -is [IO.FileInfo] -and -not ($i.Attributes -band $link) -and $i.IsReadOnly) { $i.IsReadOnly = $false }
+          $i.Delete()
+        } catch { }
+      }
+    } catch { }
+  }
+  # Without <days> the emptied folders go too, deepest first (a folder is listed after the one that holds it).
+  if (-not $cut) { for ($n = $dirs.Count - 1; $n -ge 0; $n--) { try { $dirs[$n].Delete() } catch { } } }
 }
 
 # item <name> <size> <action> [admin]: one dry-run line; on --apply, clean if the item is in CLEAN.
@@ -84,6 +124,7 @@ if (-not $APPLY) {
 }
 
 sec updates
+if ($NOUP) { $UPDATE = ''; 'updates: not asked for (--apply <items> without update): nothing listed, nothing upgraded' }
 # Shortcuts on both desktops before the upgrades; afterwards only ones not in this list and created since go.
 # In a service or SSH profile GetFolderPath can return '' and a desktop can be missing: skipped.
 $desk = $APPLY -and (on $UPDATE desktop)
@@ -140,33 +181,35 @@ if ($desk) {
   }
 }
 # Windows Update via its COM API, offline: what Windows' own last scan found. In a job, it can hang behind a running update.
-$j = Start-Job {
-  # The job is a child process: the loader's $ProgressPreference doesn't reach it, and its module-loading progress
-  # comes back to stderr as CLIXML.
-  $ProgressPreference = 'SilentlyContinue'
-  $ErrorActionPreference = 'Stop'
-  $s = (New-Object -ComObject Microsoft.Update.Session).CreateUpdateSearcher(); $s.Online = $false
-  @($s.Search('IsInstalled=0 and IsHidden=0').Updates | ForEach-Object { $_.Title })
+if (-not $NOUP) {
+  $j = Start-Job {
+    # The job is a child process: the loader's $ProgressPreference doesn't reach it, and its module-loading progress
+    # comes back to stderr as CLIXML.
+    $ProgressPreference = 'SilentlyContinue'
+    $ErrorActionPreference = 'Stop'
+    $s = (New-Object -ComObject Microsoft.Update.Session).CreateUpdateSearcher(); $s.Online = $false
+    @($s.Search('IsInstalled=0 and IsHidden=0').Updates | ForEach-Object { $_.Title })
+  }
+  if (Wait-Job $j -Timeout 60) {
+    $wu = @(Receive-Job $j)
+    if ($j.State -ne 'Completed') { 'Windows Update: search failed' }
+    elseif ($wu.Count) { 'Windows Update (list only, as of its last scan; install from Settings, it reboots):'; $wu | ForEach-Object { "  $_" } }
+    else { 'Windows Update: nothing pending (as of its last scan)' }
+  } else { 'Windows Update: search gave no answer in 60 s' }
+  Remove-Job $j -Force
 }
-if (Wait-Job $j -Timeout 60) {
-  $wu = @(Receive-Job $j)
-  if ($j.State -ne 'Completed') { 'Windows Update: search failed' }
-  elseif ($wu.Count) { 'Windows Update (list only, as of its last scan; install from Settings, it reboots):'; $wu | ForEach-Object { "  $_" } }
-  else { 'Windows Update: nothing pending (as of its last scan)' }
-} else { 'Windows Update: search gave no answer in 60 s' }
-Remove-Job $j -Force
 
 sec 'cleanup (size, on/off)'
-item usertemp (size $env:TEMP 7) { $cut = (Get-Date).AddDays(-7); Get-ChildItem $env:TEMP -Recurse -File -Force | Where-Object { $_.LastWriteTime -lt $cut } | Remove-Item -Force }
-item winget (size "$env:TEMP\WinGet") { Remove-Item "$env:TEMP\WinGet\*" -Recurse -Force }
+item usertemp (size $env:TEMP 7) { sweep $env:TEMP 7 }
+item winget (size "$env:TEMP\WinGet") { sweep "$env:TEMP\WinGet" }
 if (has scoop) {
   $sc = $env:SCOOP; if (-not $sc) { $sc = "$env:USERPROFILE\scoop" }
   item scoop (size "$sc\cache") { scoop cache rm *; scoop cleanup * }
 }
-item choco (size "$env:TEMP\chocolatey") { Remove-Item "$env:TEMP\chocolatey\*" -Recurse -Force }
+item choco (size "$env:TEMP\chocolatey") { sweep "$env:TEMP\chocolatey" }
 if (has npm) { item npm (size "$(npm config get cache)\_cacache") { npm cache clean --force } }
 if (has pip) { item pip (size "$(pip cache dir)") { pip cache purge } }
-item wudownload (size "$env:SystemRoot\SoftwareDistribution\Download") { Stop-Service wuauserv -Force; Remove-Item "$env:SystemRoot\SoftwareDistribution\Download\*" -Recurse -Force; Start-Service wuauserv } $true
+item wudownload (size "$env:SystemRoot\SoftwareDistribution\Download") { Stop-Service wuauserv -Force; sweep "$env:SystemRoot\SoftwareDistribution\Download"; Start-Service wuauserv } $true
 $rb = (New-Object -ComObject Shell.Application).NameSpace(10)
 if ($rb) { item recyclebin (mb (@($rb.Items()) | Measure-Object Size -Sum).Sum) { Clear-RecycleBin -Force } }
 

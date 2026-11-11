@@ -5,8 +5,12 @@
 #   no argument: dry run. Last upgrade, pending updates (from fresh package lists in a private dir), held and kept-back
 #                packages, what each cleanup item would free, autoremove candidates. Changes nothing.
 #   --apply:     apt-get update, apt-get upgrade --with-new-pkgs (apt asks before it changes anything), snap, flatpak,
-#                clean the items in CLEAN (or only those named after --apply), report space freed, .dpkg-dist, reboot.
-#                Uses sudo: the human runs it in their terminal.
+#                clean the items in CLEAN, report space freed, .dpkg-dist, reboot.
+#                Uses sudo: the human runs it in their terminal. Without a terminal (over SSH from Claude Code)
+#                nobody can answer apt: with an upgrade pending it stops before apt's question. The cleanup
+#                alone (--apply <items>) needs no terminal.
+#   --apply <word>...: only what is named. update = the upgrades in UPDATE; any other word = that cleanup item.
+#                --apply trash empties the Trash and upgrades nothing; --apply update journal upgrades, then vacuums.
 #
 # This is where the host's habits live. Edit CLEAN and UPDATE to fit the machine and its owner;
 # an item missing here is never cleaned, whatever the dry run shows. Packages to hold: sudo apt-mark hold <pkg>,
@@ -22,19 +26,34 @@ JOURNAL_MAX=200M
 # Items the dry run knows (on = in CLEAN):
 #   aptcache    downloaded .deb files in /var/cache/apt/archives (apt-get clean)
 #   journal     systemd journal, vacuumed to JOURNAL_MAX
-#   snaprev     disabled snap revisions, kept for snap revert (snapd keeps 2 or 3 per snap)
+#   snaprev     old snap revisions, kept for snap revert (snapd keeps 2 or 3 per snap). A snap the owner turned
+#               off (snap disable) is left alone.
 #   usercache   ~/.cache: all app caches. Apps rebuild them, some log you out. Opt-in.
 #   trash       empty the Trash. User data, irreversible. Only when the owner said yes in chat, and only
 #               when named after --apply (--apply trash): never from CLEAN.
 # Never removed here: autoremove candidates (listed only; removal cascades and can take a kernel or driver this host
 # keeps on purpose: show the full list, check notes.md, confirm separately).
 
+# Cleanup paths below start at $HOME: with it empty they would start at / (/Library/Caches, /.cache). Stop at once.
+: "${HOME:?HOME is empty}"
 APPLY=; [ "$1" = --apply ] && APPLY=1 && shift
-# Items named after --apply are the owner's pick for this run, in place of CLEAN (none: clean nothing). The pick goes
-# as args, not as an edit: an edit changes the hash and asks for approval again. CLEAN stays the habit.
+# Words after --apply are the owner's pick for this run: only what is named runs. `update` is the upgrades in UPDATE,
+# every other word a cleanup item, in place of CLEAN. So --apply trash empties the Trash and upgrades nothing, and
+# --apply update upgrades and cleans nothing. The pick goes as args, not as an edit: an edit changes the hash and asks
+# for approval again. CLEAN and UPDATE stay the habit. A word that is neither is a typo: said, and nothing runs.
 # trash only when named after --apply (--apply trash), never from CLEAN: emptying it takes the owner's yes typed in
 # chat, and --apply runs on a permission prompt alone. So it is left out of CLEAN even if added there.
-[ $# -gt 0 ] && CLEAN="$*" || { c=; for i in $CLEAN; do [ "$i" = trash ] || c="${c:+$c }$i"; done; CLEAN=$c; }
+# ITEMS: every cleanup item below. One added to this script goes here too, or naming it is refused as a typo.
+ITEMS="aptcache journal snaprev usercache trash"
+NOUP=
+if [ $# -gt 0 ]; then
+  [ -n "$APPLY" ] && NOUP=1; c=
+  for i in "$@"; do
+    if [ "$i" = update ]; then NOUP=; continue; fi
+    case " $ITEMS " in *" $i "*) c="${c:+$c }$i" ;; *) echo "unknown item: $i"; echo "known: update $ITEMS"; exit 1 ;; esac
+  done
+  CLEAN=$c
+else c=; for i in $CLEAN; do [ "$i" = trash ] || c="${c:+$c }$i"; done; CLEAN=$c; fi
 has() { command -v "$1" >/dev/null 2>&1; }
 on() { case " $1 " in *" $2 "*) return 0;; esac; return 1; }
 sec() { echo; echo "## $1"; }
@@ -67,6 +86,7 @@ case $(sed -n 's/^ID=//p' /etc/os-release) in
 esac
 
 sec updates
+[ -n "$NOUP" ] && { UPDATE=; echo "updates: not asked for (--apply <items> without update): nothing listed, nothing upgraded"; }
 if on "$UPDATE" apt; then
   # The system's lists are as old as the last root apt-get update. The dry run fetches fresh ones into a private dir
   # (no root, no lock, like checkupdates on Arch); --apply updates the real ones.
@@ -84,8 +104,8 @@ if on "$UPDATE" apt; then
   fi
   # A failed listing says so: it is not "0 pending".
   if s=$(apt-get $o -s upgrade --with-new-pkgs); then
-    echo "apt: $(echo "$s" | grep -c '^Inst ') pending, $(echo "$s" | grep -c '^Inst .*-security') from security"
-  else echo "apt: listing pending upgrades failed (error above)"; fi
+    n=$(echo "$s" | grep -c '^Inst '); echo "apt: $n pending, $(echo "$s" | grep -c '^Inst .*-security') from security"
+  else n=unknown; echo "apt: listing pending upgrades failed (error above)"; fi
   echo "$s" | awk '$1=="Inst" && $2 ~ /^(linux-image|linux-firmware|firmware-|systemd$|libc6$|nvidia|grub|openssh-server$)/{print "  " $2}'
   # Kept back: needs a new or removed package (dist-upgrade), or a phased update Ubuntu rolls out slowly. Not done here.
   k=$(echo "$s" | awk '/kept back:/{f=1; next} /^[^ ]/{f=0} f' | tr -s ' \n' ' ')
@@ -94,6 +114,13 @@ if on "$UPDATE" apt; then
   [ -n "$h" ] && echo "held (never upgraded here): $h"
   if [ -n "$APPLY" ]; then
     u=upgrade; on "$UPDATE" full && u=dist-upgrade
+    # apt asks before it changes anything (no -y here, on purpose). With no terminal (cw over SSH from Claude Code)
+    # nobody can answer and apt reads end-of-file as no: stop before the question, and say where it works.
+    # With nothing pending apt asks nothing and the run goes on.
+    if ! [ -t 0 ] && { [ "$n" != 0 ] || { [ $u = dist-upgrade ] && [ -n "${k# }" ]; }; }; then
+      echo "--apply: apt asks before it upgrades, and nobody can answer here (no terminal): run the same line in a terminal. Nothing was upgraded. Cleanup without upgrades: --apply <items>"
+      exit 1
+    fi
     echo "+ apt-get $u --with-new-pkgs"
     $S apt-get $u --with-new-pkgs || { echo "upgrade failed or declined: stopping before snap and cleanup"; exit 1; }
   fi
@@ -116,9 +143,11 @@ item aptcache "$(mb /var/cache/apt/archives)" "$S apt-get clean"
 j=; [ "$(id -u)" != 0 ] && ! id -Gn | grep -qwE 'adm|systemd-journal|wheel' && j=" (this user's only: not in adm/systemd-journal)"
 has journalctl && item journal "$(journalctl --disk-usage | grep -o '[0-9.]*[KMGT]' | head -1)$j, to $JOURNAL_MAX" "$S journalctl --vacuum-size=$JOURNAL_MAX"
 if has snap; then
-  rev=$(snap list --all | awk '$NF ~ /disabled/{print $1 "_" $3}')
+  # Only disabled revisions of a snap that also has an active one. A snap whose only revision is disabled is one the
+  # owner turned off with snap disable: snap remove --revision of a snap's only revision removes the whole snap.
+  rev=$(snap list --all | awk '$NF ~ /disabled/{d[++n]=$1 "_" $3; s[n]=$1; next} {a[$1]=1} END{for (i=1; i<=n; i++) if (a[s[i]]) print d[i]}')
   snaprev() { for r in $rev; do $S snap remove "${r%_*}" --revision="${r##*_}" || return; done; }
-  [ -n "$rev" ] && item snaprev "$(cd /var/lib/snapd/snaps && mb $(echo "$rev" | sed 's/$/.snap/')), $(echo "$rev" | wc -l | tr -d ' ') revisions" snaprev
+  [ -n "$rev" ] && item snaprev "$(cd /var/lib/snapd/snaps && mb $(echo "$rev" | sed 's/$/.snap/')), $(echo "$rev" | wc -l | tr -d ' ') revisions: $(echo "$rev" | awk -F_ '{printf "%s%s %s", (NR>1 ? ", " : ""), $1, $2}')" snaprev
 fi
 item usercache "$(mb "${XDG_CACHE_HOME:-$HOME/.cache}")" "rm -rf \"${XDG_CACHE_HOME:-$HOME/.cache}/\"*"
 item trash "$(mb "$HOME/.local/share/Trash")" "rm -rf \"$HOME/.local/share/Trash/\"*"
