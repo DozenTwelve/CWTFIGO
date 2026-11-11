@@ -6,7 +6,9 @@
 #                Changes nothing (checkupdates syncs a private copy of the package database).
 #   --apply:     keyring, pacman -Syu, AUR, flatpak, clean the items in CLEAN, report space freed, .pacnew, reboot.
 #                Uses sudo: the human runs it in their terminal. Read the news from the dry run first;
-#                an item there that needs manual intervention comes before --apply.
+#                an item there that needs manual intervention comes before --apply. Without a terminal (over
+#                SSH from Claude Code) nobody can answer pacman or the AUR helper: with an upgrade pending it stops
+#                before their question. The cleanup alone (--apply <items>) needs no terminal.
 #   --apply <word>...: only what is named. update = the upgrades in UPDATE; any other word = that cleanup item.
 #                --apply trash empties the Trash and upgrades nothing; --apply update journal upgrades, then vacuums.
 #
@@ -66,6 +68,14 @@ item() {
 if [ -n "$APPLY" ] && [ -n "$S" ]; then
   sudo -v || { echo "--apply needs sudo: run it in a terminal"; exit 1; }
 fi
+# pacman and the AUR helper ask before they change anything (no --noconfirm here, on purpose). With no terminal (cw
+# over SSH from Claude Code) nobody can answer and they read end-of-file as no: stop before the question, and say
+# where it works.
+answer() {
+  [ -t 0 ] && return
+  echo "--apply: $1 asks before it upgrades, and nobody can answer here (no terminal): run the same line in a terminal. Nothing was upgraded. Cleanup without upgrades: --apply <items>"
+  exit 1
+}
 before=$(free_mb)
 
 sec news
@@ -79,6 +89,7 @@ fi
 sec updates
 [ -n "$NOUP" ] && { UPDATE=; echo "updates: not asked for (--apply <items> without update): nothing listed, nothing upgraded"; }
 if on "$UPDATE" pacman; then
+  rc=
   if has checkupdates; then
     out=$(checkupdates); rc=$?   # 2 = nothing to update, 1 = error
     case $rc in
@@ -91,6 +102,8 @@ if on "$UPDATE" pacman; then
     echo "repo: no checkupdates (pacman-contrib not installed), count unknown"
   fi
   if [ -n "$APPLY" ]; then
+    # All current (checkupdates said so): pacman asks nothing. Pending or unknown: it will.
+    [ "$rc" = 2 ] || answer pacman
     echo "+ pacman -Sy archlinux-keyring, then pacman -Su"
     $S pacman -Sy --needed --noconfirm archlinux-keyring && $S pacman -Su ||
       { echo "upgrade failed or declined: stopping before AUR and cleanup"; exit 1; }
@@ -100,7 +113,7 @@ if on "$UPDATE" aur && [ -n "$AUR" ]; then
   out=$($AUR -Qua)
   [ -n "$out" ] && { echo "aur: $(echo "$out" | wc -l | tr -d ' ') pending"; echo "$out" | sed 's/^/  /'; } || echo "aur: all current"
   # The helper shows each PKGBUILD diff before building: AUR packages are unreviewed, read them.
-  [ -n "$APPLY" ] && [ -n "$out" ] && { echo "+ $AUR -Sua"; $AUR -Sua; }
+  [ -n "$APPLY" ] && [ -n "$out" ] && { answer "$AUR"; echo "+ $AUR -Sua"; $AUR -Sua; }
 fi
 if on "$UPDATE" flatpak && has flatpak; then
   out=$(flatpak remote-ls --updates)

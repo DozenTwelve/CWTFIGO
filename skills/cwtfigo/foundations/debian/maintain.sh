@@ -6,7 +6,9 @@
 #                packages, what each cleanup item would free, autoremove candidates. Changes nothing.
 #   --apply:     apt-get update, apt-get upgrade --with-new-pkgs (apt asks before it changes anything), snap, flatpak,
 #                clean the items in CLEAN, report space freed, .dpkg-dist, reboot.
-#                Uses sudo: the human runs it in their terminal.
+#                Uses sudo: the human runs it in their terminal. Without a terminal (over SSH from Claude Code)
+#                nobody can answer apt: with an upgrade pending it stops before apt's question. The cleanup
+#                alone (--apply <items>) needs no terminal.
 #   --apply <word>...: only what is named. update = the upgrades in UPDATE; any other word = that cleanup item.
 #                --apply trash empties the Trash and upgrades nothing; --apply update journal upgrades, then vacuums.
 #
@@ -100,8 +102,8 @@ if on "$UPDATE" apt; then
   fi
   # A failed listing says so: it is not "0 pending".
   if s=$(apt-get $o -s upgrade --with-new-pkgs); then
-    echo "apt: $(echo "$s" | grep -c '^Inst ') pending, $(echo "$s" | grep -c '^Inst .*-security') from security"
-  else echo "apt: listing pending upgrades failed (error above)"; fi
+    n=$(echo "$s" | grep -c '^Inst '); echo "apt: $n pending, $(echo "$s" | grep -c '^Inst .*-security') from security"
+  else n=unknown; echo "apt: listing pending upgrades failed (error above)"; fi
   echo "$s" | awk '$1=="Inst" && $2 ~ /^(linux-image|linux-firmware|firmware-|systemd$|libc6$|nvidia|grub|openssh-server$)/{print "  " $2}'
   # Kept back: needs a new or removed package (dist-upgrade), or a phased update Ubuntu rolls out slowly. Not done here.
   k=$(echo "$s" | awk '/kept back:/{f=1; next} /^[^ ]/{f=0} f' | tr -s ' \n' ' ')
@@ -110,6 +112,13 @@ if on "$UPDATE" apt; then
   [ -n "$h" ] && echo "held (never upgraded here): $h"
   if [ -n "$APPLY" ]; then
     u=upgrade; on "$UPDATE" full && u=dist-upgrade
+    # apt asks before it changes anything (no -y here, on purpose). With no terminal (cw over SSH from Claude Code)
+    # nobody can answer and apt reads end-of-file as no: stop before the question, and say where it works.
+    # With nothing pending apt asks nothing and the run goes on.
+    if ! [ -t 0 ] && { [ "$n" != 0 ] || { [ $u = dist-upgrade ] && [ -n "${k# }" ]; }; }; then
+      echo "--apply: apt asks before it upgrades, and nobody can answer here (no terminal): run the same line in a terminal. Nothing was upgraded. Cleanup without upgrades: --apply <items>"
+      exit 1
+    fi
     echo "+ apt-get $u --with-new-pkgs"
     $S apt-get $u --with-new-pkgs || { echo "upgrade failed or declined: stopping before snap and cleanup"; exit 1; }
   fi

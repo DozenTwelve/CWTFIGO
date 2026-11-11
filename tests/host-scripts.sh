@@ -22,11 +22,18 @@ fresh() {
 # The link fresh made goes first: writing through it would rewrite the real command.
 stub() { rm -f "$D/bin/$1"; printf '#!/bin/sh\n%s\n' "$2" > "$D/bin/$1"; chmod +x "$D/bin/$1"; }
 # run <script> [args]: the copy runs, PATH=$D/bin. A placeholder first: $D itself may be under /var.
-run() {
-  f=$1; shift; e=
+copy() {
+  e=
   for d in boot etc run var proc sys rom lib overlay; do e="$e -e s,\([[:space:]\"'(=<>#]\)/$d\([/[:space:];\"')]\),\1@ROOT@/$d\2,g"; done
-  set -f; sed $e -e "s,@ROOT@,$D,g" "$f" > "$D/script"; set +f
-  PATH=$D/bin $SH "$D/script" "$@"
+  set -f; sed $e -e "s,@ROOT@,$D,g" "$1" > "$D/script"; set +f
+}
+run() { copy "$1"; shift; PATH=$D/bin $SH "$D/script" "$@"; }
+# term <script> [args]: the same with a terminal on stdin, from script(1) (as in tests/cw.sh); 127 without one.
+term() {
+  copy "$1"; shift
+  if [ "$(uname -s)" = Darwin ]; then script -q /dev/null env PATH="$D/bin" $SH "$D/script" "$@" </dev/null
+  elif command -v script >/dev/null; then script -qec "PATH=$D/bin $SH $D/script $*" /dev/null </dev/null
+  else return 127; fi
 }
 
 # debian check: a reboot is pending only for a newer kernel of the running one's flavour.
@@ -267,6 +274,20 @@ deb; out=$(run "$F/debian/maintain.sh" --apply aptcahce </dev/null 2>&1); [ $? =
 deb; out=$(run "$F/debian/maintain.sh" --apply </dev/null 2>&1) || fail "debian maintain --apply should exit 0: $out"
 has 'sudo -v' && has 'apt-get update -qq' && has 'apt-get upgrade --with-new-pkgs' && has 'apt-get clean' || fail "debian maintain --apply should upgrade and clean: $(cat "$D/bin/log")"
 echo "$out" | grep -qx 'mode: applied' && echo "$out" | grep -qx 'no .dpkg-dist' || fail "debian maintain --apply should end applied: $out"
+# apt asks before it upgrades (no -y, on purpose). With no terminal (cw over SSH from Claude Code: stdin at end-of-file)
+# and an upgrade pending, the run stops before apt's question and says to use a terminal; with a terminal it upgrades.
+# With nothing pending it goes on (the runs above), and a cleanup-only run never asks.
+deb 'Inst foo [1.0] (2.0 Debian:13/stable [amd64])'
+out=$(run "$F/debian/maintain.sh" --apply </dev/null 2>&1); [ $? = 1 ] || fail "debian maintain --apply with no terminal and an upgrade pending should exit 1: $out"
+echo "$out" | grep -q '^--apply: apt asks before it upgrades, and nobody can answer here (no terminal): run the same line in a terminal' || fail "debian maintain --apply with no terminal should say to use one: $out"
+has 'apt-get update -qq' || fail "debian maintain --apply with no terminal: the lists come first: $(cat "$D/bin/log")"
+has 'apt-get upgrade --with-new-pkgs' || has 'apt-get clean' && fail "debian maintain --apply with no terminal went on past apt's question: $(cat "$D/bin/log")"
+deb 'Inst foo [1.0] (2.0 Debian:13/stable [amd64])'
+out=$(run "$F/debian/maintain.sh" --apply aptcache </dev/null 2>&1) && has 'apt-get clean' || fail "debian maintain --apply aptcache needs no terminal: $out"
+deb 'Inst foo [1.0] (2.0 Debian:13/stable [amd64])'
+if out=$(term "$F/debian/maintain.sh" --apply 2>&1) || [ $? != 127 ]; then
+  has 'apt-get upgrade --with-new-pkgs' && has 'apt-get clean' || fail "debian maintain --apply in a terminal should upgrade and clean: $out"
+else echo "skipped: maintain --apply in a terminal (no script)"; fi
 
 arch() {   # $1: checkupdates' body (exit 2 = nothing pending)
   fresh; ln -s "${SH%% *}" "$D/bin/sh"; stub id 'echo 1000'; stub uname 'echo 6.1'; stub checkupdates "$1"
@@ -284,6 +305,21 @@ arch 'exit 2'; out=$(run "$F/arch/maintain.sh" --apply pkgcahce </dev/null 2>&1)
 [ "$(echo "$out" | sed -n 1p)" = "unknown item: pkgcahce" ] && [ ! -e "$D/bin/log" ] || fail "arch maintain --apply pkgcahce should run nothing, not even sudo -v: $out $(cat "$D/bin/log" 2>&1)"
 arch 'exit 2'; out=$(run "$F/arch/maintain.sh" --apply </dev/null 2>&1) || fail "arch maintain --apply: $out"
 has 'pacman -Su' && has 'paccache -rk2' && echo "$out" | grep -qx 'mode: applied' || fail "arch maintain --apply should upgrade and clean: $out $(cat "$D/bin/log")"
+# pacman and the AUR helper ask too (no --noconfirm): the same stop, before pacman -Sy, and before the helper's -Sua.
+arch 'echo "linux 6.1.1-1 -> 6.2.1-1"'
+out=$(run "$F/arch/maintain.sh" --apply </dev/null 2>&1); [ $? = 1 ] || fail "arch maintain --apply with no terminal and an upgrade pending should exit 1: $out"
+echo "$out" | grep -q '^--apply: pacman asks before it upgrades, and nobody can answer here (no terminal): run the same line in a terminal' || fail "arch maintain --apply with no terminal should say to use one: $out"
+grep 'pacman -S\|paccache -r' "$D/bin/log" && fail "arch maintain --apply with no terminal went on past pacman's question: $out"
+arch 'echo "linux 6.1.1-1 -> 6.2.1-1"'
+out=$(run "$F/arch/maintain.sh" --apply pkgcache </dev/null 2>&1) && has 'paccache -rk2' || fail "arch maintain --apply pkgcache needs no terminal: $out"
+arch 'exit 2'; stub paru 'echo "paru $*" >> "${0%/*}/log"; [ "$1" != -Qua ] || echo "foo-git 1-1 -> 2-1"'
+out=$(run "$F/arch/maintain.sh" --apply </dev/null 2>&1); [ $? = 1 ] || fail "arch maintain --apply with no terminal and an AUR upgrade pending should exit 1: $out"
+echo "$out" | grep -q '^--apply: paru asks before it upgrades' && has 'pacman -Su' || fail "arch maintain --apply with no terminal: repo current, then stop at the AUR helper: $out"
+has 'paru -Sua' || grep -q 'paccache -r' "$D/bin/log" && fail "arch maintain --apply with no terminal went on past the AUR helper's question: $out"
+arch 'echo "linux 6.1.1-1 -> 6.2.1-1"'; stub paru 'echo "paru $*" >> "${0%/*}/log"; [ "$1" != -Qua ] || echo "foo-git 1-1 -> 2-1"'
+if out=$(term "$F/arch/maintain.sh" --apply 2>&1) || [ $? != 127 ]; then
+  has 'pacman -Su' && has 'paru -Sua' && has 'paccache -rk2' || fail "arch maintain --apply in a terminal should upgrade and clean: $out"
+fi
 
 # openwrt maintain: a package in UPGRADE whose upgrade would also move a core package is skipped, and the dry run says so.
 for pm in apk opkg; do
