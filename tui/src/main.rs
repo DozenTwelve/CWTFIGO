@@ -475,30 +475,49 @@ fn go(terminal: &mut DefaultTerminal, app: &mut App, mut t: Target, apply: bool)
         t.sum = i.sum.clone();
     }
     let unapproved = !approved(&app.rec, &t);
+    // What a save had to say (nothing noted, or not saved) stays: the run's own word comes after it, not over it.
+    let unsaved = std::mem::take(&mut app.message);
     after(app, t, apply, unapproved, res.map(|s| s.code()));
+    app.message = joined(unsaved, std::mem::take(&mut app.message));
+}
+
+fn joined(a: String, b: String) -> String {
+    if a.is_empty() || b.is_empty() { a + &b } else { format!("{a}; {b}") }
 }
 
 /// What the owner did here goes where a visit's actions go: an entry on top of the machine's log.md, then `cw save`, so
-/// other computers sharing the record get the approval and the next visit sees the run. Only fails out loud.
+/// other computers sharing the record get the approval and the next visit sees the run. Only fails out loud. A log.md
+/// that can't be read gets no entry and no save: what was done is done, only the note of it is missing.
 fn save(terminal: &mut DefaultTerminal, app: &mut App, name: &str, what: &str) {
-    let mut cmd = note(app, name, what);
+    let mut cmd = match note(app, name, what) {
+        Ok(cmd) => cmd,
+        Err(e) => {
+            app.message = format!("{name}'s log.md can't be read ({e}): {what} not noted, nothing saved");
+            return;
+        }
+    };
     if !matches!(run_external(terminal, &mut cmd, false, None), Ok(s) if s.success()) {
         app.message = format!("{what} on {name}, but saving it to the notes failed");
     }
 }
 
-/// Writes the log.md entry; the `cw save` to run after it.
-fn note(app: &App, name: &str, what: &str) -> Command {
+/// Writes the log.md entry; the `cw save` to run after it. Err, and nothing written, when log.md is there but can't be
+/// read: taken for empty it would be written over, and the save would commit and push the loss.
+fn note(app: &App, name: &str, what: &str) -> std::io::Result<Command> {
     let date = Command::new("date").arg("+%F").output().map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
     let entry = format!("## {} tui\n- {what} (in the TUI)\n\n", date.unwrap_or_default());
     let f = app.rec.join("hosts").join(name).join("log.md");
-    let old = fs::read_to_string(&f).unwrap_or_default();
+    // Bytes, not text: a log with one byte that isn't UTF-8 keeps every byte. Only a missing file is an empty log.
+    let old = match fs::read(&f) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => vec![],
+        old => old?,
+    };
     // Newest first, under anything above the first entry.
-    let at = if old.starts_with("## ") { 0 } else { old.find("\n## ").map_or(old.len(), |i| i + 1) };
-    let _ = fs::write(&f, format!("{}{entry}{}", &old[..at], &old[at..]));
+    let at = if old.starts_with(b"## ") { 0 } else { old.windows(4).position(|w| w == b"\n## ").map_or(old.len(), |i| i + 1) };
+    let _ = fs::write(&f, [&old[..at], entry.as_bytes(), &old[at..]].concat());
     let mut cmd = cw(app);
     cmd.args(["save", &format!("tui: {what} on {name}")]);
-    cmd
+    Ok(cmd)
 }
 
 /// Whether cw counts the script approved: its sha256 in the host's approved.sha256, the check cw makes. Exit 3 from
@@ -1180,17 +1199,45 @@ mod tests {
         (a.cw, a.rec) = (d.join("cw"), d.join("rec"));
         let log = d.join("rec/hosts/b/log.md");
         let entries = || fs::read_to_string(&log).unwrap().lines().filter(|l| l.starts_with("## ")).map(|l| l.ends_with(" tui")).collect::<Vec<_>>();
-        assert!(note(&a, "b", "approved fix").status().unwrap().success());
+        assert!(note(&a, "b", "approved fix").unwrap().status().unwrap().success());
         assert_eq!(fs::read_to_string(d.join("cw.args")).unwrap(), "save|tui: approved fix on b|");
         assert!(fs::read_to_string(&log).unwrap().contains("- approved fix (in the TUI)\n"));
         fs::write(&log, "# log\n\n## 2026-11-01 visit\n- x\n").unwrap();
-        note(&a, "b", "ran maintain --apply: exit 0");
+        note(&a, "b", "ran maintain --apply: exit 0").unwrap();
         let text = fs::read_to_string(&log).unwrap();
         assert!(text.starts_with("# log\n\n## ") && text.contains("- ran maintain --apply: exit 0"), "{text}");
         assert_eq!(entries(), [true, false], "newest first");
         fs::write(&log, "## 2026-11-01 visit\n").unwrap();
-        note(&a, "b", "approved fix");
+        note(&a, "b", "approved fix").unwrap();
         assert_eq!(entries(), [true, false]);
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn a_log_that_cant_be_read_as_text_is_never_written_over() {
+        let d = env::temp_dir().join(format!("cwtfigo-tui-log-{}", std::process::id()));
+        fs::create_dir_all(d.join("rec/hosts/b")).unwrap();
+        let mut a = app(vec![host("b", vec![])]);
+        a.rec = d.join("rec");
+        let log = d.join("rec/hosts/b/log.md");
+        // One byte that isn't UTF-8 (a Latin-1 name pasted in): every old byte stays, the entry goes above the first one.
+        let old = b"# log of caf\xe9\n\n## 2026-11-01 visit\n- fixed \xff\xfe\n";
+        fs::write(&log, old).unwrap();
+        note(&a, "b", "approved fix").unwrap();
+        let new = fs::read(&log).unwrap();
+        let at = b"# log of caf\xe9\n\n".len();
+        assert_eq!((&new[..at], &new[new.len() - (old.len() - at)..]), (&old[..at], &old[at..]));
+        let entry = String::from_utf8(new[at..new.len() - (old.len() - at)].to_vec()).unwrap();
+        assert!(entry.starts_with("## ") && entry.ends_with(" tui\n- approved fix (in the TUI)\n\n"), "{entry}");
+        // Not readable at all (here a directory in its place): left alone, and no cw save to run.
+        fs::remove_file(&log).unwrap();
+        fs::create_dir(&log).unwrap();
+        fs::write(log.join("kept"), "x").unwrap();
+        assert!(note(&a, "b", "approved fix").is_err());
+        assert_eq!(fs::read_to_string(log.join("kept")).unwrap(), "x");
+        // What save says about it isn't wiped out by the run's own word.
+        assert_eq!(joined("not noted".into(), "fix on b: exit 0".into()), "not noted; fix on b: exit 0");
+        assert_eq!((joined("a".into(), String::new()), joined(String::new(), "b".into())), ("a".into(), "b".into()));
         fs::remove_dir_all(&d).unwrap();
     }
 
