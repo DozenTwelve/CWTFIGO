@@ -340,6 +340,12 @@ fn quits(k: KeyEvent) -> bool {
         || k.modifiers.contains(KeyModifiers::CONTROL) && matches!(k.code, KeyCode::Char('c' | 'd'))
 }
 
+/// The only yes to a confirm: y or Y alone. With Ctrl or Alt held it is another key (Ctrl-Y, a shell's yank, typed
+/// from habit) and means no, as every other key does.
+fn yes(k: KeyEvent) -> bool {
+    matches!(k.code, KeyCode::Char('y' | 'Y')) && (k.modifiers - KeyModifiers::SHIFT).is_empty()
+}
+
 /// One key press. false = quit.
 fn key(terminal: &mut DefaultTerminal, app: &mut App, k: KeyEvent, tx: &Sender<Msg>) -> bool {
     let code = k.code;
@@ -348,7 +354,7 @@ fn key(terminal: &mut DefaultTerminal, app: &mut App, k: KeyEvent, tx: &Sender<M
     app.message.clear(); // a message stays until the next key, then the key bar is back
     match std::mem::replace(&mut app.mode, Mode::Normal) {
         Mode::Confirm(_, then) => {
-            if !matches!(code, KeyCode::Char('y' | 'Y')) {
+            if !yes(k) {
                 app.message = "cancelled".into();
             } else {
                 match then {
@@ -1251,6 +1257,16 @@ mod tests {
         assert!(quits(k('c', KeyModifiers::CONTROL)) && quits(k('d', KeyModifiers::CONTROL)) && quits(k('q', KeyModifiers::NONE)));
         assert!(quits(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)));
         assert!(!quits(k('c', KeyModifiers::NONE)) && !quits(k('r', KeyModifiers::CONTROL)));
+    }
+
+    #[test]
+    fn only_a_plain_y_confirms() {
+        let k = |c, m| KeyEvent::new(KeyCode::Char(c), m);
+        assert!(yes(k('y', KeyModifiers::NONE)) && yes(k('Y', KeyModifiers::SHIFT)) && yes(k('Y', KeyModifiers::NONE)));
+        for m in [KeyModifiers::CONTROL, KeyModifiers::ALT, KeyModifiers::CONTROL | KeyModifiers::SHIFT, KeyModifiers::SUPER] {
+            assert!(!yes(k('y', m)) && !yes(k('Y', m)), "{m:?}");
+        }
+        assert!(!yes(k('n', KeyModifiers::NONE)) && !yes(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)));
     }
 
     #[cfg(unix)]
